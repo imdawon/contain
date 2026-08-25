@@ -6,6 +6,7 @@ import { cooks } from "@/lib/bay/cook";
 import { bindProbeWindow, note } from "@/lib/bay/probe";
 import { punctureSelected } from "@/components/bay/pack";
 import { isMuted, setMuted, unlockAudio } from "@/lib/contain/audio";
+import { SOLID, SOLID_SHAPES } from "@/lib/bay/solids";
 import { useBay, type Tool } from "@/store/bay-store";
 import { cn } from "@/lib/utils";
 
@@ -62,7 +63,7 @@ export function LabApp() {
           { id: `${e.id}-hinge`, label: `${e.id} hinge` },
           { id: `${e.id}-latch`, label: `${e.id} latch` },
         ]
-      : [{ id: e.id, label: `${e.id} pack` }],
+      : [{ id: e.id, label: `${e.id} ${e.kind}` }],
   );
 
   return (
@@ -155,6 +156,29 @@ export function LabApp() {
           >
             Can
           </button>
+          <label className="flex items-center">
+            <span className="sr-only">Drop a solid</span>
+            <select
+              defaultValue=""
+              onChange={(e) => {
+                const kind = e.target.value;
+                if (!kind) return;
+                spawn(kind as Parameters<typeof spawn>[0]);
+                note("spawn", { kind });
+                e.target.value = "";
+              }}
+              className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-2 font-mono text-[11px] uppercase tracking-[0.12em] text-fg"
+            >
+              <option value="" disabled>
+                Solid
+              </option>
+              {SOLID_SHAPES.map((s) => (
+                <option key={s} value={s}>
+                  {SOLID[s].label}
+                </option>
+              ))}
+            </select>
+          </label>
           <Button
             className="h-11 font-display text-lg tracking-[0.12em]"
             disabled={!packOn}

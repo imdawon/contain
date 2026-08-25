@@ -5,6 +5,8 @@ import { Suspense, useEffect, useLayoutEffect, useRef, useState, type RefObject 
 import * as THREE from "three";
 import { AmmoCan } from "@/components/bay/ammo-can";
 import { Pack } from "@/components/bay/pack";
+import { Solid } from "@/components/bay/solid";
+import { isSolid } from "@/store/bay-store";
 import { ProbeTick } from "@/components/bay/probe-tick";
 import { FLOOR } from "@/lib/bay/parts";
 import { listSamplers } from "@/lib/bay/probe";
@@ -125,9 +127,11 @@ function World() {
       {entities.map((e) =>
         e.kind === "can" ? (
           <AmmoCan key={e.id} id={e.id} pos={e.pos} />
-        ) : (
+        ) : e.kind === "pack" ? (
           <Pack key={e.id} id={e.id} pos={e.pos} fireMap={fire} />
-        ),
+        ) : isSolid(e.kind) ? (
+          <Solid key={e.id} id={e.id} shape={e.kind} pos={e.pos} />
+        ) : null,
       )}
       <OrbitControls
         ref={(el) => {

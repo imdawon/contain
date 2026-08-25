@@ -1,12 +1,17 @@
 import { create } from "zustand";
+import { SOLID_SHAPES, type SolidShape } from "@/lib/bay/solids";
 
 export type Tool = "grab" | "nail";
-export type Kind = "pack" | "can";
+export type Kind = "pack" | "can" | SolidShape;
 
 export interface Entity {
   id: string;
   kind: Kind;
   pos: [number, number, number];
+}
+
+export function isSolid(kind: Kind): kind is SolidShape {
+  return (SOLID_SHAPES as readonly string[]).includes(kind);
 }
 
 interface BayState {
@@ -53,9 +58,11 @@ export const useBay = create<BayState>((set, get) => ({
     const pos: [number, number, number] =
       kind === "can"
         ? [(Math.random() - 0.5) * 1.6, 0, (Math.random() - 0.5) * 1.6]
-        : [(Math.random() - 0.5) * 0.8, 1.25, (Math.random() - 0.5) * 0.8];
+        : kind === "pack"
+          ? [(Math.random() - 0.5) * 0.8, 1.25, (Math.random() - 0.5) * 0.8]
+          : [0.95 + (Math.random() - 0.5) * 0.5, 1.05, (Math.random() - 0.5) * 0.8];
     const e = { id: nid(), kind, pos };
-    set({ entities: [...get().entities, e], selected: e.id });
+    set({ entities: [...get().entities, e], selected: e.id, trackId: e.id });
   },
   clear: () => set({ entities: [], selected: null, trackId: null, latch: "sealed" }),
   reset: () => {
