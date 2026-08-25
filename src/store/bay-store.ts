@@ -22,6 +22,7 @@ interface BayState {
   muted: boolean;
   dragging: boolean;
   latch: "sealed" | "hinged" | "free";
+  cutaway: boolean;
   spawn: (kind: Kind) => void;
   clear: () => void;
   reset: () => void;
@@ -31,6 +32,7 @@ interface BayState {
   toggleMuted: () => void;
   setDragging: (v: boolean) => void;
   setLatch: (latch: BayState["latch"]) => void;
+  toggleCutaway: () => void;
 }
 
 let n = 1;
@@ -54,6 +56,7 @@ export const useBay = create<BayState>((set, get) => ({
   ...start(),
   muted: false,
   dragging: false,
+  cutaway: false,
   spawn: (kind) => {
     const pos: [number, number, number] =
       kind === "can"
@@ -86,4 +89,5 @@ export const useBay = create<BayState>((set, get) => ({
   toggleMuted: () => set({ muted: !get().muted }),
   setDragging: (dragging) => set({ dragging }),
   setLatch: (latch) => set({ latch }),
+  toggleCutaway: () => set({ cutaway: !get().cutaway }),
 }));
