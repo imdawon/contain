@@ -44,6 +44,7 @@ export interface ProbeSnap {
   selected: string | null;
   trackId: string | null;
   tool: string;
+  cutaway: boolean;
   camera: ProbeCamera | null;
   objects: ProbeObject[];
   inView: string[];
@@ -96,6 +97,7 @@ function emptySnap(): ProbeSnap {
     selected: null,
     trackId: null,
     tool: "grab",
+    cutaway: false,
     camera: null,
     objects: [],
     inView: [],
@@ -217,6 +219,11 @@ export function bindProbeWindow() {
         window as unknown as { __baySetTrack?: (id: string | null) => void }
       ).__baySetTrack;
       set?.(id);
+    },
+    cutaway() {
+      (
+        window as unknown as { __bayToggleCutaway?: () => void }
+      ).__bayToggleCutaway?.();
     },
   };
   (window as unknown as { __bay: typeof api }).__bay = api;

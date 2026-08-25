@@ -45,6 +45,8 @@ export function LabApp() {
   const toggleMuted = useBay((s) => s.toggleMuted);
   const trackId = useBay((s) => s.trackId);
   const setTrack = useBay((s) => s.setTrack);
+  const cutaway = useBay((s) => s.cutaway);
+  const toggleCutaway = useBay((s) => s.toggleCutaway);
 
   useEffect(() => {
     setClient(true);
@@ -53,6 +55,18 @@ export function LabApp() {
   useEffect(() => {
     setMuted(muted);
   }, [muted]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "KeyX") return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      e.preventDefault();
+      toggleCutaway();
+      note("cutaway", { on: useBay.getState().cutaway });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggleCutaway]);
 
   const packOn = selected ? entities.find((e) => e.id === selected)?.kind === "pack" : false;
   const trackOpts = entities.flatMap((e) =>
@@ -123,6 +137,20 @@ export function LabApp() {
 
       <div className="absolute inset-x-0 bottom-0 z-10 border-t border-border bg-surface/92 p-3 md:p-4">
         <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              toggleCutaway();
+              note("cutaway", { on: !cutaway });
+            }}
+            className={cn(
+              "h-11 rounded-[var(--radius-sm)] border px-3 font-mono text-[11px] uppercase tracking-[0.14em]",
+              cutaway ? "border-fg bg-raised text-fg" : "border-border bg-bg text-muted",
+            )}
+            title="Ghost the wall facing the camera (X)"
+          >
+            X-ray
+          </button>
           {(["grab", "nail"] as Tool[]).map((t) => (
             <button
               key={t}

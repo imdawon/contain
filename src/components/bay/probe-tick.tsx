@@ -17,12 +17,19 @@ export function ProbeTick() {
   const selected = useBay((s) => s.selected);
   const trackId = useBay((s) => s.trackId);
   const tool = useBay((s) => s.tool);
+  const cutaway = useBay((s) => s.cutaway);
   const setTrack = useBay((s) => s.setTrack);
+  const toggleCutaway = useBay((s) => s.toggleCutaway);
 
   useEffect(() => {
     bindProbeWindow();
-    (window as unknown as { __baySetTrack: (id: string | null) => void }).__baySetTrack = setTrack;
-  }, [setTrack]);
+    const w = window as unknown as {
+      __baySetTrack: (id: string | null) => void;
+      __bayToggleCutaway: () => void;
+    };
+    w.__baySetTrack = setTrack;
+    w.__bayToggleCutaway = toggleCutaway;
+  }, [setTrack, toggleCutaway]);
 
   useFrame(() => {
     _proj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
@@ -84,6 +91,7 @@ export function ProbeTick() {
       selected,
       trackId,
       tool,
+      cutaway,
       camera: {
         x: round(camera.position.x),
         y: round(camera.position.y),

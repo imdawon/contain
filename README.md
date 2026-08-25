@@ -36,6 +36,7 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
     window.__bay.log()       // event stream: puncture, latch-break, hinge-break, spawn, reset, set-prop
     window.__bay.dump()      // JSON string of the last snapshot
     window.__bay.track(id)   // follow a part, or track(null) for free orbit
+    window.__bay.cutaway()   // toggle x-ray on the camera-facing can wall
     window.__bay.apply(id, { x, y, z, vx, vy, vz, mass, friction, restitution })
     ```
 
@@ -57,7 +58,7 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 17. **Lighting exists to read height.** Key + cool fill + warm rim, contact shadows, and distance fog. If an object is airborne, its contact blob and the grid under it should make that obvious — not a flat gray soup.
 18. **Commit when the bay actually moved.** After a verified slice of progress, `git commit` the same turn. Do not wait for “the whole sim is done.” Compact recovery is this README plus git, not a chat recap. The message says what the bay does now (phone cook pops the latch, inspector edits mass, …), not a file list. Do not commit a blank canvas or a known-broken probe; if it is only a save-point, say so in the message.
 19. **Grab keeps its depth.** Pointer-down stores the click distance and the offset from the body. Drag slides on that depth; scroll pushes / pulls. Never snap the body to a point 1.4 m in front of the camera.
-20. **The can is sealed until the lid opens.** All five walls plus the floor are opaque steel. No ghost face. You see the inside after the latch pops, not before.
+20. **The can is sealed until you ask.** Walls are opaque steel. **X-ray** (button, or key `X`) ghosts only the wall facing the camera so you can see inside. Orbit and the ghosted face follows. Off = fully sealed. The lid popping is still the physical open.
 21. **Collider kit is how we test the sim.** Spawn platonic / primitive solids (cube, ball, cylinder, capsule, tetra, octa, dodeca, ico, plank) from **Solid**. Cube/plank = cuboid, ball = sphere, cylinder/capsule = native, the four platonic meshes = convex hull. Stack, tumble, throw. Not scenery.
 22. **A 30-second pose ring buffer is next, not now.** When we debug lid jitter, sample the tracked body every tick into a last-30s log on `window.__bay`. Do not build it until a twitch needs a timeline.
 
@@ -96,7 +97,7 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 ## How to play v0
 
 1. Orbit-drag empty floor, or **Track** a part (body / lid / hinge / latch / pack). Inspector follows that part.
-2. **Grab** a part: it stays where it is, then follows the mouse at that depth. Scroll to push or pull. **Solid** drops a cube / ball / hull beside the can for stacking tests.
+2. **Grab** a part: it stays where it is, then follows the mouse at that depth. Scroll to push or pull. **X-ray** (or `X`) ghosts the wall you are looking at. **Solid** drops a cube / ball / hull beside the can for stacking tests.
 3. Click the pack (**PUNCTURE** enables when a pack is selected).
 4. **PUNCTURE**. Latch badge: sealed → hinged. The can stays on the pad; the lid hinges open. Track the lid if you want the shot.
 5. **Reset** to restage.
