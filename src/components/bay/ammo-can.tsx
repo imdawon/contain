@@ -205,7 +205,7 @@ export function AmmoCan({ id, pos }: { id: string; pos: [number, number, number]
           </mesh>
           <mesh position={[0, 0, d / 2 - t / 2]}>
             <boxGeometry args={[w, h, t]} />
-            <meshStandardMaterial color={olive} metalness={0.45} roughness={0.5} transparent opacity={0.22} />
+            <meshStandardMaterial color={olive} metalness={0.45} roughness={0.5} />
           </mesh>
         </group>
       </RigidBody>

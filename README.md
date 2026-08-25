@@ -22,7 +22,7 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 2. **Setup, then watch.** Full spawn / grab. No cutscene that plays itself without the player staging it.
 3. **Live play, 16:9.** You operate the camera. Orbit empty floor, or **track any object / sub-object**. Not auto-run shorts yet.
 4. **Graphic / toy, not photoreal.** Flat color, grid, readable silhouettes. No tiny objects lost on a huge floor.
-5. **Video-game physics.** Rapier rigid bodies + joints. Parts have mass, a hinge axis, angle limits, and break numbers. Not FEA, not electrochemical accuracy.
+5. **Video-game physics.** The live bay is **Rapier** (`@react-three/rapier`), not Box3D. `box3d-wasm` is leftover from the old chamber and does not drive the stage. Parts have mass, a hinge axis, angle limits, and break numbers. Not FEA, not electrochemical accuracy.
 6. **Parts are the unit.** A can is not one mesh. It is **body + lid + latch + hinge**, each with mass / range / tolerance.
 7. **Latch fails before hinge.** Phone NMC cook should pop the front latch (`HINGED`). Only a much bigger dump shears the pin (`FREE`). Thresholds live in `src/lib/bay/parts.ts`.
 8. **Thermal is juice + force.** Cook timer → fire sprites + accumulated “gas” + impulses. If a pack is inside the can AABB, that gas loads the lid.
@@ -56,6 +56,10 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 16. **Ground is a pad, not a postage stamp.** Infinite shader grid (1 m cells, 10 m sections) plus a 400 m floor collider. Camera far plane and fog cover that pad. Debris may leave the shot; it should still have ground under it unless you throw it hundreds of meters.
 17. **Lighting exists to read height.** Key + cool fill + warm rim, contact shadows, and distance fog. If an object is airborne, its contact blob and the grid under it should make that obvious — not a flat gray soup.
 18. **Commit when the bay actually moved.** After a verified slice of progress, `git commit` the same turn. Do not wait for “the whole sim is done.” Compact recovery is this README plus git, not a chat recap. The message says what the bay does now (phone cook pops the latch, inspector edits mass, …), not a file list. Do not commit a blank canvas or a known-broken probe; if it is only a save-point, say so in the message.
+19. **Grab keeps its depth.** Pointer-down stores the click distance and the offset from the body. Drag slides on that depth; scroll pushes / pulls. Never snap the body to a point 1.4 m in front of the camera.
+20. **The can is sealed until the lid opens.** All five walls plus the floor are opaque steel. No ghost face. You see the inside after the latch pops, not before.
+21. **Collider kit is how we test the sim.** Spawn platonic / primitive solids (cube, ball, cylinder, capsule, tetra, octa, dodeca, ico, plank) from **Solid**. Cube/plank = cuboid, ball = sphere, cylinder/capsule = native, the four platonic meshes = convex hull. Stack, tumble, throw. Not scenery.
+22. **A 30-second pose ring buffer is next, not now.** When we debug lid jitter, sample the tracked body every tick into a last-30s log on `window.__bay`. Do not build it until a twitch needs a timeline.
 
 ---
 
@@ -83,14 +87,16 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 | `src/components/bay/pack.tsx` | Grabbable pack, puncture, fire |
 | `src/components/bay/probe-tick.tsx` | Camera frustum + per-frame snapshot |
 | `src/store/bay-store.ts` | Spawn/select/tool/latch |
-| `src/components/contain/inspector.tsx` | Live xyz / mass / friction editor for the tracked body |
+| `src/components/contain/inspector.tsx` | Live xyz / mass / grip / bounce editor for the tracked body |
+| `src/lib/bay/solids.ts` | Collider-kit shapes |
+| `src/components/bay/solid.tsx` | Spawnable cube / ball / cylinder / capsule / platonic hulls / plank |
 
 ---
 
 ## How to play v0
 
 1. Orbit-drag empty floor, or **Track** a part (body / lid / hinge / latch / pack). Inspector follows that part.
-2. **Grab** the pack, lid, or can, throw if you want. Edit xyz / mass in the inspect panel if you want a different setup.
+2. **Grab** a part: it stays where it is, then follows the mouse at that depth. Scroll to push or pull. **Solid** drops a cube / ball / hull beside the can for stacking tests.
 3. Click the pack (**PUNCTURE** enables when a pack is selected).
 4. **PUNCTURE**. Latch badge: sealed → hinged. The can stays on the pad; the lid hinges open. Track the lid if you want the shot.
 5. **Reset** to restage.
@@ -99,4 +105,4 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 
 ## Later (not v0)
 
-Explosives vs shields (cardboard, plastic, hood, bolted riot shield) and a crash dummy. Flammable props (dry grass). Multiple pack sizes. Same axioms: parts, break numbers, setup-then-watch, probe the log.
+Explosives vs shields (cardboard, plastic, hood, bolted riot shield) and a crash dummy. Flammable props (dry grass). Multiple pack sizes. A 30-second pose ring buffer on the tracked body (`window.__bay.history`) for lid-jitter. Same axioms: parts, break numbers, setup-then-watch, probe the log.
