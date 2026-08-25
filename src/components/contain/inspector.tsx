@@ -37,7 +37,7 @@ export function Inspector() {
   const speed = live?.vx != null ? Math.hypot(live.vx, live.vy ?? 0, live.vz ?? 0) : null;
 
   return (
-    <aside className="pointer-events-auto absolute left-4 top-24 z-10 w-56 rounded-[var(--radius-md)] border border-border bg-surface/92 p-3 md:left-5 md:top-[6.5rem] md:w-64">
+    <aside className="pointer-events-auto absolute left-4 top-24 z-10 w-60 rounded-[var(--radius-md)] border border-border bg-surface/92 p-3 md:left-5 md:top-[6.5rem] md:w-72">
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted">Inspect</p>
         {airborne ? (
@@ -63,59 +63,111 @@ export function Inspector() {
       </label>
 
       {live ? (
-        <div className="space-y-2">
-          <Row>
-            <NumField label="x" value={live.x} disabled={!live.editable} onCommit={(n) => applyActor(live.id, { x: n })} />
-            <NumField label="y" value={live.y} disabled={!live.editable} onCommit={(n) => applyActor(live.id, { y: n })} />
-            <NumField label="z" value={live.z} disabled={!live.editable} onCommit={(n) => applyActor(live.id, { z: n })} />
-          </Row>
-          <Row>
-            <NumField label="vx" value={live.vx} disabled={!live.editable} onCommit={(n) => applyActor(live.id, { vx: n })} />
-            <NumField label="vy" value={live.vy} disabled={!live.editable} onCommit={(n) => applyActor(live.id, { vy: n })} />
-            <NumField label="vz" value={live.vz} disabled={!live.editable} onCommit={(n) => applyActor(live.id, { vz: n })} />
-          </Row>
-          <Row>
-            <NumField label="mass" value={live.mass} disabled={!live.editable} step={0.1} onCommit={(n) => applyActor(live.id, { mass: n })} />
+        <div className="space-y-2.5">
+          <Fieldset legend="position · meters">
             <NumField
-              label="μ"
+              label="x"
+              hint="left / right"
+              value={live.x}
+              disabled={!live.editable}
+              onCommit={(n) => applyActor(live.id, { x: n })}
+            />
+            <NumField
+              label="y"
+              hint="height"
+              value={live.y}
+              disabled={!live.editable}
+              onCommit={(n) => applyActor(live.id, { y: n })}
+            />
+            <NumField
+              label="z"
+              hint="forward / back"
+              value={live.z}
+              disabled={!live.editable}
+              onCommit={(n) => applyActor(live.id, { z: n })}
+            />
+          </Fieldset>
+          <Fieldset legend="velocity · m/s">
+            <NumField
+              label="x"
+              hint="speed left / right"
+              value={live.vx}
+              disabled={!live.editable}
+              onCommit={(n) => applyActor(live.id, { vx: n })}
+            />
+            <NumField
+              label="y"
+              hint="speed up / down"
+              value={live.vy}
+              disabled={!live.editable}
+              onCommit={(n) => applyActor(live.id, { vy: n })}
+            />
+            <NumField
+              label="z"
+              hint="speed forward / back"
+              value={live.vz}
+              disabled={!live.editable}
+              onCommit={(n) => applyActor(live.id, { vz: n })}
+            />
+          </Fieldset>
+          <Fieldset legend="body">
+            <NumField
+              label="mass"
+              hint="kilograms. Heavier is harder to throw."
+              value={live.mass}
+              disabled={!live.editable}
+              step={0.1}
+              onCommit={(n) => applyActor(live.id, { mass: n })}
+            />
+            <NumField
+              label="grip"
+              hint="friction. 0 = ice, 1 = sticky."
               value={live.friction}
               disabled={!live.editable}
               step={0.05}
               onCommit={(n) => applyActor(live.id, { friction: n })}
             />
             <NumField
-              label="e"
+              label="bounce"
+              hint="restitution. 0 = thud, 1 = superball."
               value={live.restitution}
               disabled={!live.editable}
               step={0.05}
               onCommit={(n) => applyActor(live.id, { restitution: n })}
             />
-          </Row>
+          </Fieldset>
           <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted">
-            |v| {fmt(speed, 2)} · y {fmt(live.y, 2)}
+            speed {fmt(speed, 2)} m/s
             {live.state.latch != null ? ` · ${String(live.state.latch)}` : ""}
             {live.state.cook != null ? ` · ${String(live.state.cook)}` : ""}
           </p>
         </div>
       ) : (
-        <p className="font-mono text-[11px] leading-relaxed text-muted">Track a part to read and edit xyz, mass, friction.</p>
+        <p className="font-mono text-[11px] leading-relaxed text-muted">Track a part to read and edit position, mass, grip.</p>
       )}
     </aside>
   );
 }
 
-function Row({ children }: { children: ReactNode }) {
-  return <div className="grid grid-cols-3 gap-1.5">{children}</div>;
+function Fieldset({ legend, children }: { legend: string; children: ReactNode }) {
+  return (
+    <fieldset className="min-w-0">
+      <legend className="mb-1 font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{legend}</legend>
+      <div className="grid grid-cols-3 gap-1.5">{children}</div>
+    </fieldset>
+  );
 }
 
 function NumField({
   label,
+  hint,
   value,
   disabled,
   step = 0.01,
   onCommit,
 }: {
   label: string;
+  hint: string;
   value: number | null;
   disabled?: boolean;
   step?: number;
@@ -126,12 +178,13 @@ function NumField({
   const shown = editing ? text : fmt(value, 2);
 
   return (
-    <label className="block">
-      <span className="mb-0.5 block font-mono text-[10px] uppercase tracking-[0.14em] text-muted">{label}</span>
+    <label className="block min-w-0" title={hint}>
+      <span className="mb-0.5 block font-mono text-[10px] uppercase tracking-[0.12em] text-muted">{label}</span>
       <input
         type="text"
         inputMode="decimal"
         disabled={disabled}
+        aria-label={`${label}. ${hint}`}
         value={shown}
         step={step}
         onFocus={() => {
