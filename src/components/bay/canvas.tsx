@@ -9,7 +9,7 @@ import { Doorway } from "@/components/bay/doorway";
 import { Dummy } from "@/components/bay/dummy";
 import { Grass } from "@/components/bay/grass";
 import { Grenade } from "@/components/bay/grenade";
-import { Hill } from "@/components/bay/hill";
+import { Ramp } from "@/components/bay/ramp";
 import { Pack } from "@/components/bay/pack";
 import { SceneRig } from "@/components/bay/scene-rig";
 import { Solid } from "@/components/bay/solid";
@@ -220,8 +220,8 @@ function World() {
           <Dummy key={e.id} id={e.id} pos={e.pos} rot={e.rot} live={e.live} />
         ) : e.kind === "wagon" ? (
           <Wagon key={e.id} id={e.id} pos={e.pos} rot={e.rot} grip={e.grip} bounce={e.bounce} mass={e.mass} />
-        ) : e.kind === "hill" ? (
-          <Hill key={e.id} id={e.id} pos={e.pos} rot={e.rot} size={e.size} grip={e.grip} />
+        ) : e.kind === "hill" || e.kind === "ramp" ? (
+          <Ramp key={e.id} id={e.id} pos={e.pos} rot={e.rot} size={e.size} grip={e.grip} />
         ) : e.kind === "wall" ? (
           <Wall key={e.id} id={e.id} pos={e.pos} />
         ) : e.kind === "doorway" ? (
