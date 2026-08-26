@@ -26,6 +26,8 @@ export type SceneTrack = { kind?: Kind; part?: string; ref?: string };
 
 export type SceneAirborne = { minY?: number; minZ?: number };
 
+export type SceneCam = { offset?: Vec3 };
+
 export type Scene = {
   id: string;
   name: string;
@@ -34,6 +36,7 @@ export type Scene = {
   select?: string;
   track?: SceneTrack;
   airborne?: SceneAirborne;
+  cam?: SceneCam;
   entities: SceneActor[];
   ties: SceneTie[];
 };
@@ -148,6 +151,11 @@ export function coerceScene(raw: unknown): Scene | null {
     if (minY != null) airborne.minY = minY;
     if (minZ != null) airborne.minZ = minZ;
   }
+  let cam: SceneCam | undefined;
+  if (o.cam && typeof o.cam === "object") {
+    const off = vec3((o.cam as Record<string, unknown>).offset);
+    if (off) cam = { offset: off };
+  }
   return {
     id: o.id.slice(0, 48),
     name: o.name.slice(0, 40),
@@ -156,6 +164,7 @@ export function coerceScene(raw: unknown): Scene | null {
     select,
     track,
     airborne,
+    cam,
     entities,
     ties,
   };
