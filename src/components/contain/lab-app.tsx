@@ -3,6 +3,7 @@ import { Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Inspector } from "@/components/contain/inspector";
 import { cooks } from "@/lib/bay/cook";
+import { clearAllHeat } from "@/lib/bay/heat";
 import { bindProbeWindow, note } from "@/lib/bay/probe";
 import { punctureSelected } from "@/components/bay/pack";
 import { isMuted, setMuted, unlockAudio } from "@/lib/contain/audio";
@@ -68,17 +69,32 @@ export function LabApp() {
     return () => window.removeEventListener("keydown", onKey);
   }, [toggleCutaway]);
 
-  const packOn = selected ? entities.find((e) => e.id === selected)?.kind === "pack" : false;
-  const trackOpts = entities.flatMap((e) =>
-    e.kind === "can"
-      ? [
-          { id: e.id, label: `${e.id} body` },
-          { id: `${e.id}-lid`, label: `${e.id} lid` },
-          { id: `${e.id}-hinge`, label: `${e.id} hinge` },
-          { id: `${e.id}-latch`, label: `${e.id} latch` },
-        ]
-      : [{ id: e.id, label: `${e.id} ${e.kind}` }],
-  );
+  const selectedKind = selected ? entities.find((e) => e.id === selected)?.kind : null;
+  const packOn = selectedKind === "pack" || selectedKind === "charge";
+  const trackOpts = entities.flatMap((e) => {
+    if (e.kind === "can") {
+      return [
+        { id: e.id, label: `${e.id} body` },
+        { id: `${e.id}-lid`, label: `${e.id} lid` },
+        { id: `${e.id}-hinge`, label: `${e.id} hinge` },
+        { id: `${e.id}-latch`, label: `${e.id} latch` },
+      ];
+    }
+    if (e.kind === "dummy") {
+      return [
+        { id: `${e.id}-hips`, label: `${e.id} hips` },
+        { id: `${e.id}-chest`, label: `${e.id} chest` },
+        { id: `${e.id}-head`, label: `${e.id} head` },
+      ];
+    }
+    if (e.kind === "crate") {
+      return [
+        { id: `${e.id}-lid`, label: `${e.id} lid` },
+        { id: `${e.id}-floor`, label: `${e.id} floor` },
+      ];
+    }
+    return [{ id: e.id, label: `${e.id} ${e.kind}` }];
+  });
 
   return (
     <div className="relative h-dvh overflow-hidden bg-bg text-fg">
@@ -104,7 +120,7 @@ export function LabApp() {
         <div>
           <p className="font-display text-4xl leading-none tracking-[0.18em] md:text-5xl">CONTAIN</p>
           <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
-            v0 · hinged can · breakable latch
+            v0 · dummy · crate · grass
           </p>
         </div>
         <div className="pointer-events-auto flex items-center gap-2">
@@ -177,12 +193,52 @@ export function LabApp() {
           <button
             type="button"
             onClick={() => {
+              spawn("charge");
+              note("spawn", { kind: "charge" });
+            }}
+            className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 text-sm hover:bg-raised"
+          >
+            Charge
+          </button>
+          <button
+            type="button"
+            onClick={() => {
               spawn("can");
               note("spawn", { kind: "can" });
             }}
             className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 text-sm hover:bg-raised"
           >
             Can
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              spawn("crate");
+              note("spawn", { kind: "crate" });
+            }}
+            className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 text-sm hover:bg-raised"
+          >
+            Crate
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              spawn("dummy");
+              note("spawn", { kind: "dummy" });
+            }}
+            className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 text-sm hover:bg-raised"
+          >
+            Dummy
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              spawn("grass");
+              note("spawn", { kind: "grass" });
+            }}
+            className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 text-sm hover:bg-raised"
+          >
+            Grass
           </button>
           <label className="flex items-center">
             <span className="sr-only">Drop a solid</span>
@@ -221,6 +277,7 @@ export function LabApp() {
             type="button"
             onClick={() => {
               cooks.clear();
+              clearAllHeat();
               note("reset", {});
               reset();
             }}

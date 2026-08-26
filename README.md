@@ -10,9 +10,9 @@ This file is the **living axiom list**. If a rule matters after a compact, it be
 
 You place objects, then let them play. BeamNG energy: one setup, one run, a readable ending.
 
-**Now (v0):** one hinged ammo can + one battery pack. Grab, throw, puncture. Latch shears before the hinge.
+**Now (v0):** dummy + crate + charge + spreading grass. Phone-in-can still spawnable. Latch shears before the hinge.
 
-**Not yet:** dummies, grass, shields, crowds, multiple chemistries, film chrome.
+**Not yet:** shields, crowds, film chrome, 30s pose log.
 
 ---
 
@@ -61,18 +61,18 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 20. **The can is sealed until you ask.** Walls are opaque steel. **X-ray** (button, or key `X`) ghosts only the wall facing the camera so you can see inside. Orbit and the ghosted face follows. Off = fully sealed. The lid popping is still the physical open.
 21. **Collider kit is how we test the sim.** Spawn platonic / primitive solids (cube, ball, cylinder, capsule, tetra, octa, dodeca, ico, plank) from **Solid**. Cube/plank = cuboid, ball = sphere, cylinder/capsule = native, the four platonic meshes = convex hull. Stack, tumble, throw. Not scenery.
 22. **A 30-second pose ring buffer is next, not now.** When we debug lid jitter, sample the tracked body every tick into a last-30s log on `window.__bay`. Do not build it until a twitch needs a timeline.
+23. **Dummy is a ragdoll, not a statue.** Hips, chest, head, thighs, shins, arms. Spherical shoulders/hips/neck, hinged knees/elbows. Collision group 1 vs world 0 so limbs do not fight each other. The punchline is the flop.
+24. **A charge dismantles a crate.** Crate is floor + four walls + lid, welded. `bay-blast` (capture) shears the welds, then impulses throw the panels. Phone NMC still does **not** blast. Charge does.
+25. **Fire spreads.** Grass cells ignite from the heat field (`src/lib/bay/heat.ts`) written by cooks and burning tufts. Idle → burn → ash. Not a fluid sim.
 
 ---
 
 ## v0 proof (what “works” means)
 
-- Pack starts **in** the can. Badge **SEALED**.
-- **PUNCTURE** (pack selected) → cook → fire.
-- Event `latch-break` fires. Badge **HINGED**. Lid `y` and/or `rx` change vs the pre-break sample.
-- Hinge still exists until pressure hits `CAN.hinge` (phone run should not).
-- Tracking `can0-lid` or `can0-hinge` moves `snapshot().camera` look toward that part.
-- After a phone cook, `can0` body **y stays on the pad** (about `0.25`, under `1.0` at t+6s). `vy` near 0. Not still falling a minute later.
-- Inspector shows that body’s xyz / mass; `apply({ y: 2 })` lifts it, then gravity brings it back.
+- Default stage: **crate + charge inside + dummy in front + grass under the dummy**. Charge selected.
+- **PUNCTURE** → cook → `charge-boom` → `crate-break`. Crate panels leave the weld. Dummy hips/head move (flop, not a rigid statue).
+- Grass `burning` count rises (`grass-ignite`) from the heat field.
+- Phone pack still spawnable; it still must **not** loft an 8 kg can.
 
 ---
 
@@ -91,6 +91,10 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 | `src/components/contain/inspector.tsx` | Live xyz / mass / grip / bounce editor for the tracked body |
 | `src/lib/bay/solids.ts` | Collider-kit shapes |
 | `src/components/bay/solid.tsx` | Spawnable cube / ball / cylinder / capsule / platonic hulls / plank |
+| `src/components/bay/dummy.tsx` | Ragdoll dummy |
+| `src/components/bay/crate.tsx` | Welded crate that shears on blast |
+| `src/components/bay/grass.tsx` | Spreading grass fire |
+| `src/lib/bay/heat.ts` | Toy heat field |
 
 ---
 
@@ -98,12 +102,12 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 
 1. Orbit-drag empty floor, or **Track** a part (body / lid / hinge / latch / pack). Inspector follows that part.
 2. **Grab** a part: it stays where it is, then follows the mouse at that depth. Scroll to push or pull. **X-ray** (or `X`) ghosts the wall you are looking at. **Solid** drops a cube / ball / hull beside the can for stacking tests.
-3. Click the pack (**PUNCTURE** enables when a pack is selected).
-4. **PUNCTURE**. Latch badge: sealed → hinged. The can stays on the pad; the lid hinges open. Track the lid if you want the shot.
-5. **Reset** to restage.
+3. Charge starts selected. **PUNCTURE**. Grass should catch. Crate should come apart. Dummy should flop.
+4. Spawn **Can** / **Pack** if you still want the quiet phone gag.
+5. **Reset** restages the clip.
 
 ---
 
 ## Later (not v0)
 
-Explosives vs shields (cardboard, plastic, hood, bolted riot shield) and a crash dummy. Flammable props (dry grass). Multiple pack sizes. A 30-second pose ring buffer on the tracked body (`window.__bay.history`) for lid-jitter. Same axioms: parts, break numbers, setup-then-watch, probe the log.
+Shields (cardboard, plastic, hood, bolted riot). Multiple pack sizes. Film chrome. A 30-second pose ring buffer on the tracked body (`window.__bay.history`). Same axioms: parts, break numbers, setup-then-watch, probe the log.
