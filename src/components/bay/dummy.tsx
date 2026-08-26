@@ -7,7 +7,7 @@ import {
   type RapierRigidBody,
 } from "@react-three/rapier";
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import { useGrab } from "@/components/bay/grab";
 import { DUMMY } from "@/lib/bay/parts";
 import { note, registerAssembly, registerBody, setBodyMass, unregisterAssembly, unregisterBody } from "@/lib/bay/probe";
@@ -18,7 +18,7 @@ import { useBay } from "@/store/bay-store";
 const GROUPS = interactionGroups([1], [0, 2]);
 const bone = 0xc4b8a8;
 const jointCol = 0x6a5348;
-type BodyType = "dynamic" | "kinematicPosition";
+type BodyType = "kinematicPosition";
 
 function Ball({
   a,
@@ -145,10 +145,7 @@ export function Dummy({ id, pos }: { id: string; pos: [number, number, number] }
   const larmL = useRef<RapierRigidBody>(null!);
   const larmR = useRef<RapierRigidBody>(null!);
   const bones = useRef([hips, chest, head, thighL, thighR, shinL, shinR, uarmL, uarmR, larmL, larmR]);
-  const [floppy, setFloppy] = useState(false);
-  const type: BodyType = floppy ? "dynamic" : "kinematicPosition";
-  const lin = floppy ? 0.12 : 3.2;
-  const ang = floppy ? 0.16 : 8;
+  const floppy = useRef(false);
 
   useEffect(() => {
     const ids = [
@@ -170,11 +167,13 @@ export function Dummy({ id, pos }: { id: string; pos: [number, number, number] }
 
   useEffect(() => {
     const onBlast = (ev: Event) => {
-      const { x, z, power } = (ev as CustomEvent<{ x: number; y: number; z: number; power: number }>).detail;
+      const { x, y, z, power } = (ev as CustomEvent<{ x: number; y: number; z: number; power: number }>).detail;
       const h = hips.current;
       if (!h || power < 4) return;
       const p = h.translation();
       if (Math.hypot(p.x - x, p.z - z) > 6) return;
+      const first = !floppy.current;
+      floppy.current = true;
       unregisterAssembly(id);
       let n = 0;
       for (const r of bones.current) {
@@ -183,17 +182,29 @@ export function Dummy({ id, pos }: { id: string; pos: [number, number, number] }
         b.setBodyType(0, true);
         b.setLinearDamping(0.12);
         b.setAngularDamping(0.16);
+        const q = b.translation();
+        const dx = q.x - x;
+        const dy = q.y - y;
+        const dz = q.z - z;
+        const dist = Math.max(0.2, Math.hypot(dx, dy, dz));
+        b.applyImpulse(
+          {
+            x: (dx / dist) * 1.6,
+            y: 2.2 + (dy / dist) * 0.8,
+            z: (dz / dist) * 1.6,
+          },
+          true,
+        );
         b.wakeUp();
         n += 1;
       }
-      setFloppy(true);
-      if (n > 0) note("dummy-flop", { id, n, x: p.x, z: p.z });
+      if (first && n > 0) note("dummy-flop", { id, n, x: p.x, z: p.z });
     };
     window.addEventListener("bay-blast", onBlast, true);
     return () => window.removeEventListener("bay-blast", onBlast, true);
   }, [id]);
 
-  const boneProps = { type, linearDamping: lin, angularDamping: ang };
+  const boneProps = { type: "kinematicPosition" as BodyType, linearDamping: 3.2, angularDamping: 8 };
 
   return (
     <group position={pos}>

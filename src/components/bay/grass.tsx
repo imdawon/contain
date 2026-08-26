@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { GRASS } from "@/lib/bay/parts";
 import { clearHeat, heatAt, setHeat } from "@/lib/bay/heat";
 import { note, registerBody, unregisterBody } from "@/lib/bay/probe";
-import { playEvent, setFireMix, silenceLoops } from "@/lib/contain/audio";
+import { playEvent, reportFire } from "@/lib/contain/audio";
 
 type Phase = "idle" | "burn" | "ash";
 
@@ -57,7 +57,7 @@ export function Grass({ id, pos }: { id: string; pos: [number, number, number] }
     return () => {
       unregisterBody(id);
       for (let i = 0; i < cells.length; i++) clearHeat(`${id}-${i}`);
-      if (hissing.current) silenceLoops();
+      reportFire(id, 0, 0);
     };
   }, [id, cells, pos]);
 
@@ -122,10 +122,10 @@ export function Grass({ id, pos }: { id: string; pos: [number, number, number] }
     if (burning > 0) {
       hissing.current = true;
       const u = Math.min(1, burning / Math.max(1, cells.length));
-      setFireMix(0.35 + u * 0.65, 0.25 + u * 0.75);
+      reportFire(id, 0.35 + u * 0.65, 0.25 + u * 0.75);
     } else if (hissing.current) {
       hissing.current = false;
-      silenceLoops();
+      reportFire(id, 0, 0);
     }
   });
 
