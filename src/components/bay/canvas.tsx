@@ -67,11 +67,13 @@ function BlastBus() {
         const dy = p.y - y;
         const dz = p.z - z;
         const dist = Math.max(0.28, Math.hypot(dx, dy, dz));
-        const j = Math.min(9.5, (power * 0.48) / dist);
+        const j = Math.min(7.2, (power * 0.42) / dist);
+        const radialY = (dy / dist) * j;
+        const lift = dy < -0.04 ? radialY * 0.45 : Math.max(0, radialY * 0.5) + j * 0.1;
         b.applyImpulse(
           {
             x: (dx / dist) * j,
-            y: Math.max(0.2, (dy / dist) * j * 0.4) + j * 0.18,
+            y: lift,
             z: (dz / dist) * j,
           },
           true,

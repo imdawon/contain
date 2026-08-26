@@ -94,17 +94,26 @@ export function useGrab(body: RefObject<RapierRigidBody | null>, id: string) {
     ray.at(dist.current, _hit);
     _hit.add(offset.current);
     _hit.y = Math.max(0.06, _hit.y);
-    const dx = _hit.x - last.current.x;
-    const dy = _hit.y - last.current.y;
-    const dz = _hit.z - last.current.z;
+    let dx = _hit.x - last.current.x;
+    let dy = _hit.y - last.current.y;
+    let dz = _hit.z - last.current.z;
+    let minY = Infinity;
+    for (const m of crew.current) {
+      const rb = m.id === id ? b : listSamplers().get(m.id)?.getBody?.();
+      if (!rb) continue;
+      minY = Math.min(minY, rb.translation().y);
+    }
+    if (Number.isFinite(minY) && minY + dy < 0.06) dy = 0.06 - minY;
     const inv = 1 / Math.max(dt, 1 / 60);
     vel.current.set(dx * inv, dy * inv, dz * inv);
-    last.current.copy(_hit);
+    last.current.x += dx;
+    last.current.y += dy;
+    last.current.z += dz;
     for (const m of crew.current) {
       const rb = m.id === id ? b : listSamplers().get(m.id)?.getBody?.();
       if (!rb) continue;
       const p = rb.translation();
-      rb.setNextKinematicTranslation({ x: p.x + dx, y: Math.max(0.06, p.y + dy), z: p.z + dz });
+      rb.setNextKinematicTranslation({ x: p.x + dx, y: p.y + dy, z: p.z + dz });
     }
   }
 

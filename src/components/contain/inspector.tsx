@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { applyActor, snapshot, type ProbeObject, type ProbeSnap } from "@/lib/bay/probe";
+import { applyActor, listSamplers, snapshot, type ProbeObject, type ProbeSnap } from "@/lib/bay/probe";
 import { useBay } from "@/store/bay-store";
 import { cn } from "@/lib/utils";
 
@@ -25,7 +25,12 @@ export function Inspector() {
     const tick = () => {
       const snap = snapshot();
       setLive(pickTarget(snap));
-      setIds(snap.objects.map((o) => ({ id: o.id, kind: o.kind })));
+      const listed = snap.objects.map((o) => ({ id: o.id, kind: o.kind }));
+      setIds(
+        listed.length > 0
+          ? listed
+          : [...listSamplers()].map(([id, rec]) => ({ id, kind: rec.kind })),
+      );
     };
     tick();
     const t = window.setInterval(tick, 100);

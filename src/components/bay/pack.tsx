@@ -3,7 +3,7 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import { punctureId } from "@/lib/bay/actions";
 import { cooks, startCook, stepCook } from "@/lib/bay/cook";
-import { clearHeat, setHeat } from "@/lib/bay/heat";
+import { clearHeat, pulseHeat, setHeat } from "@/lib/bay/heat";
 import { PACK } from "@/lib/bay/parts";
 import { playEvent } from "@/lib/contain/audio";
 import { note, registerBody, setBodyMass, unregisterBody } from "@/lib/bay/probe";
@@ -104,10 +104,11 @@ export function Pack({
       note(isCharge ? "charge-boom" : "pack-boom", { id, x: p.x, y: p.y, z: p.z, boom: c.boom });
       playEvent("burst", "nmc");
       if (isCharge) {
+        pulseHeat(`${id}-blast`, { x: p.x, y: p.y, z: p.z, kW: 28 }, 2.4);
         window.dispatchEvent(
           new CustomEvent("bay-blast", { detail: { x: p.x, y: p.y, z: p.z, power: Math.min(14, c.boom) } }),
         );
-        b.applyImpulse({ x: (Math.random() - 0.5) * 0.4, y: 2.2, z: (Math.random() - 0.5) * 0.4 }, true);
+        b.applyImpulse({ x: (Math.random() - 0.5) * 0.35, y: 1.1, z: (Math.random() - 0.5) * 0.35 }, true);
       } else {
         b.applyImpulse({ x: (Math.random() - 0.5) * 0.06, y: 0.08, z: (Math.random() - 0.5) * 0.06 }, true);
       }

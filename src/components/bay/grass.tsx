@@ -98,7 +98,7 @@ export function Grass({ id, pos }: { id: string; pos: [number, number, number] }
       } else if (c.phase === "burn") {
         c.t += dt;
         burning += 1;
-        setHeat(`${id}-${i}`, { x: wx, y: 0.08, z: wz, kW: 5.2 });
+        setHeat(`${id}-${i}`, { x: wx, y: 0.08, z: wz, kW: 8 });
         if (c.t > 4.2) {
           c.phase = "ash";
           clearHeat(`${id}-${i}`);
