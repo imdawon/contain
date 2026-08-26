@@ -3,6 +3,8 @@ import { Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Inspector } from "@/components/contain/inspector";
 import { bindHarnessPipe, bindHarnessWindow, resetStage } from "@/lib/bay/harness";
+import { loadBay, saveBay } from "@/lib/bay/actions";
+import { listLevels } from "@/lib/bay/level";
 import { note } from "@/lib/bay/probe";
 import { punctureSelected } from "@/components/bay/pack";
 import { isMuted, setMuted, unlockAudio } from "@/lib/contain/audio";
@@ -45,6 +47,7 @@ export function LabApp() {
   const setTrack = useBay((s) => s.setTrack);
   const cutaway = useBay((s) => s.cutaway);
   const toggleCutaway = useBay((s) => s.toggleCutaway);
+  const levelId = useBay((s) => s.levelId);
 
   useEffect(() => {
     setClient(true);
@@ -118,7 +121,7 @@ export function LabApp() {
         <div>
           <p className="font-display text-4xl leading-none tracking-[0.18em] md:text-5xl">CONTAIN</p>
           <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
-            v0 · grenade · dummy · crate · grass
+            {listLevels().find((l) => l.id === levelId)?.name ?? "clip"} · setup then watch
           </p>
         </div>
         <div className="pointer-events-auto flex items-center gap-2">
@@ -291,6 +294,50 @@ export function LabApp() {
             className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 font-mono text-[11px] uppercase tracking-[0.12em] text-muted hover:text-fg"
           >
             Reset
+          </button>
+          <label className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.12em] text-muted">
+            Clip
+            <select
+              value={levelId}
+              onChange={(e) => loadBay(e.target.value)}
+              data-bay="level"
+              className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-2 text-fg"
+            >
+              <optgroup label="Gags">
+                {listLevels()
+                  .filter((l) => l.builtin)
+                  .map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.name}
+                    </option>
+                  ))}
+              </optgroup>
+              {listLevels().some((l) => !l.builtin) ? (
+                <optgroup label="Saved">
+                  {listLevels()
+                    .filter((l) => !l.builtin)
+                    .map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.name}
+                      </option>
+                    ))}
+                </optgroup>
+              ) : null}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={() => {
+              const current = listLevels().find((l) => l.id === levelId);
+              const next = window.prompt("Name this clip", current?.builtin ? `${current.name} copy` : (current?.name ?? "Clip"));
+              if (!next) return;
+              saveBay(next);
+            }}
+            data-bay="save"
+            className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 font-mono text-[11px] uppercase tracking-[0.12em] text-muted hover:text-fg"
+            title="Save the current arrangement as a clip"
+          >
+            Save
           </button>
           <label className="ml-auto flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.12em] text-muted">
             Track

@@ -1,4 +1,13 @@
 import { create } from "zustand";
+import {
+  captureActors,
+  DEFAULT_LEVEL_ID,
+  getLevel,
+  materialize,
+  persistCustom,
+  trackFrom,
+  type Level,
+} from "@/lib/bay/level";
 import { SOLID_SHAPES, type SolidShape } from "@/lib/bay/solids";
 
 export type Tool = "grab" | "nail";
@@ -23,9 +32,12 @@ interface BayState {
   dragging: boolean;
   latch: "sealed" | "hinged" | "free";
   cutaway: boolean;
+  levelId: string;
   spawn: (kind: Kind) => void;
   clear: () => void;
   reset: () => void;
+  loadLevel: (id: string) => { ok: boolean; id: string; n: number; name: string };
+  saveLevel: (name?: string) => { ok: boolean; id: string; name: string; n: number };
   select: (id: string | null) => void;
   setTrack: (id: string | null) => void;
   setTool: (tool: Tool) => void;
@@ -41,26 +53,13 @@ function nid() {
   return `e${n}`;
 }
 
-function stage() {
-  const crateId = "crate0";
-  const nadeId = "grenade0";
-  const dummyId = "dummy0";
-  const grassId = "grass0";
-  return {
-    entities: [
-      { id: crateId, kind: "crate" as const, pos: [0, 0, 0] as [number, number, number] },
-      { id: nadeId, kind: "grenade" as const, pos: [0, 0.64, 0] as [number, number, number] },
-      { id: dummyId, kind: "dummy" as const, pos: [0, 0, 1.22] as [number, number, number] },
-      { id: grassId, kind: "grass" as const, pos: [0, 0, 0.9] as [number, number, number] },
-    ],
-    selected: nadeId,
-    trackId: `${dummyId}-hips`,
-    latch: "sealed" as const,
-    tool: "grab" as const,
-  };
+function stageFrom(id: string) {
+  const level = getLevel(id) ?? getLevel(DEFAULT_LEVEL_ID)!;
+  return { ...materialize(level, nid), levelId: level.id };
 }
 
-const start = (): Pick<BayState, "entities" | "selected" | "trackId" | "latch" | "tool"> => stage();
+const start = (): Pick<BayState, "entities" | "selected" | "trackId" | "latch" | "tool" | "levelId"> =>
+  stageFrom(DEFAULT_LEVEL_ID);
 
 export const useBay = create<BayState>((set, get) => ({
   ...start(),
@@ -81,24 +80,28 @@ export const useBay = create<BayState>((set, get) => ({
     set({ entities: [...get().entities, e], selected: e.id, trackId });
   },
   clear: () => set({ entities: [], selected: null, trackId: null, latch: "sealed" }),
-  reset: () => {
-    const crateId = nid();
-    const nadeId = nid();
-    const dummyId = nid();
-    const grassId = nid();
-    set({
-      entities: [
-        { id: crateId, kind: "crate", pos: [0, 0, 0] },
-        { id: nadeId, kind: "grenade", pos: [0, 0.64, 0] },
-        { id: dummyId, kind: "dummy", pos: [0, 0, 1.22] },
-        { id: grassId, kind: "grass", pos: [0, 0, 0.9] },
-      ],
-      selected: nadeId,
-      trackId: `${dummyId}-hips`,
-      latch: "sealed",
-      tool: "grab",
-      dragging: false,
+  reset: () => set({ ...stageFrom(get().levelId), dragging: false }),
+  loadLevel: (id) => {
+    const staged = stageFrom(id);
+    set({ ...staged, dragging: false });
+    const level = getLevel(staged.levelId)!;
+    return { ok: true, id: staged.levelId, n: staged.entities.length, name: level.name };
+  },
+  saveLevel: (name) => {
+    const s = get();
+    const current = getLevel(s.levelId);
+    const label = (name?.trim() || current?.name || "Clip").slice(0, 40);
+    const replaceId = current && !current.builtin ? current.id : undefined;
+    const saved: Level = persistCustom({
+      name: label,
+      blurb: current?.builtin ? `Copy of ${current.name}.` : (current?.blurb ?? "Saved clip."),
+      entities: captureActors(s.entities),
+      select: s.entities.find((e) => e.id === s.selected)?.kind,
+      track: trackFrom(s.entities, s.trackId),
+      replaceId,
     });
+    set({ levelId: saved.id });
+    return { ok: true, id: saved.id, name: saved.name, n: saved.entities.length };
   },
   select: (id) => set({ selected: id }),
   setTrack: (id) => set({ trackId: id }),
