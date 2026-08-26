@@ -60,7 +60,7 @@ export function useGrab(body: RefObject<RapierRigidBody | null>, id: string) {
     offset.current.set(t.x - e.point.x, t.y - e.point.y, t.z - e.point.z);
     const bone = listSamplers().get(id)?.kind === "dummy-bone";
     if (bone) {
-      if (b.isKinematic()) awakenRagdoll(id);
+      awakenRagdoll(id);
       mode.current = "spring";
       crew.current = [{ id, kinematic: false }];
       note("grab", { id, n: 1, spring: true });

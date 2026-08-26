@@ -10,7 +10,7 @@ This file is the **living axiom list**. Axioms are product rules that still matt
 
 You place objects, then let them play. BeamNG energy: one setup, one run, a readable ending.
 
-**Now (v0):** dummy + crate + **grenade** + **vs runs** (same victim, one knob ticks up). Phone pack still spawnable as a fire.
+**Now (v0):** dummy + crate + **grenade** + wall + doorway + **vs runs** (same victim, one knob ticks up). Phone pack still spawnable as a fire.
 
 **Not yet:** cars, ramps, shields, film chrome.
 
@@ -32,6 +32,7 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 12. **Commit when the bay actually moved.** Same turn as a verified slice. Message says what the bay does now.
 13. **A clip is a level.** Named arrangement of parts. Reset restages that clip. Save keeps a gag.
 14. **A run is a bet.** Same victim. One variable. Premise on screen. Early rungs can fail. Next is the only loop.
+15. **Cover is occlusion.** A crate, can, wall, or door on the line blocks that bone’s blast. Grass is not cover. Rapier will not occlude a scripted radial impulse by itself.
 
 ---
 
@@ -39,6 +40,7 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 
 - Default stage: **Grenades vs Dummy lv 1** — one grenade far enough that the dummy stays a T-statue.
 - **PULL PIN** arms every grenade. Fuse → `grenade-boom`. Lv 1–3 miss. Lv 4 at the feet flops.
+- Cover on the line (crate / can / wall / doorway) stops that flop. Grass on the line does not.
 - **Next** restages lv+1 with more bangs / closer range. Same dummy.
 - Phone pack still spawnable; it is a **fire**, not a charge, and must **not** loft an 8 kg can.
 
@@ -63,6 +65,8 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 | `src/lib/bay/solids.ts` | Collider-kit shapes |
 | `src/components/bay/solid.tsx` | Spawnable cube / ball / cylinder / capsule / platonic hulls / plank |
 | `src/components/bay/dummy.tsx` | Ragdoll dummy |
+| `src/components/bay/wall.tsx` | Tall cuboid cover |
+| `src/components/bay/doorway.tsx` | Frame + hinged door; latch fails first |
 | `src/components/bay/crate.tsx` | Welded crate that shears on blast |
 | `src/components/bay/grass.tsx` | Spreading grass fire |
 | `src/lib/bay/heat.ts` | Toy heat field |
@@ -76,7 +80,7 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 
 1. Read the overlay: **N GRENADES vs 1 DUMMY**. That is the bet.
 2. **PULL PIN**. Watch whether the dummy stays up. **Next** (or `N`) is the next rung.
-3. Pick **Dummy vs Cover** to tick armor instead of grenade count. Gags (Pin-pull, Shoes, …) are still under Run.
+3. Pick **Dummy vs Cover** to tick armor instead of grenade count. Wall and door are spawnable cover. Gags (Pin-pull, Shoes, …) are still under Run.
 4. **Grab** a part to cheat the setup. **Save** keeps a layout. **Reset** restages this rung.
 
 ---

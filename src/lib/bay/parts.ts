@@ -53,6 +53,26 @@ export const DUMMY = {
   larmMass: 0.38,
 };
 
+export const WALL = {
+  w: 1.35,
+  h: 1.85,
+  d: 0.1,
+  mass: 36,
+};
+
+export const DOOR = {
+  openW: 0.86,
+  h: 2.05,
+  frameT: 0.08,
+  depth: 0.12,
+  panelT: 0.046,
+  frameMass: 22,
+  panelMass: 9,
+  latch: 2.4,
+  hinge: 14,
+  open: [-1.85, 0.04] as [number, number],
+};
+
 export const GRASS = {
   cols: 7,
   rows: 5,

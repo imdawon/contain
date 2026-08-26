@@ -1,4 +1,5 @@
 import { forgetBay, listBayLevels, listBayRuns, loadBay, loadRun, nextTrial, punctureId, resetBay, saveBay, setToolName, spawnKind } from "@/lib/bay/actions";
+import { hingeSnapshot } from "@/lib/bay/atd";
 import { getLevel, levelCard } from "@/lib/bay/level";
 import { getRun, runCard } from "@/lib/bay/run";
 import { cooks } from "@/lib/bay/cook";
@@ -432,6 +433,7 @@ export function peek() {
       boom: c.boom,
     })),
     objects,
+    loads: hingeSnapshot(),
   };
 }
 
@@ -491,7 +493,7 @@ function loadClip(id: string) {
 
 export function help() {
   return {
-    peek: "compact stage: objects xyz/speed + recent events",
+    peek: "compact stage: objects xyz/speed + recent events + toy hinge loads",
     snapshot: "full probe snap",
     log: "event list",
     history: "(seconds=30) pose+velocity ring at 30Hz (every other 60Hz tick); events ride on the same frames",
@@ -499,7 +501,7 @@ export function help() {
     ui: "DOM controls with data-bay",
     click: "(name, value?) click [data-bay=name]; selects need a value (track id, solid shape)",
     camera: "snapshot().camera xyz + look",
-    spawn: "(kind) grenade|pack|can|crate|dummy|grass|cube|...",
+    spawn: "(kind) grenade|pack|can|crate|dummy|grass|wall|doorway|cube|...",
     solid: "(shape)",
     puncture: "(id?) pull grenade pin or cook pack",
     reset: "restage the current trial or clip",

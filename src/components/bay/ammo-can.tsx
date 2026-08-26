@@ -1,14 +1,9 @@
-import {
-  CuboidCollider,
-  RigidBody,
-  useFixedJoint,
-  useRapier,
-  useRevoluteJoint,
-  type RapierRigidBody,
-} from "@react-three/rapier";
+import { CuboidCollider, RigidBody, interactionGroups, useFixedJoint, useRapier, useRevoluteJoint, type RapierRigidBody } from "@react-three/rapier";
 import { useFrame } from "@react-three/fiber";
 import { useRef } from "react";
 import { cooks } from "@/lib/bay/cook";
+import { markCover } from "@/lib/bay/cover";
+import { COVER_G, CRATE_G, DUMMY_G, WORLD_G } from "@/lib/bay/groups";
 import { CAN } from "@/lib/bay/parts";
 import { note, registerAssembly, registerBody, setBodyMass, unregisterAssembly, unregisterBody } from "@/lib/bay/probe";
 import { playEvent } from "@/lib/contain/audio";
@@ -48,6 +43,7 @@ function ghost(mesh: THREE.Mesh | null, on: boolean) {
 }
 
 const Q = [0, 0, 0, 1] as [number, number, number, number];
+const GROUPS = interactionGroups([WORLD_G, COVER_G], [WORLD_G, DUMMY_G, CRATE_G, COVER_G]);
 
 export function AmmoCan({ id, pos }: { id: string; pos: [number, number, number] }) {
   const body = useRef<RapierRigidBody>(null!);
@@ -60,6 +56,7 @@ export function AmmoCan({ id, pos }: { id: string; pos: [number, number, number]
   const hingeGone = useRef(false);
   const ventOnce = useRef(false);
   const massPinned = useRef(false);
+  const tagged = useRef(false);
   const cutaway = useBay((s) => s.cutaway);
   const faces = useRef<Record<FaceName, THREE.Mesh | null>>({
     floor: null,
@@ -160,6 +157,11 @@ export function AmmoCan({ id, pos }: { id: string; pos: [number, number, number]
       setBodyMass(l, CAN.lidMass);
       massPinned.current = true;
     }
+    if (!tagged.current) {
+      markCover(b, "can");
+      markCover(l, "can");
+      tagged.current = true;
+    }
     const bp = b.translation();
 
     let gas = 0;
@@ -249,12 +251,13 @@ export function AmmoCan({ id, pos }: { id: string; pos: [number, number, number]
         linearDamping={1.4}
         angularDamping={1.4}
         ccd
+        collisionGroups={GROUPS}
       >
-        <CuboidCollider args={[w / 2, t / 2, d / 2]} position={[0, -h / 2 + t / 2, 0]} />
-        <CuboidCollider args={[t / 2, h / 2, d / 2]} position={[-w / 2 + t / 2, 0, 0]} />
-        <CuboidCollider args={[t / 2, h / 2, d / 2]} position={[w / 2 - t / 2, 0, 0]} />
-        <CuboidCollider args={[w / 2, h / 2, t / 2]} position={[0, 0, -d / 2 + t / 2]} />
-        <CuboidCollider args={[w / 2, h / 2, t / 2]} position={[0, 0, d / 2 - t / 2]} />
+        <CuboidCollider args={[w / 2, t / 2, d / 2]} position={[0, -h / 2 + t / 2, 0]} collisionGroups={GROUPS} />
+        <CuboidCollider args={[t / 2, h / 2, d / 2]} position={[-w / 2 + t / 2, 0, 0]} collisionGroups={GROUPS} />
+        <CuboidCollider args={[t / 2, h / 2, d / 2]} position={[w / 2 - t / 2, 0, 0]} collisionGroups={GROUPS} />
+        <CuboidCollider args={[w / 2, h / 2, t / 2]} position={[0, 0, -d / 2 + t / 2]} collisionGroups={GROUPS} />
+        <CuboidCollider args={[w / 2, h / 2, t / 2]} position={[0, 0, d / 2 - t / 2]} collisionGroups={GROUPS} />
         <group onPointerDown={grabBody.down}>
           <mesh ref={(el) => { faces.current.floor = el; }} position={[0, -h / 2 + t / 2, 0]}>
             <boxGeometry args={[w, t, d]} />
@@ -288,6 +291,7 @@ export function AmmoCan({ id, pos }: { id: string; pos: [number, number, number]
         restitution={0.1}
         linearDamping={0.8}
         angularDamping={0.9}
+        collisionGroups={GROUPS}
       >
         <mesh
           ref={(el) => {
