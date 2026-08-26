@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { GRASS } from "@/lib/bay/parts";
 import { clearHeat, heatAt, setHeat } from "@/lib/bay/heat";
 import { note, registerBody, unregisterBody } from "@/lib/bay/probe";
-import { playEvent } from "@/lib/contain/audio";
+import { playEvent, setFireMix, silenceLoops } from "@/lib/contain/audio";
 
 type Phase = "idle" | "burn" | "ash";
 
@@ -22,6 +22,7 @@ export function Grass({ id, pos }: { id: string; pos: [number, number, number] }
   const { cols, rows, gap, ignite } = GRASS;
   const mesh = useRef<THREE.InstancedMesh>(null);
   const litOnce = useRef(false);
+  const hissing = useRef(false);
   const cells = useMemo(() => {
     const list: Cell[] = [];
     const ox = ((cols - 1) * gap) / 2;
@@ -56,6 +57,7 @@ export function Grass({ id, pos }: { id: string; pos: [number, number, number] }
     return () => {
       unregisterBody(id);
       for (let i = 0; i < cells.length; i++) clearHeat(`${id}-${i}`);
+      if (hissing.current) silenceLoops();
     };
   }, [id, cells, pos]);
 
@@ -117,7 +119,14 @@ export function Grass({ id, pos }: { id: string; pos: [number, number, number] }
     }
     fm.instanceMatrix.needsUpdate = true;
     if (fm.instanceColor) fm.instanceColor.needsUpdate = true;
-    void burning;
+    if (burning > 0) {
+      hissing.current = true;
+      const u = Math.min(1, burning / Math.max(1, cells.length));
+      setFireMix(0.35 + u * 0.65, 0.25 + u * 0.75);
+    } else if (hissing.current) {
+      hissing.current = false;
+      silenceLoops();
+    }
   });
 
   const n = cols * rows;

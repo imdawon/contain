@@ -8,6 +8,7 @@ import { useBay } from "@/store/bay-store";
 const _hit = new THREE.Vector3();
 
 type Member = { id: string; kinematic: boolean };
+type Mode = "assembly" | "spring" | "solo";
 
 export function useGrab(body: RefObject<RapierRigidBody | null>, id: string) {
   const grabbing = useRef(false);
@@ -16,6 +17,7 @@ export function useGrab(body: RefObject<RapierRigidBody | null>, id: string) {
   const dist = useRef(-1);
   const offset = useRef(new THREE.Vector3());
   const crew = useRef<Member[]>([]);
+  const mode = useRef<Mode>("solo");
 
   useEffect(() => {
     const up = () => release();
@@ -56,7 +58,16 @@ export function useGrab(body: RefObject<RapierRigidBody | null>, id: string) {
     last.current.set(t.x, t.y, t.z);
     dist.current = Math.max(0.4, e.distance);
     offset.current.set(t.x - e.point.x, t.y - e.point.y, t.z - e.point.z);
-    crew.current = bodies().map(({ id: mid, b: rb }) => {
+    const ragdoll = listSamplers().get(id)?.kind === "dummy-bone" && !b.isKinematic();
+    if (ragdoll) {
+      mode.current = "spring";
+      crew.current = [{ id, kinematic: false }];
+      note("grab", { id, n: 1, spring: true });
+      return;
+    }
+    const crewBodies = bodies();
+    mode.current = crewBodies.length > 1 ? "assembly" : "solo";
+    crew.current = crewBodies.map(({ id: mid, b: rb }) => {
       const kinematic = rb.isKinematic();
       rb.setBodyType(2, true);
       rb.setLinvel({ x: 0, y: 0, z: 0 }, true);
@@ -71,6 +82,17 @@ export function useGrab(body: RefObject<RapierRigidBody | null>, id: string) {
     grabbing.current = false;
     useBay.getState().setDragging(false);
     dist.current = -1;
+    if (mode.current === "spring") {
+      const rb = body.current;
+      if (rb) {
+        rb.setLinvel({ x: vel.current.x * 0.55, y: vel.current.y * 0.55, z: vel.current.z * 0.55 }, true);
+        rb.wakeUp();
+      }
+      note("ungrab", { id, floppy: true, spring: true });
+      crew.current = [];
+      mode.current = "solo";
+      return;
+    }
     const floppy = crew.current.some((m) => !m.kinematic);
     for (const m of crew.current) {
       const rb = m.id === id ? body.current : listSamplers().get(m.id)?.getBody?.();
@@ -85,6 +107,7 @@ export function useGrab(body: RefObject<RapierRigidBody | null>, id: string) {
     }
     note("ungrab", { id, floppy });
     crew.current = [];
+    mode.current = "solo";
   }
 
   function tick(ray: THREE.Ray, dt: number) {
@@ -94,6 +117,18 @@ export function useGrab(body: RefObject<RapierRigidBody | null>, id: string) {
     ray.at(dist.current, _hit);
     _hit.add(offset.current);
     _hit.y = Math.max(0.06, _hit.y);
+    if (mode.current === "spring") {
+      const p = b.translation();
+      const k = 14;
+      const vx = (_hit.x - p.x) * k;
+      const vy = (_hit.y - p.y) * k;
+      const vz = (_hit.z - p.z) * k;
+      vel.current.set(vx, vy, vz);
+      b.setLinvel({ x: vx, y: vy, z: vz }, true);
+      b.wakeUp();
+      last.current.copy(_hit);
+      return;
+    }
     let dx = _hit.x - last.current.x;
     let dy = _hit.y - last.current.y;
     let dz = _hit.z - last.current.z;

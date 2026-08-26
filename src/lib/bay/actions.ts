@@ -2,7 +2,7 @@ import { cooks, startCook } from "@/lib/bay/cook";
 import { clearAllHeat } from "@/lib/bay/heat";
 import { PACK } from "@/lib/bay/parts";
 import { clearLog, note } from "@/lib/bay/probe";
-import { playEvent } from "@/lib/contain/audio";
+import { playEvent, silenceLoops } from "@/lib/contain/audio";
 import { useBay, type Kind, type Tool } from "@/store/bay-store";
 
 function isFuse(kind: Kind | undefined) {
@@ -35,6 +35,7 @@ export function resetBay() {
   cooks.clear();
   clearAllHeat();
   clearLog();
+  silenceLoops();
   note("reset", {});
   useBay.getState().reset();
   const s = useBay.getState();
