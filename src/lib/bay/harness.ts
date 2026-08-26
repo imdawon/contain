@@ -1,4 +1,5 @@
-import { punctureId, resetBay, setToolName, spawnKind } from "@/lib/bay/actions";
+import { forgetBay, listBayLevels, loadBay, punctureId, resetBay, saveBay, setToolName, spawnKind } from "@/lib/bay/actions";
+import { getLevel, levelCard } from "@/lib/bay/level";
 import { cooks } from "@/lib/bay/cook";
 import { loopLevels } from "@/lib/contain/audio";
 import {
@@ -405,6 +406,7 @@ export function peek() {
     : histCam
       ? { x: histCam.x, y: histCam.y, z: histCam.z, lookX: histCam.x, lookY: histCam.y, lookZ: histCam.z, fov: 42 }
       : null;
+  const level = getLevel(store.levelId);
   return {
     t: round(probeTime()),
     selected: store.selected,
@@ -412,6 +414,8 @@ export function peek() {
     tool: store.tool,
     latch: store.latch,
     cutaway: store.cutaway,
+    level: level ? levelCard(level) : { id: store.levelId, name: store.levelId, blurb: "", builtin: false, n: store.entities.length },
+    stage: store.entities.map((e) => ({ id: e.id, kind: e.kind, x: e.pos[0], y: e.pos[1], z: e.pos[2] })),
     camera,
     events: log()
       .slice(-12)
@@ -465,12 +469,21 @@ export function waitFrames(ms = 1000) {
     requestAnimationFrame(tick);
   });
 }
-export function resetStage() {
+function clearHist() {
   frames.length = 0;
   drags.length = 0;
   hist.lastHistT = -1;
   hist.lastEventN = 0;
+}
+
+export function resetStage() {
+  clearHist();
   return resetBay();
+}
+
+function loadClip(id: string) {
+  clearHist();
+  return loadBay(id);
 }
 
 export function help() {
@@ -486,7 +499,11 @@ export function help() {
     spawn: "(kind) grenade|pack|can|crate|dummy|grass|cube|...",
     solid: "(shape)",
     puncture: "(id?) pull grenade pin or cook pack",
-    reset: "restage clip",
+    reset: "restage the current clip",
+    levels: "builtin + saved clips",
+    load: "(id) restage a clip",
+    save: "(name?) keep the current arrangement",
+    forget: "(id) drop a saved clip",
     tool: "('grab'|'nail')",
     select: "(id)",
     track: "(id|null)",
@@ -520,6 +537,10 @@ export function harnessApi() {
     solid: selectSolid,
     puncture: punctureId,
     reset: resetStage,
+    levels: listBayLevels,
+    load: loadClip,
+    save: saveBay,
+    forget: forgetBay,
     tool: setToolName,
     select: (id: string | null) => {
       useBay.getState().select(id);

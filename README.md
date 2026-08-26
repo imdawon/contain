@@ -10,9 +10,9 @@ This file is the **living axiom list**. Axioms are product rules that still matt
 
 You place objects, then let them play. BeamNG energy: one setup, one run, a readable ending.
 
-**Now (v0):** dummy + crate + **grenade** + spreading grass. Phone pack still spawnable as a fire. Latch shears before the hinge.
+**Now (v0):** dummy + crate + **grenade** + spreading grass + **named clips**. Phone pack still spawnable as a fire. Latch shears before the hinge.
 
-**Not yet:** shields, crowds, film chrome.
+**Not yet:** cars, ramps, shields, film chrome.
 
 ---
 
@@ -30,6 +30,7 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 10. **Probe, don’t screenshot.** Motion, latch, flop, and cook claims come from `window.__bay` (`peek`, `history`, `effects`, `until`). Screenshots are optional garnish.
 11. **Only number major product rules.** Tick rates, file maps, spawn lists, and API dumps are facts. Do not add them as axioms.
 12. **Commit when the bay actually moved.** Same turn as a verified slice. Message says what the bay does now.
+13. **A clip is a level.** Named arrangement of parts. Reset restages that clip. Save keeps a gag.
 
 ---
 
@@ -54,7 +55,8 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 | `src/components/bay/pack.tsx` | Grabbable pack, puncture, fire |
 | `src/components/bay/grenade.tsx` | Pin, fuse tick, bang, fragments |
 | `src/components/bay/probe-tick.tsx` | Camera frustum + per-frame snapshot |
-| `src/store/bay-store.ts` | Spawn/select/tool/latch |
+| `src/store/bay-store.ts` | Spawn/select/tool/latch/clip |
+| `src/lib/bay/level.ts` | Builtin gags + saved clips |
 | `src/components/contain/inspector.tsx` | Live xyz / mass / grip / bounce editor for the tracked body |
 | `src/lib/bay/solids.ts` | Collider-kit shapes |
 | `src/components/bay/solid.tsx` | Spawnable cube / ball / cylinder / capsule / platonic hulls / plank |
@@ -71,10 +73,10 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 ## How to play v0
 
 1. Orbit-drag empty floor, or **Track** a part (body / lid / hinge / latch / pack). Inspector follows that part.
-2. **Grab** a part: it stays where it is, then follows the mouse at that depth. Scroll to push or pull. **X-ray** (or `X`) ghosts the wall you are looking at. **Solid** drops a cube / ball / hull beside the can for stacking tests.
-3. Grenade starts selected. **PULL PIN**. Grass should catch. Crate should come apart. Dummy should flop.
-4. Spawn **Can** / **Pack** if you still want the quiet phone gag.
-5. **Reset** restages the clip.
+2. Pick a **Clip** (Pin-pull, Shoes, Roost, Can pop, Twins, Jenga, Pins). **PULL PIN**. Watch.
+3. **Grab** a part: it stays where it is, then follows the mouse at that depth. Scroll to push or pull. **X-ray** (or `X`) ghosts the wall you are looking at. **Solid** drops a cube / ball / hull for stacking tests.
+4. **Save** keeps the current arrangement. **Reset** restages that clip, not a blank floor.
+5. Spawn **Can** / **Pack** if you still want the quiet phone gag.
 
 ---
 

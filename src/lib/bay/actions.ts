@@ -1,5 +1,6 @@
 import { cooks, startCook } from "@/lib/bay/cook";
 import { clearAllHeat } from "@/lib/bay/heat";
+import { forgetCustom, getLevel, listLevels, levelCard } from "@/lib/bay/level";
 import { GRENADE, PACK } from "@/lib/bay/parts";
 import { clearLog, note } from "@/lib/bay/probe";
 import { playEvent, silenceLoops } from "@/lib/contain/audio";
@@ -35,19 +36,61 @@ export function spawnKind(kind: string) {
   return { ok: true, kind: kind === "charge" ? "grenade" : kind, selected: useBay.getState().selected };
 }
 
-export function resetBay() {
+function quietStage() {
   cooks.clear();
   clearAllHeat();
   clearLog();
   silenceLoops();
-  note("reset", {});
+}
+
+export function resetBay() {
+  quietStage();
+  note("reset", { id: useBay.getState().levelId });
   useBay.getState().reset();
+  return stageInfo();
+}
+
+export function listBayLevels() {
+  return listLevels().map(levelCard);
+}
+
+export function loadBay(id: string) {
+  const wanted = getLevel(id);
+  if (!wanted) return { ok: false as const, reason: "missing" as const, id };
+  quietStage();
+  const r = useBay.getState().loadLevel(id);
+  note("load-level", { id: r.id, name: r.name, n: r.n });
+  return { ...r, ...stageInfo() };
+}
+
+export function saveBay(name?: string) {
+  const r = useBay.getState().saveLevel(name);
+  note("save-level", { id: r.id, name: r.name, n: r.n });
+  return r;
+}
+
+export function forgetBay(id: string) {
+  const r = forgetCustom(id);
+  if (!r.ok) return r;
+  note("forget-level", { id });
   const s = useBay.getState();
+  if (s.levelId === id) {
+    quietStage();
+    useBay.getState().loadLevel("pin-pull");
+  }
+  return { ...r, current: useBay.getState().levelId };
+}
+
+function stageInfo() {
+  const s = useBay.getState();
+  const level = getLevel(s.levelId);
   return {
-    ok: true,
+    ok: true as const,
     selected: s.selected,
     trackId: s.trackId,
-    entities: s.entities.map((e) => ({ id: e.id, kind: e.kind })),
+    levelId: s.levelId,
+    level: level ? levelCard(level) : null,
+    entities: s.entities.map((e) => ({ id: e.id, kind: e.kind, pos: e.pos })),
   };
 }
 
