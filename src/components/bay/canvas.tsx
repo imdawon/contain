@@ -28,12 +28,18 @@ function TrackCam({
   orbit: RefObject<{ target: THREE.Vector3 } | null>;
 }) {
   const trackId = useBay((s) => s.trackId);
+  const offset = useBay((s) => s.scene?.cam?.offset);
+  const camera = useThree((s) => s.camera);
   useFrame(() => {
     if (!trackId || !orbit.current) return;
     const rec = listSamplers().get(trackId);
     if (!rec) return;
     const p = rec.sample();
     orbit.current.target.set(p.x, p.y, p.z);
+    if (offset) {
+      camera.position.set(p.x + offset[0], p.y + offset[1], p.z + offset[2]);
+      camera.lookAt(p.x, p.y + 0.12, p.z);
+    }
   });
   return null;
 }
@@ -156,8 +162,8 @@ function World() {
 
   return (
     <Physics gravity={[0, -6.4, 0]} timeStep={1 / 60} interpolate numSolverIterations={12} numInternalPgsIterations={8}>
-      <ProbeTick />
       <TrackCam orbit={orbit} />
+      <ProbeTick />
       <BlastBus />
       {scene ? <SceneRig key={`${scene.id}-${stageN}`} scene={scene} /> : null}
       <RigidBody type="fixed" colliders={false} friction={0.95} restitution={0.02}>
@@ -219,7 +225,7 @@ function World() {
           orbit.current = el;
         }}
         makeDefault
-        enabled={!dragging}
+        enabled={!dragging && !scene?.cam?.offset}
         enablePan
         minDistance={0.5}
         maxDistance={80}
@@ -292,3 +298,4 @@ export function BayCanvas() {
 }
 
 export default BayCanvas;
+
