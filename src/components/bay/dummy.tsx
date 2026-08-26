@@ -7,16 +7,18 @@ import {
   type RapierRigidBody,
 } from "@react-three/rapier";
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useRef, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { useGrab } from "@/components/bay/grab";
 import { DUMMY } from "@/lib/bay/parts";
 import { note, registerAssembly, registerBody, setBodyMass, unregisterAssembly, unregisterBody } from "@/lib/bay/probe";
 import { poseOf } from "@/lib/bay/sample";
 import { useBay } from "@/store/bay-store";
 
-const GROUPS = interactionGroups([1], [0]);
+/** World 0, dummy 1, crate 2. Bones skip each other; they still hit floor/crate/charge. */
+const GROUPS = interactionGroups([1], [0, 2]);
 const bone = 0xc4b8a8;
 const jointCol = 0x6a5348;
+type BodyType = "dynamic" | "kinematicPosition";
 
 function Ball({
   a,
@@ -58,6 +60,9 @@ function Bone({
   pos,
   size,
   mass,
+  type,
+  linearDamping,
+  angularDamping,
   color = bone,
   children,
 }: {
@@ -66,6 +71,9 @@ function Bone({
   pos: [number, number, number];
   size: [number, number, number];
   mass: number;
+  type: BodyType;
+  linearDamping: number;
+  angularDamping: number;
   color?: number;
   children?: ReactNode;
 }) {
@@ -74,7 +82,16 @@ function Bone({
   const selected = useBay((s) => s.selected === id);
 
   useEffect(() => {
-    registerBody(id, "dummy-bone", () => poseOf(r.current, { parent: id.split("-")[0] ?? null }), () => r.current);
+    registerBody(
+      id,
+      "dummy-bone",
+      () =>
+        poseOf(r.current, {
+          parent: id.split("-")[0] ?? null,
+          kinematic: r.current ? r.current.isKinematic() : true,
+        }),
+      () => r.current,
+    );
     return () => unregisterBody(id);
   }, [id, r]);
 
@@ -92,12 +109,12 @@ function Bone({
       ref={r}
       position={pos}
       colliders={false}
-      type="kinematicPosition"
+      type={type}
       mass={mass}
       friction={0.7}
       restitution={0.04}
-      linearDamping={3.2}
-      angularDamping={8}
+      linearDamping={linearDamping}
+      angularDamping={angularDamping}
       collisionGroups={GROUPS}
       ccd
     >
@@ -128,6 +145,10 @@ export function Dummy({ id, pos }: { id: string; pos: [number, number, number] }
   const larmL = useRef<RapierRigidBody>(null!);
   const larmR = useRef<RapierRigidBody>(null!);
   const bones = useRef([hips, chest, head, thighL, thighR, shinL, shinR, uarmL, uarmR, larmL, larmR]);
+  const [floppy, setFloppy] = useState(false);
+  const type: BodyType = floppy ? "dynamic" : "kinematicPosition";
+  const lin = floppy ? 0.12 : 3.2;
+  const ang = floppy ? 0.16 : 8;
 
   useEffect(() => {
     const ids = [
@@ -154,6 +175,7 @@ export function Dummy({ id, pos }: { id: string; pos: [number, number, number] }
       if (!h || power < 4) return;
       const p = h.translation();
       if (Math.hypot(p.x - x, p.z - z) > 6) return;
+      unregisterAssembly(id);
       let n = 0;
       for (const r of bones.current) {
         const b = r.current;
@@ -164,25 +186,28 @@ export function Dummy({ id, pos }: { id: string; pos: [number, number, number] }
         b.wakeUp();
         n += 1;
       }
+      setFloppy(true);
       if (n > 0) note("dummy-flop", { id, n, x: p.x, z: p.z });
     };
     window.addEventListener("bay-blast", onBlast, true);
     return () => window.removeEventListener("bay-blast", onBlast, true);
   }, [id]);
 
+  const boneProps = { type, linearDamping: lin, angularDamping: ang };
+
   return (
     <group position={pos}>
-      <Bone r={hips} id={`${id}-hips`} pos={[0, 0.74, 0]} size={[0.3, 0.16, 0.18]} mass={DUMMY.hipMass} />
-      <Bone r={chest} id={`${id}-chest`} pos={[0, 1.0, 0]} size={[0.28, 0.34, 0.16]} mass={DUMMY.chestMass} />
-      <Bone r={head} id={`${id}-head`} pos={[0, 1.28, 0]} size={[0.16, 0.16, 0.16]} mass={DUMMY.headMass} color={jointCol} />
-      <Bone r={thighL} id={`${id}-thigh-l`} pos={[-0.08, 0.5, 0]} size={[0.1, 0.32, 0.1]} mass={DUMMY.thighMass} />
-      <Bone r={thighR} id={`${id}-thigh-r`} pos={[0.08, 0.5, 0]} size={[0.1, 0.32, 0.1]} mass={DUMMY.thighMass} />
-      <Bone r={shinL} id={`${id}-shin-l`} pos={[-0.08, 0.17, 0]} size={[0.09, 0.32, 0.09]} mass={DUMMY.shinMass} />
-      <Bone r={shinR} id={`${id}-shin-r`} pos={[0.08, 0.17, 0]} size={[0.09, 0.32, 0.09]} mass={DUMMY.shinMass} />
-      <Bone r={uarmL} id={`${id}-uarm-l`} pos={[-0.28, 1.08, 0]} size={[0.26, 0.08, 0.08]} mass={DUMMY.uarmMass} />
-      <Bone r={uarmR} id={`${id}-uarm-r`} pos={[0.28, 1.08, 0]} size={[0.26, 0.08, 0.08]} mass={DUMMY.uarmMass} />
-      <Bone r={larmL} id={`${id}-larm-l`} pos={[-0.52, 1.08, 0]} size={[0.22, 0.07, 0.07]} mass={DUMMY.larmMass} />
-      <Bone r={larmR} id={`${id}-larm-r`} pos={[0.52, 1.08, 0]} size={[0.22, 0.07, 0.07]} mass={DUMMY.larmMass} />
+      <Bone r={hips} id={`${id}-hips`} pos={[0, 0.74, 0]} size={[0.3, 0.16, 0.18]} mass={DUMMY.hipMass} {...boneProps} />
+      <Bone r={chest} id={`${id}-chest`} pos={[0, 1.0, 0]} size={[0.28, 0.34, 0.16]} mass={DUMMY.chestMass} {...boneProps} />
+      <Bone r={head} id={`${id}-head`} pos={[0, 1.28, 0]} size={[0.16, 0.16, 0.16]} mass={DUMMY.headMass} color={jointCol} {...boneProps} />
+      <Bone r={thighL} id={`${id}-thigh-l`} pos={[-0.08, 0.5, 0]} size={[0.1, 0.32, 0.1]} mass={DUMMY.thighMass} {...boneProps} />
+      <Bone r={thighR} id={`${id}-thigh-r`} pos={[0.08, 0.5, 0]} size={[0.1, 0.32, 0.1]} mass={DUMMY.thighMass} {...boneProps} />
+      <Bone r={shinL} id={`${id}-shin-l`} pos={[-0.08, 0.17, 0]} size={[0.09, 0.32, 0.09]} mass={DUMMY.shinMass} {...boneProps} />
+      <Bone r={shinR} id={`${id}-shin-r`} pos={[0.08, 0.17, 0]} size={[0.09, 0.32, 0.09]} mass={DUMMY.shinMass} {...boneProps} />
+      <Bone r={uarmL} id={`${id}-uarm-l`} pos={[-0.28, 1.08, 0]} size={[0.26, 0.08, 0.08]} mass={DUMMY.uarmMass} {...boneProps} />
+      <Bone r={uarmR} id={`${id}-uarm-r`} pos={[0.28, 1.08, 0]} size={[0.26, 0.08, 0.08]} mass={DUMMY.uarmMass} {...boneProps} />
+      <Bone r={larmL} id={`${id}-larm-l`} pos={[-0.52, 1.08, 0]} size={[0.22, 0.07, 0.07]} mass={DUMMY.larmMass} {...boneProps} />
+      <Bone r={larmR} id={`${id}-larm-r`} pos={[0.52, 1.08, 0]} size={[0.22, 0.07, 0.07]} mass={DUMMY.larmMass} {...boneProps} />
 
       <Ball a={hips} b={chest} pa={[0, 0.08, 0]} pb={[0, -0.17, 0]} />
       <Ball a={chest} b={head} pa={[0, 0.17, 0]} pb={[0, -0.08, 0]} />

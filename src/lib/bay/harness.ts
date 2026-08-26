@@ -1,4 +1,5 @@
 import { punctureId, resetBay, setToolName, spawnKind } from "@/lib/bay/actions";
+import { loopLevels } from "@/lib/contain/audio";
 import {
   applyActor,
   assemblyMembers,
@@ -347,6 +348,8 @@ export function peek() {
     cook: string | number | boolean | null;
     burning: string | number | boolean | null;
     ash: string | number | boolean | null;
+    kin: boolean | null;
+    spin: number;
   }[] = [];
   for (const [id, rec] of listSamplers()) {
     const p = rec.sample();
@@ -354,12 +357,17 @@ export function peek() {
     let vx = 0;
     let vy = 0;
     let vz = 0;
+    let spin = 0;
+    let kin: boolean | null = null;
     const b = rec.getBody?.();
     if (b) {
       const lv = b.linvel();
       vx = round(lv.x);
       vy = round(lv.y);
       vz = round(lv.z);
+      const av = b.angvel();
+      spin = round(Math.hypot(av.x, av.y, av.z));
+      kin = b.isKinematic();
     }
     objects.push({
       id,
@@ -374,6 +382,8 @@ export function peek() {
       cook: p.state?.cook ?? null,
       burning: p.state?.burning ?? null,
       ash: p.state?.ash ?? null,
+      kin,
+      spin,
     });
   }
   const cam = s.camera;
@@ -453,6 +463,7 @@ export function help() {
     fling: "(id, {x,y,z}) set velocity",
     drop: "(id) dynamic",
     until: "(eventType, timeoutMs) promise",
+    audio: "hiss/roar loop levels",
   };
 }
 
@@ -495,6 +506,7 @@ export function harnessApi() {
     drop,
     until,
     note,
+    audio: loopLevels,
   };
 }
 

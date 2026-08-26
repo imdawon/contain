@@ -1,6 +1,7 @@
 import {
   CuboidCollider,
   RigidBody,
+  interactionGroups,
   useFixedJoint,
   useRapier,
   type RapierRigidBody,
@@ -16,21 +17,27 @@ import { playEvent } from "@/lib/contain/audio";
 const Q = [0, 0, 0, 1] as [number, number, number, number];
 const ply = 0x8a6a3e;
 const plyLid = 0x9a7a48;
+/** World 0, dummy 1, crate 2. Welded panels skip each other. */
+const TOGETHER = interactionGroups([2], [0, 1]);
 
 function Panel({
   r,
   id,
   pos,
   size,
+  hit,
   mass,
   color,
+  groups,
 }: {
   r: RefObject<RapierRigidBody>;
   id: string;
   pos: [number, number, number];
   size: [number, number, number];
+  hit: [number, number, number];
   mass: number;
   color: number;
+  groups: number;
 }) {
   const grab = useGrab(r, id);
   const pinned = useRef(false);
@@ -48,20 +55,21 @@ function Panel({
     pinned.current = true;
   });
 
-  const [sx, sy, sz] = size;
   return (
     <RigidBody
       ref={r}
       position={pos}
       colliders={false}
+      type="kinematicPosition"
       mass={mass}
       friction={0.55}
       restitution={0.08}
-      linearDamping={0.4}
-      angularDamping={0.35}
+      linearDamping={0.35}
+      angularDamping={0.28}
+      collisionGroups={groups}
       ccd
     >
-      <CuboidCollider args={[sx / 2, sy / 2, sz / 2]} />
+      <CuboidCollider args={[hit[0] / 2, hit[1] / 2, hit[2] / 2]} collisionGroups={groups} />
       <mesh onPointerDown={grab.down}>
         <boxGeometry args={size} />
         <meshStandardMaterial color={color} roughness={0.82} metalness={0.04} />
@@ -80,6 +88,9 @@ export function Crate({ id, pos }: { id: string; pos: [number, number, number] }
   const lid = useRef<RapierRigidBody>(null!);
   const { world } = useRapier();
   const gone = useRef(false);
+  const gap = 2 * t;
+  const innerW = Math.max(0.08, w - gap);
+  const innerD = Math.max(0.08, d - gap);
 
   const jL = useFixedJoint(floor, left, [
     [-w / 2 + t / 2, t / 2, 0],
@@ -131,6 +142,28 @@ export function Crate({ id, pos }: { id: string; pos: [number, number, number] }
       for (const j of [jL, jR, jB, jF, jLid]) {
         if (j.current) world.removeImpulseJoint(j.current, true);
       }
+      for (const panel of [floor, left, right, back, front, lid]) {
+        const b = panel.current;
+        if (!b) continue;
+        b.setBodyType(0, true);
+        b.setLinearDamping(0.35);
+        b.setAngularDamping(0.28);
+        const q = b.translation();
+        const dx = q.x - x;
+        const dy = q.y - y;
+        const dz = q.z - z;
+        const dist = Math.max(0.14, Math.hypot(dx, dy, dz));
+        const jolt = panel === floor ? 1.1 : panel === lid ? 4.2 : 2.6;
+        b.applyImpulse(
+          {
+            x: (dx / dist) * jolt,
+            y: panel === floor ? 0.4 : panel === lid ? 5.2 : 2.4,
+            z: (dz / dist) * jolt,
+          },
+          true,
+        );
+        b.wakeUp();
+      }
       note("crate-break", { id, dist, power });
       playEvent("lid", "nmc");
     };
@@ -144,12 +177,66 @@ export function Crate({ id, pos }: { id: string; pos: [number, number, number] }
 
   return (
     <group position={pos}>
-      <Panel r={floor} id={`${id}-floor`} pos={[0, floorY, 0]} size={[w, t, d]} mass={floorMass} color={ply} />
-      <Panel r={left} id={`${id}-left`} pos={[-w / 2 + t / 2, wallY, 0]} size={[t, h, d]} mass={wallMass} color={ply} />
-      <Panel r={right} id={`${id}-right`} pos={[w / 2 - t / 2, wallY, 0]} size={[t, h, d]} mass={wallMass} color={ply} />
-      <Panel r={back} id={`${id}-back`} pos={[0, wallY, -d / 2 + t / 2]} size={[w, h, t]} mass={wallMass} color={ply} />
-      <Panel r={front} id={`${id}-front`} pos={[0, wallY, d / 2 - t / 2]} size={[w, h, t]} mass={wallMass} color={ply} />
-      <Panel r={lid} id={`${id}-lid`} pos={[0, lidY, 0]} size={[w + 0.02, lh, d + 0.02]} mass={lidMass} color={plyLid} />
+      <Panel
+        r={floor}
+        id={`${id}-floor`}
+        pos={[0, floorY, 0]}
+        size={[w, t, d]}
+        hit={[innerW, t, innerD]}
+        mass={floorMass}
+        color={ply}
+        groups={TOGETHER}
+      />
+      <Panel
+        r={left}
+        id={`${id}-left`}
+        pos={[-w / 2 + t / 2, wallY, 0]}
+        size={[t, h, d]}
+        hit={[t, h, innerD]}
+        mass={wallMass}
+        color={ply}
+        groups={TOGETHER}
+      />
+      <Panel
+        r={right}
+        id={`${id}-right`}
+        pos={[w / 2 - t / 2, wallY, 0]}
+        size={[t, h, d]}
+        hit={[t, h, innerD]}
+        mass={wallMass}
+        color={ply}
+        groups={TOGETHER}
+      />
+      <Panel
+        r={back}
+        id={`${id}-back`}
+        pos={[0, wallY, -d / 2 + t / 2]}
+        size={[w, h, t]}
+        hit={[innerW, h, t]}
+        mass={wallMass}
+        color={ply}
+        groups={TOGETHER}
+      />
+      <Panel
+        r={front}
+        id={`${id}-front`}
+        pos={[0, wallY, d / 2 - t / 2]}
+        size={[w, h, t]}
+        hit={[innerW, h, t]}
+        mass={wallMass}
+        color={ply}
+        groups={TOGETHER}
+      />
+      <Panel
+        r={lid}
+        id={`${id}-lid`}
+        pos={[0, lidY, 0]}
+        size={[w + 0.02, lh, d + 0.02]}
+        hit={[innerW, lh, innerD]}
+        mass={lidMass}
+        color={plyLid}
+        groups={TOGETHER}
+      />
     </group>
   );
 }
