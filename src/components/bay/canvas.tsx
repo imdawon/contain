@@ -31,16 +31,17 @@ function TrackCam({
   const offset = useBay((s) => s.scene?.cam?.offset);
   const camera = useThree((s) => s.camera);
   useFrame(() => {
-    if (!trackId || !orbit.current) return;
+    if (!trackId) return;
     const rec = listSamplers().get(trackId);
     if (!rec) return;
     const p = rec.sample();
-    orbit.current.target.set(p.x, p.y, p.z);
+    if (orbit.current) orbit.current.target.set(p.x, p.y, p.z);
     if (offset) {
       camera.position.set(p.x + offset[0], p.y + offset[1], p.z + offset[2]);
-      camera.lookAt(p.x, p.y + 0.12, p.z);
+      camera.lookAt(p.x, p.y + 0.38, p.z);
+      camera.updateMatrixWorld();
     }
-  });
+  }, -1);
   return null;
 }
 
@@ -220,20 +221,22 @@ function World() {
           <Solid key={e.id} id={e.id} shape={e.kind} pos={e.pos} />
         ) : null,
       )}
-      <OrbitControls
-        ref={(el) => {
-          orbit.current = el;
-        }}
-        makeDefault
-        enabled={!dragging && !scene?.cam?.offset}
-        enablePan
-        minDistance={0.5}
-        maxDistance={80}
-        maxPolarAngle={1.48}
-        target={[0, 0.7, 0.55]}
-        enableDamping
-        dampingFactor={0.08}
-      />
+      {scene?.cam?.offset ? null : (
+        <OrbitControls
+          ref={(el) => {
+            orbit.current = el;
+          }}
+          makeDefault
+          enabled={!dragging}
+          enablePan
+          minDistance={0.5}
+          maxDistance={80}
+          maxPolarAngle={1.48}
+          target={[0, 0.7, 0.55]}
+          enableDamping
+          dampingFactor={0.08}
+        />
+      )}
     </Physics>
   );
 }

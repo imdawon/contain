@@ -4,19 +4,20 @@
   "blurb": "Dummy tied to a rigid wagon. Down the hill. Grenade bangs mid-air.",
   "file": "scenes/v1.json",
   "select": "grenade",
+  "inspect": false,
   "track": {
     "ref": "dummy-hips"
   },
   "cam": {
     "offset": [
-      1.62,
-      0.8,
-      -1.7
+      4.15,
+      1.55,
+      -3.15
     ]
   },
   "airborne": {
     "minY": 2.4,
-    "minZ": 5.9
+    "minZ": 5.8
   },
   "entities": [
     {
@@ -24,60 +25,60 @@
       "kind": "hill",
       "pos": [
         0.0,
-        8.254,
-        -0.948
+        8.084,
+        -0.864
       ],
       "rot": [
-        0.36,
+        0.38,
         0,
         0
       ],
       "size": [
-        5.2,
-        0.44,
-        13.4
+        6.0,
+        0.46,
+        13.2
       ],
       "fixed": true,
-      "grip": 0.12
+      "grip": 0.14
     },
     {
       "name": "wagon",
       "kind": "wagon",
       "pos": [
         0.0,
-        10.312,
-        -5.195
+        10.292,
+        -5.205
       ],
       "rot": [
-        0.36,
+        0.38,
         0,
         0
       ],
       "vel": [
         0.0,
-        -1.198,
-        3.182
+        -0.389,
+        0.975
       ],
-      "grip": 0.04,
+      "grip": 0.05,
       "bounce": 0.02
     },
     {
       "name": "dummy",
       "kind": "dummy",
       "pos": [
-        -0.04,
-        10.35,
-        -5.181
+        -0.02,
+        10.311,
+        -5.198
       ],
       "rot": [
-        0.36,
+        0.38,
         0,
         0
       ],
       "vel": [
         0.0,
-        -1.198,
-        3.182
+        -0.389,
+        0.975
       ],
       "live": true
     },
@@ -85,27 +86,31 @@
       "name": "nade",
       "kind": "grenade",
       "pos": [
-        0.44,
-        10.502,
-        -5.017
+        0.34,
+        10.248,
+        -4.878
       ],
       "rot": [
-        0.36,
+        0.38,
         0,
         0
       ],
       "vel": [
         0.0,
-        -1.198,
-        3.182
+        -0.389,
+        0.975
       ],
       "grip": 0.8,
-      "fuse": 1.4
+      "fuse": 2.45
     }
   ],
   "ties": [
     {
       "a": "dummy-hips",
+      "b": "wagon"
+    },
+    {
+      "a": "dummy-chest",
       "b": "wagon"
     },
     {
