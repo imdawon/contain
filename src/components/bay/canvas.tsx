@@ -161,7 +161,7 @@ function World() {
   const fire = useFireMap();
 
   return (
-    <Physics gravity={[0, -6.4, 0]} timeStep={1 / 60} interpolate numSolverIterations={12} numInternalPgsIterations={8}>
+    <Physics key={stageN} gravity={[0, -6.4, 0]} timeStep={1 / 60} interpolate numSolverIterations={12} numInternalPgsIterations={8}>
       <TrackCam orbit={orbit} />
       <ProbeTick />
       <BlastBus />
