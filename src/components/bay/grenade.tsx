@@ -1,7 +1,7 @@
 import { BallCollider, RigidBody, type RapierRigidBody } from "@react-three/rapier";
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { cooks, startCook, stepCook } from "@/lib/bay/cook";
+import { cooks, startCook } from "@/lib/bay/cook";
 import { clearHeat, pulseHeat, setHeat } from "@/lib/bay/heat";
 import { GRENADE } from "@/lib/bay/parts";
 import { playEvent, reportFire } from "@/lib/contain/audio";
@@ -141,7 +141,6 @@ export function Grenade({
       pinOnce.current = true;
       setArmed(true);
       playEvent("pin", "nmc");
-      note("pin-pull", { id });
     }
     if (spoon.current) {
       spoon.current.rotation.z = cook ? -1.15 : 0.12;
@@ -150,10 +149,9 @@ export function Grenade({
       if (cook?.phase === "dead") reportFire(id, 0, 0);
       return;
     }
-    const c = stepCook(id, cap);
     const p = b.translation();
-    if (c) c.pos = [p.x, p.y, p.z];
-    if (c?.phase === "cook") {
+    cook.pos = [p.x, p.y, p.z];
+    if (cook.phase === "cook") {
       tickAcc.current += cap;
       if (tickAcc.current > 0.28) {
         tickAcc.current = 0;
@@ -161,14 +159,9 @@ export function Grenade({
       }
       reportFire(id, 0.08, 0.04);
     }
-    if (c?.phase === "boom" && !boomOnce.current) {
+    if (cook.phase === "boom" && !boomOnce.current) {
       boomOnce.current = true;
-      note("grenade-boom", { id, x: p.x, y: p.y, z: p.z, boom: c.boom });
-      playEvent("bang", "nmc");
       pulseHeat(`${id}-blast`, { x: p.x, y: p.y, z: p.z, kW: 40 }, 2.8);
-      window.dispatchEvent(
-        new CustomEvent("bay-blast", { detail: { x: p.x, y: p.y, z: p.z, power: GRENADE.boom } }),
-      );
       const bits: Frag[] = [];
       for (let i = 0; i < 9; i++) {
         const a = (i / 9) * Math.PI * 2 + i * 0.07;

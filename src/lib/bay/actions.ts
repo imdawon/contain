@@ -20,6 +20,7 @@ export function punctureId(id?: string | null) {
   store.select(ent.id);
   if (ent.kind === "grenade" || ent.kind === "charge") {
     startCook(ent.id, "frag", GRENADE.fuse, GRENADE.peak, GRENADE.boom);
+    note("pin-pull", { id: ent.id });
   } else {
     startCook(ent.id, "nmc", PACK.nmc.cook, PACK.nmc.peak, PACK.nmc.boom);
   }

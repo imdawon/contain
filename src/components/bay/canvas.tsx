@@ -101,7 +101,7 @@ function World() {
   fire.colorSpace = THREE.SRGBColorSpace;
 
   return (
-    <Physics gravity={[0, -4.8, 0]} timeStep={1 / 60} interpolate numSolverIterations={8} numInternalPgsIterations={4}>
+    <Physics gravity={[0, -6.4, 0]} timeStep={1 / 60} interpolate numSolverIterations={12} numInternalPgsIterations={8}>
       <ProbeTick />
       <TrackCam orbit={orbit} />
       <BlastBus />

@@ -2,7 +2,7 @@ import { RigidBody, type RapierRigidBody } from "@react-three/rapier";
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import { punctureId } from "@/lib/bay/actions";
-import { cooks, startCook, stepCook } from "@/lib/bay/cook";
+import { cooks, startCook } from "@/lib/bay/cook";
 import { clearHeat, setHeat } from "@/lib/bay/heat";
 import { PACK } from "@/lib/bay/parts";
 import { playEvent, reportFire } from "@/lib/contain/audio";
@@ -107,24 +107,21 @@ export function Pack({
       reportFire(id, 0, 0);
       return;
     }
-    const c = stepCook(id, cap);
     const p = b.translation();
-    if (c) {
-      c.pos = [p.x, p.y, p.z];
-      const u = Math.min(1, c.t / Math.max(0.2, c.delay));
-      if (c.phase === "cook") {
-        reportFire(id, 0.25 + u * 0.9, 0.15 + u * u * 1.1);
-        if (u > 0.48 && !sizzleOnce.current) {
-          sizzleOnce.current = true;
-          playEvent("runaway", "nmc");
-        }
-      } else if (c.phase === "boom") {
-        reportFire(id, 1, 1.4);
+    cook.pos = [p.x, p.y, p.z];
+    const u = Math.min(1, cook.t / Math.max(0.2, cook.delay));
+    if (cook.phase === "cook") {
+      reportFire(id, 0.25 + u * 0.9, 0.15 + u * u * 1.1);
+      if (u > 0.48 && !sizzleOnce.current) {
+        sizzleOnce.current = true;
+        playEvent("runaway", "nmc");
       }
+    } else if (cook.phase === "boom") {
+      reportFire(id, 1, 1.4);
     }
-    if (c?.phase === "boom" && !boomOnce.current) {
+    if (cook.phase === "boom" && !boomOnce.current) {
       boomOnce.current = true;
-      note("pack-boom", { id, x: p.x, y: p.y, z: p.z, boom: c.boom });
+      note("pack-boom", { id, x: p.x, y: p.y, z: p.z, boom: cook.boom });
       playEvent("burst", "nmc");
       b.applyImpulse({ x: (Math.random() - 0.5) * 0.06, y: 0.08, z: (Math.random() - 0.5) * 0.06 }, true);
     }
