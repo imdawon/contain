@@ -11,6 +11,7 @@ type Bus = {
 
 let bus: Bus | null = null;
 let muted = false;
+const fireSrc = new Map<string, { smoke: number; flame: number }>();
 
 function noiseBuffer(ctx: AudioContext) {
   const length = ctx.sampleRate * 2;
@@ -83,17 +84,46 @@ function beep(freq: number, dur: number, gain = 0.12, type: OscillatorType = "sq
   osc.stop(ctx.currentTime + dur);
 }
 
+function pin(param: AudioParam, now: number) {
+  param.cancelScheduledValues(now);
+  param.setValueAtTime(param.value, now);
+}
+
+function rampTo(param: AudioParam, value: number, now: number, dur: number) {
+  pin(param, now);
+  param.linearRampToValueAtTime(Math.max(0, value), now + Math.max(0.02, dur));
+}
+
 function setLoop(hissTo: number, roarTo: number, hold = 0) {
   if (!bus) return;
   const now = bus.ctx.currentTime;
-  bus.hiss.gain.cancelScheduledValues(now);
-  bus.roar.gain.cancelScheduledValues(now);
-  bus.hiss.gain.setTargetAtTime(Math.max(0, hissTo), now, 0.06);
-  bus.roar.gain.setTargetAtTime(Math.max(0, roarTo), now, 0.06);
+  rampTo(bus.hiss.gain, hissTo, now, 0.08);
+  rampTo(bus.roar.gain, roarTo, now, 0.08);
   if (hold > 0) {
-    bus.hiss.gain.setTargetAtTime(0, now + hold, 0.28);
-    bus.roar.gain.setTargetAtTime(0, now + hold, 0.28);
+    const t = now + hold;
+    bus.hiss.gain.linearRampToValueAtTime(0, t);
+    bus.roar.gain.linearRampToValueAtTime(0, t);
   }
+}
+
+function mixFire() {
+  let smoke = 0;
+  let flame = 0;
+  for (const s of fireSrc.values()) {
+    smoke = Math.max(smoke, s.smoke);
+    flame = Math.max(flame, s.flame);
+  }
+  if (smoke <= 0.001 && flame <= 0.001) {
+    silenceLoops();
+    return;
+  }
+  applyFireMix(smoke, flame);
+}
+
+export function reportFire(id: string, smoke: number, flame: number) {
+  if (smoke <= 0.001 && flame <= 0.001) fireSrc.delete(id);
+  else fireSrc.set(id, { smoke, flame });
+  mixFire();
 }
 
 export function playEvent(type: string, chem: "nmc" | "lfp") {
@@ -117,7 +147,7 @@ export function playEvent(type: string, chem: "nmc" | "lfp") {
       beep(42, 0.55, 0.38, "sawtooth");
       beep(90, 0.22, 0.22, "square");
       beep(180, 0.1, 0.1, "square");
-      setLoop(0.1, 0.26, 0.55);
+      setLoop(0.1, 0.26, 0.9);
       break;
     case "lid":
       beep(160, 0.16, 0.2, "square");
@@ -136,22 +166,23 @@ export function playEvent(type: string, chem: "nmc" | "lfp") {
   }
 }
 
-export function setFireMix(smoke: number, flame: number) {
+function applyFireMix(smoke: number, flame: number) {
   if (!bus) return;
   const now = bus.ctx.currentTime;
-  bus.hiss.gain.cancelScheduledValues(now);
-  bus.roar.gain.cancelScheduledValues(now);
-  bus.hiss.gain.setTargetAtTime(Math.min(0.18, Math.max(0, smoke) * 0.16), now, 0.08);
-  bus.roar.gain.setTargetAtTime(Math.min(0.22, Math.max(0, flame) * 0.07), now, 0.08);
+  rampTo(bus.hiss.gain, Math.min(0.18, Math.max(0, smoke) * 0.16), now, 0.08);
+  rampTo(bus.roar.gain, Math.min(0.22, Math.max(0, flame) * 0.07), now, 0.08);
+}
+
+export function setFireMix(smoke: number, flame: number) {
+  reportFire("mix", smoke, flame);
 }
 
 export function silenceLoops() {
+  fireSrc.clear();
   if (!bus) return;
   const now = bus.ctx.currentTime;
-  bus.hiss.gain.cancelScheduledValues(now);
-  bus.roar.gain.cancelScheduledValues(now);
-  bus.hiss.gain.setTargetAtTime(0, now, 0.12);
-  bus.roar.gain.setTargetAtTime(0, now, 0.12);
+  rampTo(bus.hiss.gain, 0, now, 0.12);
+  rampTo(bus.roar.gain, 0, now, 0.12);
 }
 
 export function loopLevels() {

@@ -142,6 +142,35 @@ export function assemblyGroup(id: string) {
   return memberOf.get(id) ?? null;
 }
 
+/** Turn an assembly into live dynamic bodies without touching React RigidBody props. */
+export function awakenRagdoll(
+  id: string,
+  lin = 0.12,
+  ang = 0.16,
+): number {
+  const ids = assemblyMembers(id);
+  let n = 0;
+  for (const mid of ids) {
+    const b = actors.get(mid)?.getBody?.();
+    if (!b) continue;
+    b.setBodyType(0, true);
+    b.setLinearDamping(lin);
+    b.setAngularDamping(ang);
+    b.wakeUp();
+    n += 1;
+  }
+  const group = memberOf.get(id);
+  if (group) unregisterAssembly(group);
+  return n;
+}
+
+export function setColliderGroups(b: RapierRigidBody, groups: number) {
+  const n = b.numColliders();
+  for (let i = 0; i < n; i++) {
+    b.collider(i)?.setCollisionGroups(groups);
+  }
+}
+
 export function note(type: string, data: Record<string, string | number | boolean | null> = {}) {
   events.push({ t: now(), type, data });
   if (events.length > MAX_EVENTS) events.splice(0, events.length - MAX_EVENTS);

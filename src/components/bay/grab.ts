@@ -2,7 +2,7 @@ import type { RapierRigidBody } from "@react-three/rapier";
 import type { ThreeEvent } from "@react-three/fiber";
 import { useEffect, useRef, type RefObject } from "react";
 import * as THREE from "three";
-import { assemblyMembers, listSamplers, note } from "@/lib/bay/probe";
+import { assemblyMembers, awakenRagdoll, listSamplers, note } from "@/lib/bay/probe";
 import { useBay } from "@/store/bay-store";
 
 const _hit = new THREE.Vector3();
@@ -58,8 +58,9 @@ export function useGrab(body: RefObject<RapierRigidBody | null>, id: string) {
     last.current.set(t.x, t.y, t.z);
     dist.current = Math.max(0.4, e.distance);
     offset.current.set(t.x - e.point.x, t.y - e.point.y, t.z - e.point.z);
-    const ragdoll = listSamplers().get(id)?.kind === "dummy-bone" && !b.isKinematic();
-    if (ragdoll) {
+    const bone = listSamplers().get(id)?.kind === "dummy-bone";
+    if (bone) {
+      if (b.isKinematic()) awakenRagdoll(id);
       mode.current = "spring";
       crew.current = [{ id, kinematic: false }];
       note("grab", { id, n: 1, spring: true });

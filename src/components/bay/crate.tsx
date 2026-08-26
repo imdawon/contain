@@ -10,15 +10,16 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef, type RefObject } from "react";
 import { useGrab } from "@/components/bay/grab";
 import { CRATE } from "@/lib/bay/parts";
-import { note, registerAssembly, registerBody, setBodyMass, unregisterAssembly, unregisterBody } from "@/lib/bay/probe";
+import { note, registerAssembly, registerBody, setBodyMass, setColliderGroups, unregisterAssembly, unregisterBody } from "@/lib/bay/probe";
 import { poseOf } from "@/lib/bay/sample";
 import { playEvent } from "@/lib/contain/audio";
 
 const Q = [0, 0, 0, 1] as [number, number, number, number];
 const ply = 0x8a6a3e;
 const plyLid = 0x9a7a48;
-/** World 0, dummy 1, crate 2. Welded panels skip each other. */
+/** World 0, dummy 1, crate 2. Welded panels skip each other; loose panels hit everything. */
 const TOGETHER = interactionGroups([2], [0, 1]);
+const APART = interactionGroups([2], [0, 1, 2]);
 
 function Panel({
   r,
@@ -148,6 +149,7 @@ export function Crate({ id, pos }: { id: string; pos: [number, number, number] }
         b.setBodyType(0, true);
         b.setLinearDamping(0.35);
         b.setAngularDamping(0.28);
+        setColliderGroups(b, APART);
         const q = b.translation();
         const dx = q.x - x;
         const dy = q.y - y;
