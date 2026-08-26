@@ -1,12 +1,12 @@
 import { cooks, startCook } from "@/lib/bay/cook";
 import { clearAllHeat } from "@/lib/bay/heat";
-import { PACK } from "@/lib/bay/parts";
+import { GRENADE, PACK } from "@/lib/bay/parts";
 import { clearLog, note } from "@/lib/bay/probe";
 import { playEvent, silenceLoops } from "@/lib/contain/audio";
 import { useBay, type Kind, type Tool } from "@/store/bay-store";
 
 function isFuse(kind: Kind | undefined) {
-  return kind === "pack" || kind === "charge";
+  return kind === "pack" || kind === "grenade" || kind === "charge";
 }
 
 export function punctureId(id?: string | null) {
@@ -18,17 +18,20 @@ export function punctureId(id?: string | null) {
     return { ok: false, reason: "not-fuse" as const, id: wanted ?? null, kind: hit?.kind ?? null };
   }
   store.select(ent.id);
-  const spec = ent.kind === "charge" ? PACK.charge : PACK.nmc;
-  startCook(ent.id, "nmc", spec.cook, spec.peak, spec.boom);
+  if (ent.kind === "grenade" || ent.kind === "charge") {
+    startCook(ent.id, "frag", GRENADE.fuse, GRENADE.peak, GRENADE.boom);
+  } else {
+    startCook(ent.id, "nmc", PACK.nmc.cook, PACK.nmc.peak, PACK.nmc.boom);
+  }
   playEvent("puncture", "nmc");
-  note("puncture", { id: ent.id, kind: ent.kind });
+  note("puncture", { id: ent.id, kind: ent.kind === "charge" ? "grenade" : ent.kind });
   return { ok: true, id: ent.id, kind: ent.kind };
 }
 
 export function spawnKind(kind: string) {
   useBay.getState().spawn(kind as Kind);
-  note("spawn", { kind });
-  return { ok: true, kind, selected: useBay.getState().selected };
+  note("spawn", { kind: kind === "charge" ? "grenade" : kind });
+  return { ok: true, kind: kind === "charge" ? "grenade" : kind, selected: useBay.getState().selected };
 }
 
 export function resetBay() {

@@ -133,21 +133,36 @@ export function playEvent(type: string, chem: "nmc" | "lfp") {
       beep(180, 0.08, 0.16, "sawtooth");
       beep(920, 0.04, 0.08, "square");
       break;
+    case "pin":
+      beep(1480, 0.04, 0.1, "square");
+      beep(420, 0.09, 0.08, "triangle");
+      break;
+    case "tick":
+      beep(1680, 0.028, 0.05, "square");
+      break;
+    case "bang":
+      beep(26, 0.55, 0.72, "sawtooth");
+      beep(48, 0.22, 0.48, "sawtooth");
+      beep(210, 0.07, 0.22, "square");
+      setLoop(0.05, 0.18, 0.4);
+      break;
     case "vent":
       setLoop(chem === "lfp" ? 0.12 : 0.08, 0, 1.2);
       break;
     case "runaway":
-      setLoop(chem === "lfp" ? 0.18 : 0.1, chem === "nmc" ? 0.22 : 0.08, 1.4);
+      beep(70, 0.22, 0.16, "sawtooth");
+      beep(140, 0.18, 0.1, "square");
       break;
     case "jet":
       setLoop(0.06, 0.32, 0.7);
       beep(70, 0.3, 0.2, "sawtooth");
       break;
     case "burst":
-      beep(42, 0.55, 0.38, "sawtooth");
-      beep(90, 0.22, 0.22, "square");
-      beep(180, 0.1, 0.1, "square");
-      setLoop(0.1, 0.26, 0.9);
+      beep(28, 0.85, 0.55, "sawtooth");
+      beep(52, 0.45, 0.42, "sawtooth");
+      beep(90, 0.28, 0.28, "square");
+      beep(160, 0.14, 0.16, "square");
+      setLoop(0.16, 0.42, 1.8);
       break;
     case "lid":
       beep(160, 0.16, 0.2, "square");
@@ -169,8 +184,8 @@ export function playEvent(type: string, chem: "nmc" | "lfp") {
 function applyFireMix(smoke: number, flame: number) {
   if (!bus) return;
   const now = bus.ctx.currentTime;
-  rampTo(bus.hiss.gain, Math.min(0.18, Math.max(0, smoke) * 0.16), now, 0.08);
-  rampTo(bus.roar.gain, Math.min(0.22, Math.max(0, flame) * 0.07), now, 0.08);
+  rampTo(bus.hiss.gain, Math.min(0.24, Math.max(0, smoke) * 0.2), now, 0.08);
+  rampTo(bus.roar.gain, Math.min(0.34, Math.max(0, flame) * 0.12), now, 0.08);
 }
 
 export function setFireMix(smoke: number, flame: number) {

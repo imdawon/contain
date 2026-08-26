@@ -410,13 +410,14 @@ export function peek() {
 
 export function until(type: string, timeoutMs = 8000) {
   const t0 = probeTime();
-  if (log().some((e) => e.type === type && e.t >= t0 - 0.05)) {
+  const already = () => log().some((e: ProbeEvent) => e.type === type && e.t >= t0 - 30);
+  if (already()) {
     return Promise.resolve({ ok: true, type, waited: 0 });
   }
   return new Promise<{ ok: boolean; type: string; waited: number }>((resolve) => {
     const tStart = performance.now();
     const tick = () => {
-      if (log().some((e: ProbeEvent) => e.type === type && e.t >= t0)) {
+      if (already() || log().some((e: ProbeEvent) => e.type === type && e.t >= t0)) {
         resolve({ ok: true, type, waited: (performance.now() - tStart) / 1000 });
         return;
       }
@@ -448,9 +449,9 @@ export function help() {
     ui: "DOM controls with data-bay",
     click: "(name, value?) click [data-bay=name]; selects need a value (track id, solid shape)",
     camera: "snapshot().camera xyz + look",
-    spawn: "(kind) pack|charge|can|crate|dummy|grass|cube|...",
+    spawn: "(kind) grenade|pack|can|crate|dummy|grass|cube|...",
     solid: "(shape)",
-    puncture: "(id?) cook selected pack/charge",
+    puncture: "(id?) pull grenade pin or cook pack",
     reset: "restage clip",
     tool: "('grab'|'nail')",
     select: "(id)",
@@ -513,4 +514,66 @@ export function harnessApi() {
 export function bindHarnessWindow() {
   if (typeof window === "undefined") return;
   (window as unknown as { __bay: ReturnType<typeof harnessApi> }).__bay = harnessApi();
+}
+
+/** Live page polls the Vite `/__bay` pipe and runs `window.__bay`. Agent uses `scripts/bay.mjs`. */
+export function bindHarnessPipe() {
+  if (typeof window === "undefined" || !import.meta.env.DEV) return () => {};
+  let stop = false;
+  const seen = new Set<string>();
+  const run = async (fn: string, args: unknown[]) => {
+    const api = (window as unknown as { __bay?: Record<string, (...a: unknown[]) => unknown> }).__bay;
+    if (!api || typeof api[fn] !== "function") return { error: `no-fn:${fn}` };
+    try {
+      const value = await api[fn](...args);
+      return { value: JSON.parse(JSON.stringify(value ?? null)) };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  };
+  const handle = async (id: string, fn: string, args: unknown[]) => {
+    if (!id || seen.has(id)) return null;
+    seen.add(id);
+    if (seen.size > 80) {
+      const first = seen.values().next().value;
+      if (first) seen.delete(first);
+    }
+    return run(fn, args);
+  };
+  const onHot = async (msg: { id?: string; fn?: string; args?: unknown[] }) => {
+    const out = await handle(String(msg?.id ?? ""), String(msg?.fn ?? ""), Array.isArray(msg?.args) ? msg.args : []);
+    if (!out) return;
+    import.meta.hot?.send("bay:return", { id: msg.id, ...out });
+  };
+  import.meta.hot?.on("bay:call", onHot);
+  const loop = async () => {
+    while (!stop) {
+      try {
+        const r = await fetch("/__bay/take?wait=10000");
+        if (stop) return;
+        if (r.status === 204) continue;
+        if (!r.ok) {
+          await new Promise((res) => setTimeout(res, 400));
+          continue;
+        }
+        const msg = (await r.json()) as { id?: string; fn?: string; args?: unknown[] };
+        if (!msg?.id) continue;
+        const out = await handle(String(msg.id), String(msg.fn ?? ""), Array.isArray(msg.args) ? msg.args : []);
+        if (!out) continue;
+        await fetch("/__bay/done", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ id: msg.id, ...out }),
+        });
+      } catch {
+        if (stop) return;
+        await new Promise((res) => setTimeout(res, 500));
+      }
+    }
+  };
+  void loop();
+  return () => {
+    stop = true;
+    import.meta.hot?.off("bay:call", onHot);
+  };
 }

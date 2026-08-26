@@ -3,9 +3,9 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import { punctureId } from "@/lib/bay/actions";
 import { cooks, startCook, stepCook } from "@/lib/bay/cook";
-import { clearHeat, pulseHeat, setHeat } from "@/lib/bay/heat";
+import { clearHeat, setHeat } from "@/lib/bay/heat";
 import { PACK } from "@/lib/bay/parts";
-import { playEvent } from "@/lib/contain/audio";
+import { playEvent, reportFire } from "@/lib/contain/audio";
 import { note, registerBody, setBodyMass, unregisterBody } from "@/lib/bay/probe";
 import { useBay } from "@/store/bay-store";
 import { JetFire } from "@/components/bay/fx";
@@ -20,25 +20,24 @@ export function Pack({
   id,
   pos,
   fireMap,
-  variant = "nmc",
 }: {
   id: string;
   pos: [number, number, number];
   fireMap: Texture;
-  variant?: "nmc" | "charge";
 }) {
   const body = useRef<RapierRigidBody>(null);
   const boomOnce = useRef(false);
+  const sizzleOnce = useRef(false);
   const massPinned = useRef(false);
+  const mat = useRef<THREE.MeshStandardMaterial>(null);
   const selected = useBay((s) => s.selected === id);
   const grab = useGrab(body, id);
-  const spec = PACK[variant];
-  const isCharge = variant === "charge";
+  const spec = PACK.nmc;
 
   useEffect(() => {
     registerBody(
       id,
-      isCharge ? "charge" : "pack",
+      "pack",
       () => {
         const b = body.current;
         const c = cooks.get(id);
@@ -69,8 +68,9 @@ export function Pack({
     return () => {
       unregisterBody(id);
       clearHeat(id);
+      reportFire(id, 0, 0);
     };
-  }, [id, isCharge]);
+  }, [id]);
 
   useFrame((state, dt) => {
     const cap = Math.min(dt, 0.05);
@@ -88,30 +88,45 @@ export function Pack({
         x: p0.x,
         y: p0.y,
         z: p0.z,
-        kW: isCharge ? (cook.phase === "boom" ? 24 : Math.min(7, cook.kW * 0.18)) : cook.kW,
+        kW: cook.kW,
       });
     } else {
       clearHeat(id);
     }
-    if (!cook || cook.phase === "dead") return;
+    if (mat.current) {
+      if (cook && cook.phase !== "dead" && cook.phase !== "idle") {
+        const u = cook.phase === "boom" ? 1 : Math.min(1, cook.t / Math.max(0.2, cook.delay));
+        mat.current.emissive.setHex(0xff6a22);
+        mat.current.emissiveIntensity = cook.phase === "boom" ? 2.6 : 0.25 + u * 1.6;
+      } else {
+        mat.current.emissive.setHex(selected ? 0x444438 : 0x000000);
+        mat.current.emissiveIntensity = selected ? 0.2 : 0;
+      }
+    }
+    if (!cook || cook.phase === "dead") {
+      reportFire(id, 0, 0);
+      return;
+    }
     const c = stepCook(id, cap);
     const p = b.translation();
     if (c) {
       c.pos = [p.x, p.y, p.z];
+      const u = Math.min(1, c.t / Math.max(0.2, c.delay));
+      if (c.phase === "cook") {
+        reportFire(id, 0.25 + u * 0.9, 0.15 + u * u * 1.1);
+        if (u > 0.48 && !sizzleOnce.current) {
+          sizzleOnce.current = true;
+          playEvent("runaway", "nmc");
+        }
+      } else if (c.phase === "boom") {
+        reportFire(id, 1, 1.4);
+      }
     }
     if (c?.phase === "boom" && !boomOnce.current) {
       boomOnce.current = true;
-      note(isCharge ? "charge-boom" : "pack-boom", { id, x: p.x, y: p.y, z: p.z, boom: c.boom });
+      note("pack-boom", { id, x: p.x, y: p.y, z: p.z, boom: c.boom });
       playEvent("burst", "nmc");
-      if (isCharge) {
-        pulseHeat(`${id}-blast`, { x: p.x, y: p.y, z: p.z, kW: 28 }, 2.4);
-        window.dispatchEvent(
-          new CustomEvent("bay-blast", { detail: { x: p.x, y: p.y, z: p.z, power: Math.min(14, c.boom) } }),
-        );
-        b.applyImpulse({ x: (Math.random() - 0.5) * 0.35, y: 1.1, z: (Math.random() - 0.5) * 0.35 }, true);
-      } else {
-        b.applyImpulse({ x: (Math.random() - 0.5) * 0.06, y: 0.08, z: (Math.random() - 0.5) * 0.06 }, true);
-      }
+      b.applyImpulse({ x: (Math.random() - 0.5) * 0.06, y: 0.08, z: (Math.random() - 0.5) * 0.06 }, true);
     }
   });
 
@@ -120,7 +135,7 @@ export function Pack({
     if (useBay.getState().tool === "nail") {
       startCook(id, "nmc", spec.cook, spec.peak, spec.boom);
       playEvent("puncture", "nmc");
-      note("puncture", { id, via: "nail", kind: variant });
+      note("puncture", { id, via: "nail", kind: "pack" });
     }
   }
 
@@ -140,7 +155,8 @@ export function Pack({
       <mesh onPointerDown={onDown}>
         <boxGeometry args={[sx, sy, sz]} />
         <meshStandardMaterial
-          color={selected ? 0xd4d7cf : isCharge ? 0x6a3028 : 0x1a1c1e}
+          ref={mat}
+          color={selected ? 0xd4d7cf : 0x1a1c1e}
           metalness={0.55}
           roughness={0.3}
           emissive={selected ? 0x444438 : 0x000000}

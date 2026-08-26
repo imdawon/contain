@@ -25,8 +25,8 @@ export function heatAt(x: number, y: number, z: number) {
       continue;
     }
     const d = Math.hypot(s.x - x, s.y - y, s.z - z);
-    if (d > 1.35) continue;
-    h += s.kW / (1 + d * 3.4);
+    if (d > 2.2) continue;
+    h += s.kW / (1 + d * 2.4);
   }
   return h;
 }

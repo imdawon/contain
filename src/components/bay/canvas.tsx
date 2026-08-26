@@ -7,6 +7,7 @@ import { AmmoCan } from "@/components/bay/ammo-can";
 import { Crate } from "@/components/bay/crate";
 import { Dummy } from "@/components/bay/dummy";
 import { Grass } from "@/components/bay/grass";
+import { Grenade } from "@/components/bay/grenade";
 import { Pack } from "@/components/bay/pack";
 import { Solid } from "@/components/bay/solid";
 import { isSolid } from "@/store/bay-store";
@@ -66,10 +67,15 @@ function BlastBus() {
         const dx = p.x - x;
         const dy = p.y - y;
         const dz = p.z - z;
-        const dist = Math.max(0.28, Math.hypot(dx, dy, dz));
-        const j = Math.min(7.2, (power * 0.42) / dist);
-        const radialY = (dy / dist) * j;
-        const lift = dy < -0.04 ? radialY * 0.45 : Math.max(0, radialY * 0.5) + j * 0.1;
+        const dist = Math.max(0.22, Math.hypot(dx, dy, dz));
+        const nCol = b.numColliders();
+        if (nCol > 0) {
+          const membership = b.collider(0).collisionGroups() >>> 16;
+          if (membership & (1 << 1) || membership & (1 << 2)) return;
+        }
+        let j = Math.min(2.4, (power * 0.18) / dist);
+        if (p.y < 0.1) j *= 0.22;
+        const lift = p.y < 0.1 ? j * 0.12 : j * 0.28;
         b.applyImpulse(
           {
             x: (dx / dist) * j,
@@ -95,7 +101,7 @@ function World() {
   fire.colorSpace = THREE.SRGBColorSpace;
 
   return (
-    <Physics gravity={[0, -9.8, 0]} timeStep={1 / 60} interpolate>
+    <Physics gravity={[0, -4.8, 0]} timeStep={1 / 60} interpolate numSolverIterations={8} numInternalPgsIterations={4}>
       <ProbeTick />
       <TrackCam orbit={orbit} />
       <BlastBus />
@@ -133,8 +139,8 @@ function World() {
           <AmmoCan key={e.id} id={e.id} pos={e.pos} />
         ) : e.kind === "pack" ? (
           <Pack key={e.id} id={e.id} pos={e.pos} fireMap={fire} />
-        ) : e.kind === "charge" ? (
-          <Pack key={e.id} id={e.id} pos={e.pos} fireMap={fire} variant="charge" />
+        ) : e.kind === "grenade" || e.kind === "charge" ? (
+          <Grenade key={e.id} id={e.id} pos={e.pos} fireMap={fire} />
         ) : e.kind === "crate" ? (
           <Crate key={e.id} id={e.id} pos={e.pos} />
         ) : e.kind === "dummy" ? (

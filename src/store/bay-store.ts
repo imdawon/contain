@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { SOLID_SHAPES, type SolidShape } from "@/lib/bay/solids";
 
 export type Tool = "grab" | "nail";
-export type Kind = "pack" | "charge" | "can" | "crate" | "dummy" | "grass" | SolidShape;
+export type Kind = "pack" | "charge" | "grenade" | "can" | "crate" | "dummy" | "grass" | SolidShape;
 
 export interface Entity {
   id: string;
@@ -41,18 +41,26 @@ function nid() {
   return `e${n}`;
 }
 
-const start = (): Pick<BayState, "entities" | "selected" | "trackId" | "latch" | "tool"> => ({
-  entities: [
-    { id: "crate0", kind: "crate", pos: [0, 0, 0] },
-    { id: "charge0", kind: "charge", pos: [0, 0.14, 0] },
-    { id: "dummy0", kind: "dummy", pos: [0, 0, 1.22] },
-    { id: "grass0", kind: "grass", pos: [0, 0, 0.9] },
-  ],
-  selected: "charge0",
-  trackId: "dummy0-hips",
-  latch: "sealed",
-  tool: "grab",
-});
+function stage() {
+  const crateId = "crate0";
+  const nadeId = "grenade0";
+  const dummyId = "dummy0";
+  const grassId = "grass0";
+  return {
+    entities: [
+      { id: crateId, kind: "crate" as const, pos: [0, 0, 0] as [number, number, number] },
+      { id: nadeId, kind: "grenade" as const, pos: [0, 0.64, 0] as [number, number, number] },
+      { id: dummyId, kind: "dummy" as const, pos: [0, 0, 1.22] as [number, number, number] },
+      { id: grassId, kind: "grass" as const, pos: [0, 0, 0.9] as [number, number, number] },
+    ],
+    selected: nadeId,
+    trackId: `${dummyId}-hips`,
+    latch: "sealed" as const,
+    tool: "grab" as const,
+  };
+}
+
+const start = (): Pick<BayState, "entities" | "selected" | "trackId" | "latch" | "tool"> => stage();
 
 export const useBay = create<BayState>((set, get) => ({
   ...start(),
@@ -60,11 +68,12 @@ export const useBay = create<BayState>((set, get) => ({
   dragging: false,
   cutaway: false,
   spawn: (kind) => {
+    if (kind === "charge") kind = "grenade";
     const r = () => (Math.random() - 0.5) * 1.4;
     const pos: [number, number, number] =
       kind === "can" || kind === "crate" || kind === "grass" || kind === "dummy"
         ? [r(), 0, r()]
-        : kind === "pack" || kind === "charge"
+        : kind === "pack" || kind === "grenade"
           ? [r() * 0.6, 1.15, r() * 0.6]
           : [0.95 + r() * 0.4, 1.05, r() * 0.5];
     const e = { id: nid(), kind, pos };
@@ -74,17 +83,17 @@ export const useBay = create<BayState>((set, get) => ({
   clear: () => set({ entities: [], selected: null, trackId: null, latch: "sealed" }),
   reset: () => {
     const crateId = nid();
-    const chargeId = nid();
+    const nadeId = nid();
     const dummyId = nid();
     const grassId = nid();
     set({
       entities: [
         { id: crateId, kind: "crate", pos: [0, 0, 0] },
-        { id: chargeId, kind: "charge", pos: [0, 0.14, 0] },
+        { id: nadeId, kind: "grenade", pos: [0, 0.64, 0] },
         { id: dummyId, kind: "dummy", pos: [0, 0, 1.22] },
         { id: grassId, kind: "grass", pos: [0, 0, 0.9] },
       ],
-      selected: chargeId,
+      selected: nadeId,
       trackId: `${dummyId}-hips`,
       latch: "sealed",
       tool: "grab",
