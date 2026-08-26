@@ -1,7 +1,7 @@
 import { cooks, startCook } from "@/lib/bay/cook";
 import { clearAllHeat } from "@/lib/bay/heat";
 import { PACK } from "@/lib/bay/parts";
-import { note } from "@/lib/bay/probe";
+import { clearLog, note } from "@/lib/bay/probe";
 import { playEvent } from "@/lib/contain/audio";
 import { useBay, type Kind, type Tool } from "@/store/bay-store";
 
@@ -30,9 +30,16 @@ export function spawnKind(kind: string) {
 export function resetBay() {
   cooks.clear();
   clearAllHeat();
+  clearLog();
   note("reset", {});
   useBay.getState().reset();
-  return { ok: true };
+  const s = useBay.getState();
+  return {
+    ok: true,
+    selected: s.selected,
+    trackId: s.trackId,
+    entities: s.entities.map((e) => ({ id: e.id, kind: e.kind })),
+  };
 }
 
 export function setToolName(tool: string) {

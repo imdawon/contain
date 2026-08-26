@@ -1,6 +1,7 @@
 import { punctureId, resetBay, setToolName, spawnKind } from "@/lib/bay/actions";
 import {
   applyActor,
+  assemblyMembers,
   listSamplers,
   log,
   note,
@@ -11,9 +12,10 @@ import {
 } from "@/lib/bay/probe";
 import { useBay } from "@/store/bay-store";
 
-const HZ = 10;
+/** Pose log at 30 Hz (every other 60 Hz physics tick). 30s × 30 Hz × ~20 bodies is small. */
+const HZ = 30;
 const KEEP = 30;
-const MAX_FRAMES = HZ * KEEP + 20;
+const MAX_FRAMES = HZ * KEEP + 30;
 
 export type PoseSample = {
   x: number;
@@ -22,26 +24,27 @@ export type PoseSample = {
   vx: number | null;
   vy: number | null;
   vz: number | null;
-  rx: number;
 };
+
+export type HistEvent = { type: string; id: string | null };
 
 export type HistFrame = {
   t: number;
-  ev: string[];
+  ev: HistEvent[];
   o: Record<string, PoseSample>;
 };
 
+type DragMember = { id: string; x0: number; y0: number; z0: number; kinematic: boolean };
+
 type DragJob = {
   id: string;
-  x0: number;
-  y0: number;
-  z0: number;
-  x1: number;
-  y1: number;
-  z1: number;
+  members: DragMember[];
+  dx: number;
+  dy: number;
+  dz: number;
   t: number;
   dur: number;
-  drop: boolean;
+  floppy: boolean;
 };
 
 const frames: HistFrame[] = [];
@@ -57,19 +60,14 @@ export function recordHistory(objects: ProbeObject[], t: number) {
   if (t - lastHistT < 1 / HZ) return;
   lastHistT = t;
   const evs = log();
-  const fresh = evs.slice(lastEventN).map((e) => e.type);
+  const fresh: HistEvent[] = evs.slice(lastEventN).map((e) => ({
+    type: e.type,
+    id: typeof e.data.id === "string" ? e.data.id : null,
+  }));
   lastEventN = evs.length;
   const o: HistFrame["o"] = {};
   for (const obj of objects) {
-    o[obj.id] = {
-      x: obj.x,
-      y: obj.y,
-      z: obj.z,
-      vx: obj.vx,
-      vy: obj.vy,
-      vz: obj.vz,
-      rx: obj.rx,
-    };
+    o[obj.id] = { x: obj.x, y: obj.y, z: obj.z, vx: obj.vx, vy: obj.vy, vz: obj.vz };
   }
   frames.push({ t: round(t), ev: fresh, o });
   if (frames.length > MAX_FRAMES) frames.splice(0, frames.length - MAX_FRAMES);
@@ -80,29 +78,34 @@ export function tickDrags(dt: number) {
     const job = drags[i];
     job.t += dt;
     const u = Math.min(1, job.dur <= 0 ? 1 : job.t / job.dur);
-    const x = job.x0 + (job.x1 - job.x0) * u;
-    const y = job.y0 + (job.y1 - job.y0) * u;
-    const z = job.z0 + (job.z1 - job.z0) * u;
-    const b = listSamplers().get(job.id)?.getBody?.();
-    if (b) {
+    for (const m of job.members) {
+      const b = listSamplers().get(m.id)?.getBody?.();
+      if (!b) continue;
       b.setBodyType(2, true);
-      b.setNextKinematicTranslation({ x, y, z });
+      b.setNextKinematicTranslation({
+        x: m.x0 + job.dx * u,
+        y: Math.max(0.06, m.y0 + job.dy * u),
+        z: m.z0 + job.dz * u,
+      });
       b.setLinvel({ x: 0, y: 0, z: 0 }, true);
     }
     if (u >= 1) {
-      if (job.drop && b) {
-        const inv = 1 / Math.max(job.dur, 1 / 60);
-        b.setBodyType(0, true);
-        b.setLinvel(
-          {
-            x: (job.x1 - job.x0) * inv * 0.35,
-            y: (job.y1 - job.y0) * inv * 0.35,
-            z: (job.z1 - job.z0) * inv * 0.35,
-          },
-          true,
-        );
+      const inv = 1 / Math.max(job.dur, 1 / 60);
+      const vx = job.dx * inv * 0.35;
+      const vy = job.dy * inv * 0.35;
+      const vz = job.dz * inv * 0.35;
+      for (const m of job.members) {
+        const b = listSamplers().get(m.id)?.getBody?.();
+        if (!b) continue;
+        if (job.floppy) {
+          b.setBodyType(0, true);
+          b.setLinvel({ x: vx, y: vy, z: vz }, true);
+        } else {
+          b.setBodyType(2, true);
+          b.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        }
       }
-      note("drag-end", { id: job.id, x: round(job.x1), y: round(job.y1), z: round(job.z1) });
+      note("drag-end", { id: job.id, n: job.members.length, floppy: job.floppy });
       drags.splice(i, 1);
     }
   }
@@ -171,48 +174,69 @@ export function selectSolid(shape: string) {
 }
 
 function hold(id: string) {
-  const b = getBody(id);
-  if (!b) return { ok: false, reason: "no-body" as const, id };
+  const ids = assemblyMembers(id);
+  let n = 0;
+  for (const mid of ids) {
+    const b = getBody(mid);
+    if (!b) continue;
+    b.setBodyType(2, true);
+    b.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    b.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    n += 1;
+  }
+  if (n === 0) return { ok: false, reason: "no-body" as const, id };
   useBay.getState().select(id);
-  b.setBodyType(2, true);
-  b.setLinvel({ x: 0, y: 0, z: 0 }, true);
-  b.setAngvel({ x: 0, y: 0, z: 0 }, true);
-  note("hold", { id });
-  return { ok: true, id };
+  note("hold", { id, n });
+  return { ok: true, id, n };
 }
 
 function drop(id: string) {
-  const b = getBody(id);
-  if (!b) return { ok: false, reason: "no-body" as const, id };
-  b.setBodyType(0, true);
-  b.wakeUp();
-  note("drop", { id });
-  return { ok: true, id };
+  const ids = assemblyMembers(id);
+  let n = 0;
+  for (const mid of ids) {
+    const b = getBody(mid);
+    if (!b) continue;
+    b.setBodyType(0, true);
+    b.wakeUp();
+    n += 1;
+  }
+  if (n === 0) return { ok: false, reason: "no-body" as const, id };
+  note("drop", { id, n });
+  return { ok: true, id, n };
 }
 
 function dragTo(id: string, dest: { x?: number; y?: number; z?: number }, seconds = 0.35) {
-  const b = getBody(id);
   const now = pose(id);
-  if (!b || !now) return { ok: false, reason: "no-body" as const, id };
+  const lead = getBody(id);
+  if (!lead || !now) return { ok: false, reason: "no-body" as const, id };
+  const ids = assemblyMembers(id);
+  const members: DragMember[] = [];
+  let floppy = false;
+  for (const mid of ids) {
+    const b = getBody(mid);
+    const p = pose(mid);
+    if (!b || !p) continue;
+    if (!b.isKinematic()) floppy = true;
+    members.push({ id: mid, x0: p.x, y0: p.y, z0: p.z, kinematic: b.isKinematic() });
+    b.setBodyType(2, true);
+    b.setLinvel({ x: 0, y: 0, z: 0 }, true);
+  }
+  if (members.length === 0) return { ok: false, reason: "no-body" as const, id };
   const x1 = dest.x ?? now.x;
   const y1 = dest.y ?? now.y;
   const z1 = dest.z ?? now.z;
-  b.setBodyType(2, true);
-  b.setLinvel({ x: 0, y: 0, z: 0 }, true);
   drags.push({
     id,
-    x0: now.x,
-    y0: now.y,
-    z0: now.z,
-    x1,
-    y1,
-    z1,
+    members,
+    dx: x1 - now.x,
+    dy: y1 - now.y,
+    dz: z1 - now.z,
     t: 0,
     dur: Math.max(0.05, seconds),
-    drop: true,
+    floppy,
   });
-  note("drag", { id, x: x1, y: y1, z: z1 });
-  return { ok: true, id, to: { x: x1, y: y1, z: z1 } };
+  note("drag", { id, x: x1, y: y1, z: z1, n: members.length });
+  return { ok: true, id, n: members.length, to: { x: x1, y: y1, z: z1 } };
 }
 
 function nudge(id: string, d: { x?: number; y?: number; z?: number }) {
@@ -319,7 +343,7 @@ export function help() {
     peek: "compact stage: objects xyz/speed + recent events",
     snapshot: "full probe snap",
     log: "event list",
-    history: "(seconds=30) pose ring at 10Hz",
+    history: "(seconds=30) pose+velocity ring at 30Hz (every other 60Hz tick); events ride on the same frames",
     effects: "(id, seconds=30) path + events for one body",
     ui: "DOM controls with data-bay",
     click: "(name) click [data-bay=name]",
@@ -355,7 +379,12 @@ export function harnessApi() {
     spawn: spawnKind,
     solid: selectSolid,
     puncture: punctureId,
-    reset: resetBay,
+    reset: () => {
+      frames.length = 0;
+      lastHistT = -1;
+      lastEventN = 0;
+      return resetBay();
+    },
     tool: setToolName,
     select: (id: string | null) => {
       useBay.getState().select(id);

@@ -9,7 +9,7 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef, type RefObject } from "react";
 import { useGrab } from "@/components/bay/grab";
 import { CRATE } from "@/lib/bay/parts";
-import { note, registerBody, setBodyMass, unregisterBody } from "@/lib/bay/probe";
+import { note, registerAssembly, registerBody, setBodyMass, unregisterAssembly, unregisterBody } from "@/lib/bay/probe";
 import { poseOf } from "@/lib/bay/sample";
 import { playEvent } from "@/lib/contain/audio";
 
@@ -113,6 +113,11 @@ export function Crate({ id, pos }: { id: string; pos: [number, number, number] }
   ]);
 
   useEffect(() => {
+    registerAssembly(id, [`${id}-floor`, `${id}-left`, `${id}-right`, `${id}-back`, `${id}-front`, `${id}-lid`]);
+    return () => unregisterAssembly(id);
+  }, [id]);
+
+  useEffect(() => {
     const onBlast = (ev: Event) => {
       if (gone.current) return;
       const { x, y, z, power } = (ev as CustomEvent<{ x: number; y: number; z: number; power: number }>).detail;
@@ -122,6 +127,7 @@ export function Crate({ id, pos }: { id: string; pos: [number, number, number] }
       const dist = Math.hypot(p.x - x, p.y - y, p.z - z);
       if (dist > 1.6 || power < 5) return;
       gone.current = true;
+      unregisterAssembly(id);
       for (const j of [jL, jR, jB, jF, jLid]) {
         if (j.current) world.removeImpulseJoint(j.current, true);
       }
