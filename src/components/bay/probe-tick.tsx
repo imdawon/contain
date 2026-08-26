@@ -1,11 +1,10 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect } from "react";
 import * as THREE from "three";
+import { ensureFuseClock, tickFuse } from "@/lib/bay/blast";
 import { bindHarnessPipe, bindHarnessWindow, recordHistory, tickDrags } from "@/lib/bay/harness";
-import { cooks, stepCook } from "@/lib/bay/cook";
-import { listSamplers, note, probeTime, writeSnap } from "@/lib/bay/probe";
+import { listSamplers, probeTime, writeSnap } from "@/lib/bay/probe";
 import { useBay } from "@/store/bay-store";
-import { playEvent } from "@/lib/contain/audio";
 
 const _proj = new THREE.Matrix4();
 const _frustum = new THREE.Frustum();
@@ -27,6 +26,7 @@ export function ProbeTick() {
   useEffect(() => {
     bindHarnessWindow();
     bindHarnessPipe();
+    ensureFuseClock();
     const w = window as unknown as {
       __baySetTrack: (id: string | null) => void;
       __bayToggleCutaway: () => void;
@@ -38,19 +38,7 @@ export function ProbeTick() {
   useFrame((_, dt) => {
     const cap = Math.min(dt, 0.05);
     tickDrags(cap);
-    for (const [id, c] of cooks) {
-      const was = c.phase;
-      stepCook(id, cap);
-      if (was === "cook" && c.phase === "boom" && c.chem === "frag") {
-        const p = listSamplers().get(id)?.sample();
-        const x = p?.x ?? 0;
-        const y = p?.y ?? 0;
-        const z = p?.z ?? 0;
-        note("grenade-boom", { id, x, y, z, boom: c.boom });
-        playEvent("bang", "nmc");
-        window.dispatchEvent(new CustomEvent("bay-blast", { detail: { x, y, z, power: c.boom } }));
-      }
-    }
+    tickFuse(cap);
     _proj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     _frustum.setFromProjectionMatrix(_proj);
     camera.getWorldDirection(_dir);

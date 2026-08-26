@@ -131,8 +131,10 @@ export function hingeSnapshot(dummyId?: string) {
   const out: Record<string, number> = {};
   for (const [k, v] of store.peaks) {
     if (dummyId && !k.startsWith(`${dummyId}:`)) continue;
-    const hinge = dummyId ? k.slice(dummyId.length + 1) : k;
-    out[hinge] = Math.round(v.mag * 1000) / 1000;
+    const colon = k.indexOf(":");
+    const hinge = colon >= 0 ? k.slice(colon + 1) : k;
+    const mag = Math.round(v.mag * 1000) / 1000;
+    out[hinge] = Math.max(out[hinge] ?? 0, mag);
   }
   return out;
 }

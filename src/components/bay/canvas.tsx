@@ -1,7 +1,7 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { ContactShadows, Grid, OrbitControls, useTexture } from "@react-three/drei";
+import { ContactShadows, Grid, OrbitControls } from "@react-three/drei";
 import { CuboidCollider, Physics, RigidBody, useRapier } from "@react-three/rapier";
-import { Suspense, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
 import { AmmoCan } from "@/components/bay/ammo-can";
 import { Crate } from "@/components/bay/crate";
@@ -54,8 +54,34 @@ function FitGl() {
     apply();
     const ro = new ResizeObserver(apply);
     ro.observe(parent);
-    return () => ro.disconnect();
+    const iv = window.setInterval(apply, 250);
+    return () => {
+      ro.disconnect();
+      window.clearInterval(iv);
+    };
   }, [gl, setSize]);
+  return null;
+}
+
+function KickFrames() {
+  const advance = useThree((s) => s.advance);
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    let last = performance.now();
+    const id = window.setInterval(() => {
+      const now = performance.now();
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      try {
+        invalidate();
+        advance(now, true);
+      } catch {
+        /* rAF-less kick is best-effort */
+      }
+      void dt;
+    }, 50);
+    return () => window.clearInterval(id);
+  }, [advance, invalidate]);
   return null;
 }
 
@@ -96,12 +122,32 @@ function BlastBus() {
   return null;
 }
 
+function useFireMap() {
+  const [map, setMap] = useState<THREE.Texture>(() => {
+    const t = new THREE.Texture();
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  });
+  useEffect(() => {
+    const loader = new THREE.TextureLoader();
+    let alive = true;
+    loader.load("/textures/fire.jpg", (tex) => {
+      if (!alive) return;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      setMap(tex);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return map;
+}
+
 function World() {
   const entities = useBay((s) => s.entities);
   const dragging = useBay((s) => s.dragging);
   const orbit = useRef<{ target: THREE.Vector3 } | null>(null);
-  const fire = useTexture("/textures/fire.jpg");
-  fire.colorSpace = THREE.SRGBColorSpace;
+  const fire = useFireMap();
 
   return (
     <Physics gravity={[0, -6.4, 0]} timeStep={1 / 60} interpolate numSolverIterations={12} numInternalPgsIterations={8}>
@@ -188,7 +234,11 @@ export function BayCanvas() {
     mark();
     const ro = new ResizeObserver(mark);
     ro.observe(el);
-    return () => ro.disconnect();
+    const fallback = window.setTimeout(() => setReady(true), 400);
+    return () => {
+      ro.disconnect();
+      window.clearTimeout(fallback);
+    };
   }, []);
 
   return (
@@ -216,6 +266,7 @@ export function BayCanvas() {
           }}
         >
           <FitGl />
+          <KickFrames />
           <color attach="background" args={["#2c261e"]} />
           <fog attach="fog" args={["#2c261e", 16, 110]} />
           <hemisphereLight args={["#f2ebe0", "#3d372f", 1.35]} />
@@ -223,9 +274,7 @@ export function BayCanvas() {
           <directionalLight position={[6, 10, 4]} intensity={2.55} color="#fff3e4" />
           <directionalLight position={[-5, 3.5, -4]} intensity={0.95} color="#c5d0e4" />
           <directionalLight position={[0, 2.2, 7]} intensity={0.42} color="#ffe6c4" />
-          <Suspense fallback={null}>
-            <World />
-          </Suspense>
+          <World />
         </Canvas>
       ) : null}
     </div>

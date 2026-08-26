@@ -1,4 +1,5 @@
-import { cooks, startCook } from "@/lib/bay/cook";
+import { ensureFuseClock } from "@/lib/bay/blast";
+import { clearCooks, startCook } from "@/lib/bay/cook";
 import { clearAllHeat } from "@/lib/bay/heat";
 import { forgetCustom, getLevel, listLevels, levelCard } from "@/lib/bay/level";
 import { GRENADE, PACK } from "@/lib/bay/parts";
@@ -18,6 +19,7 @@ function arm(ent: { id: string; kind: Kind }) {
   } else {
     startCook(ent.id, "nmc", PACK.nmc.cook, PACK.nmc.peak, PACK.nmc.boom);
   }
+  ensureFuseClock();
 }
 
 /** Pull every grenade pin on stage. A pack only cooks if it is the target. */
@@ -60,7 +62,7 @@ export function spawnKind(kind: string) {
 }
 
 function quietStage() {
-  cooks.clear();
+  clearCooks();
   clearAllHeat();
   clearLog();
   silenceLoops();

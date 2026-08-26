@@ -3,6 +3,7 @@ import { Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Inspector } from "@/components/contain/inspector";
 import { bindHarnessPipe, bindHarnessWindow, resetStage } from "@/lib/bay/harness";
+import { ensureFuseClock } from "@/lib/bay/blast";
 import { loadBay, loadRun, nextTrial, saveBay } from "@/lib/bay/actions";
 import { listLevels } from "@/lib/bay/level";
 import { getRun, runCard, RUNS } from "@/lib/bay/run";
@@ -57,6 +58,7 @@ export function LabApp() {
   useEffect(() => {
     setClient(true);
     bindHarnessWindow();
+    ensureFuseClock();
     return bindHarnessPipe();
   }, []);
   useEffect(() => {

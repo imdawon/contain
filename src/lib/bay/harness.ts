@@ -1,5 +1,6 @@
 import { forgetBay, listBayLevels, listBayRuns, loadBay, loadRun, nextTrial, punctureId, resetBay, saveBay, setToolName, spawnKind } from "@/lib/bay/actions";
 import { hingeSnapshot } from "@/lib/bay/atd";
+import { ensureFuseClock, tickFuse } from "@/lib/bay/blast";
 import { getLevel, levelCard } from "@/lib/bay/level";
 import { getRun, runCard } from "@/lib/bay/run";
 import { cooks } from "@/lib/bay/cook";
@@ -56,10 +57,15 @@ type DragJob = {
   floppy: boolean;
 };
 
+const PIPE_GEN = 3;
+
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
   __bayPipeCtl?: AbortController;
   __baySeen?: Set<string>;
+  __bayPipeGen?: number;
+  __bayTakeBeat?: number;
+  __bayWatch?: ReturnType<typeof setInterval>;
 };
 const hist = (g.__bayHist ??= { frames: [], lastHistT: -1, lastEventN: 0 });
 const frames = hist.frames;
@@ -67,6 +73,10 @@ const drags: DragJob[] = [];
 
 function round(n: number) {
   return Math.round(n * 1000) / 1000;
+}
+
+function beat() {
+  g.__bayTakeBeat = performance.now();
 }
 
 export function recordHistory(
@@ -439,41 +449,60 @@ export function peek() {
   };
 }
 
+function boomReady() {
+  return [...cooks.values()].some((c) => c.chem === "frag" && (c.bang || c.phase === "boom" || c.phase === "dead"));
+}
+
 export function until(type: string, timeoutMs = 8000) {
+  ensureFuseClock();
   const t0 = probeTime();
-  const already = () => log().some((e: ProbeEvent) => e.type === type && e.t >= t0 - 1.5);
+  const already = () =>
+    log().some((e: ProbeEvent) => e.type === type && e.t >= t0 - 1.5) || (type === "grenade-boom" && boomReady());
   if (already()) {
+    tickFuse(0.05);
     return Promise.resolve({ ok: true, type, waited: 0 });
   }
   return new Promise<{ ok: boolean; type: string; waited: number }>((resolve) => {
     const tStart = performance.now();
-    const tick = () => {
-      if (already() || log().some((e: ProbeEvent) => e.type === type && e.t >= t0)) {
-        resolve({ ok: true, type, waited: (performance.now() - tStart) / 1000 });
-        return;
-      }
-      if (performance.now() - tStart > timeoutMs) {
-        resolve({ ok: false, type, waited: timeoutMs / 1000 });
-        return;
-      }
-      requestAnimationFrame(tick);
+    let done = false;
+    const finish = (ok: boolean) => {
+      if (done) return;
+      done = true;
+      clearInterval(iv);
+      resolve({ ok, type, waited: (performance.now() - tStart) / 1000 });
     };
-    requestAnimationFrame(tick);
+    const check = () => {
+      beat();
+      tickFuse(0.05);
+      if (already() || log().some((e: ProbeEvent) => e.type === type && e.t >= t0)) {
+        finish(true);
+        return;
+      }
+      if (performance.now() - tStart > timeoutMs) finish(false);
+    };
+    const iv = setInterval(check, 40);
+    check();
   });
 }
 
-
 export function waitFrames(ms = 1000) {
+  ensureFuseClock();
   return new Promise<{ ok: boolean; waited: number }>((resolve) => {
     const tStart = performance.now();
-    const tick = () => {
-      if (performance.now() - tStart >= ms) {
-        resolve({ ok: true, waited: (performance.now() - tStart) / 1000 });
-        return;
-      }
-      requestAnimationFrame(tick);
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearInterval(iv);
+      resolve({ ok: true, waited: (performance.now() - tStart) / 1000 });
     };
-    requestAnimationFrame(tick);
+    const tick = () => {
+      beat();
+      tickFuse(0.05);
+      if (performance.now() - tStart >= ms) finish();
+    };
+    const iv = setInterval(tick, 40);
+    tick();
   });
 }
 function clearHist() {
@@ -607,32 +636,55 @@ function stopHotListener() {
   }
 }
 
+function installWatchdog() {
+  if (typeof window === "undefined" || g.__bayWatch) return;
+  g.__bayWatch = setInterval(() => {
+    const last = g.__bayTakeBeat ?? 0;
+    if (last && performance.now() - last > 28000) {
+      g.__bayPipeCtl?.abort();
+      g.__bayPipeCtl = undefined;
+      startHarnessPipe();
+    }
+  }, 2000);
+}
+
 function startHarnessPipe() {
   if (typeof window === "undefined" || !import.meta.env.DEV) return;
   bindHarnessWindow();
-  const run = async (fn: string, args: unknown[]) => {
+  ensureFuseClock();
+  installWatchdog();
+  if (g.__bayPipeGen !== PIPE_GEN) {
+    g.__bayPipeCtl?.abort();
+    g.__bayPipeCtl = undefined;
+    g.__bayPipeGen = PIPE_GEN;
+  }
+  const run = async (fn: string, args: unknown[], capMs = 16000) => {
     const api = (window as unknown as { __bay?: Record<string, (...a: unknown[]) => unknown> }).__bay;
     if (!api || typeof api[fn] !== "function") return { error: `no-fn:${fn}` };
     try {
-      const value = await api[fn](...args);
+      const cap = Math.max(4000, Math.min(60000, Number(capMs) || 16000));
+      const value = await Promise.race([
+        Promise.resolve(api[fn](...args)),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("run-timeout")), cap)),
+      ]);
       return { value: JSON.parse(JSON.stringify(value ?? null)) };
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
     }
   };
   const seen = (g.__baySeen ??= new Set<string>());
-  const handle = async (id: string, fn: string, args: unknown[]) => {
+  const handle = async (id: string, fn: string, args: unknown[], capMs?: number) => {
     if (!id || seen.has(id)) return null;
     seen.add(id);
     if (seen.size > 80) {
       const first = seen.values().next().value;
       if (first) seen.delete(first);
     }
-    return run(fn, args);
+    return run(fn, args, capMs);
   };
   stopHotListener();
-  const onHot = async (msg: { id?: string; fn?: string; args?: unknown[] }) => {
-    const out = await handle(String(msg?.id ?? ""), String(msg?.fn ?? ""), Array.isArray(msg?.args) ? msg.args : []);
+  const onHot = async (msg: { id?: string; fn?: string; args?: unknown[]; waitMs?: number }) => {
+    const out = await handle(String(msg?.id ?? ""), String(msg?.fn ?? ""), Array.isArray(msg?.args) ? msg.args : [], msg.waitMs);
     if (!out) return;
     import.meta.hot?.send("bay:return", { id: msg.id, ...out });
   };
@@ -641,9 +693,11 @@ function startHarnessPipe() {
   if (g.__bayPipeCtl && !g.__bayPipeCtl.signal.aborted) return;
   const ctl = new AbortController();
   g.__bayPipeCtl = ctl;
+  beat();
   const loop = async () => {
     while (!ctl.signal.aborted) {
       try {
+        beat();
         const r = await fetch("/__bay/take?wait=10000", { signal: ctl.signal });
         if (ctl.signal.aborted) return;
         if (r.status === 204) continue;
@@ -651,9 +705,11 @@ function startHarnessPipe() {
           await new Promise((res) => setTimeout(res, 400));
           continue;
         }
-        const msg = (await r.json()) as { id?: string; fn?: string; args?: unknown[] };
+        const msg = (await r.json()) as { id?: string; fn?: string; args?: unknown[]; waitMs?: number };
         if (!msg?.id) continue;
-        const out = await handle(String(msg.id), String(msg.fn ?? ""), Array.isArray(msg.args) ? msg.args : []);
+        const cap = Math.min(20000, Number(msg.waitMs) || 16000);
+        const out = await handle(String(msg.id), String(msg.fn ?? ""), Array.isArray(msg.args) ? msg.args : [], cap);
+        beat();
         if (!out) continue;
         await fetch("/__bay/done", {
           method: "POST",
