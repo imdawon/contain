@@ -180,6 +180,50 @@ const ARMOR: Run = {
         actor("grass", 0, 0, 1.1),
       ],
     },
+    {
+      lv: 9,
+      threat: "1 GRENADE",
+      victim: "1 DUMMY · 1 WALL",
+      entities: [
+        actor("dummy", 0, 0, 0),
+        actor("wall", 0, 0, 0.48),
+        actor("grenade", 0, 0.09, 0.95),
+        actor("grass", 1.35, 0, 0),
+      ],
+    },
+    {
+      lv: 10,
+      threat: "1 GRENADE",
+      victim: "1 DUMMY · 1 DOORWAY",
+      entities: [
+        actor("dummy", 0, 0, 0),
+        actor("doorway", 0, 0, 0.52),
+        actor("grenade", 0, 0.09, 1.02),
+        actor("grass", 1.4, 0, 0),
+      ],
+    },
+    {
+      lv: 11,
+      threat: "1 GRENADE",
+      victim: "1 DUMMY · 1 CRATE",
+      entities: [
+        actor("dummy", 0, 0, -0.55),
+        actor("crate", 0, 0, 0),
+        actor("grenade", 0, 0.09, 0.72),
+        actor("grass", 1.3, 0, 0),
+      ],
+    },
+    {
+      lv: 12,
+      threat: "1 GRENADE",
+      victim: "1 DUMMY · 1 CAN",
+      entities: [
+        actor("dummy", 0, 0, -0.58),
+        actor("can", 0, 0, 0),
+        actor("grenade", 0, 0.09, 0.78),
+        actor("grass", 1.35, 0, 0),
+      ],
+    },
   ],
 };
 

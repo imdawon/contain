@@ -12,7 +12,7 @@ import { DEFAULT_RUN_ID, getRun, getTrial, materializeTrial, type Run } from "@/
 import { SOLID_SHAPES, type SolidShape } from "@/lib/bay/solids";
 
 export type Tool = "grab" | "nail";
-export type Kind = "pack" | "charge" | "grenade" | "can" | "crate" | "dummy" | "grass" | SolidShape;
+export type Kind = "pack" | "charge" | "grenade" | "can" | "crate" | "dummy" | "grass" | "wall" | "doorway" | SolidShape;
 
 export interface Entity {
   id: string;
@@ -87,13 +87,20 @@ export const useBay = create<BayState>((set, get) => ({
     if (kind === "charge") kind = "grenade";
     const r = () => (Math.random() - 0.5) * 1.4;
     const pos: [number, number, number] =
-      kind === "can" || kind === "crate" || kind === "grass" || kind === "dummy"
+      kind === "can" || kind === "crate" || kind === "grass" || kind === "dummy" || kind === "wall" || kind === "doorway"
         ? [r(), 0, r()]
         : kind === "pack" || kind === "grenade"
           ? [r() * 0.6, 1.15, r() * 0.6]
           : [0.95 + r() * 0.4, 1.05, r() * 0.5];
     const e = { id: nid(), kind, pos };
-    const trackId = kind === "dummy" ? `${e.id}-hips` : kind === "crate" ? `${e.id}-lid` : e.id;
+    const trackId =
+      kind === "dummy"
+        ? `${e.id}-hips`
+        : kind === "crate"
+          ? `${e.id}-lid`
+          : kind === "doorway"
+            ? `${e.id}-panel`
+            : e.id;
     set({ entities: [...get().entities, e], selected: e.id, trackId });
   },
   clear: () => set({ entities: [], selected: null, trackId: null, latch: "sealed" }),

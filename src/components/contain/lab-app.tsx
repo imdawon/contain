@@ -110,6 +110,14 @@ export function LabApp() {
         { id: `${e.id}-floor`, label: `${e.id} floor` },
       ];
     }
+    if (e.kind === "doorway") {
+      return [
+        { id: e.id, label: `${e.id} frame` },
+        { id: `${e.id}-panel`, label: `${e.id} door` },
+        { id: `${e.id}-hinge`, label: `${e.id} hinge` },
+        { id: `${e.id}-latch`, label: `${e.id} latch` },
+      ];
+    }
     return [{ id: e.id, label: `${e.id} ${e.kind}` }];
   });
 
@@ -276,6 +284,28 @@ export function LabApp() {
             className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 text-sm hover:bg-raised"
           >
             Grass
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              spawn("wall");
+              note("spawn", { kind: "wall" });
+            }}
+            data-bay="wall"
+            className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 text-sm hover:bg-raised"
+          >
+            Wall
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              spawn("doorway");
+              note("spawn", { kind: "doorway" });
+            }}
+            data-bay="doorway"
+            className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 text-sm hover:bg-raised"
+          >
+            Door
           </button>
           <label className="flex items-center">
             <span className="sr-only">Drop a solid</span>

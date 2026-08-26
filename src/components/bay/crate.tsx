@@ -9,6 +9,8 @@ import {
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef, type RefObject } from "react";
 import { useGrab } from "@/components/bay/grab";
+import { markCover } from "@/lib/bay/cover";
+import { COVER_G, CRATE_G, DUMMY_G, WORLD_G } from "@/lib/bay/groups";
 import { CRATE } from "@/lib/bay/parts";
 import { note, registerAssembly, registerBody, setBodyMass, setColliderGroups, unregisterAssembly, unregisterBody } from "@/lib/bay/probe";
 import { poseOf } from "@/lib/bay/sample";
@@ -17,9 +19,9 @@ import { playEvent } from "@/lib/contain/audio";
 const Q = [0, 0, 0, 1] as [number, number, number, number];
 const ply = 0x8a6a3e;
 const plyLid = 0x9a7a48;
-/** World 0, dummy 1, crate 2. Welded panels skip each other; loose panels hit everything. */
-const TOGETHER = interactionGroups([2], [0, 1]);
-const APART = interactionGroups([2], [0, 1, 2]);
+/** World 0, dummy 1, crate 2, cover 14. Welded panels skip each other; loose panels hit everything. */
+const TOGETHER = interactionGroups([CRATE_G], [WORLD_G, DUMMY_G, COVER_G]);
+const APART = interactionGroups([CRATE_G], [WORLD_G, DUMMY_G, CRATE_G, COVER_G]);
 
 function Panel({
   r,
@@ -42,6 +44,7 @@ function Panel({
 }) {
   const grab = useGrab(r, id);
   const pinned = useRef(false);
+  const tagged = useRef(false);
 
   useEffect(() => {
     registerBody(id, "crate-panel", () => poseOf(r.current, { parent: id.split("-")[0] ?? null }), () => r.current);
@@ -51,7 +54,12 @@ function Panel({
   useFrame((state, dt) => {
     grab.tick(state.raycaster.ray, Math.min(dt, 0.05));
     const b = r.current;
-    if (!b || pinned.current) return;
+    if (!b) return;
+    if (!tagged.current) {
+      markCover(b, "crate");
+      tagged.current = true;
+    }
+    if (pinned.current) return;
     setBodyMass(b, mass);
     pinned.current = true;
   });

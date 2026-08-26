@@ -165,6 +165,7 @@ export function awakenRagdoll(
     const b = actors.get(mid)?.getBody?.();
     if (!b) continue;
     b.setBodyType(0, true);
+    b.setGravityScale(1, true);
     b.setLinearDamping(lin);
     b.setAngularDamping(ang);
     b.wakeUp();

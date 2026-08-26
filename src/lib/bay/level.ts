@@ -1,4 +1,5 @@
 import { listSamplers } from "@/lib/bay/probe";
+import { DOOR, WALL } from "@/lib/bay/parts";
 import type { Entity, Kind } from "@/store/bay-store";
 
 /** Named arrangement of parts. Reset restages this, not a generic empty floor. */
@@ -142,6 +143,8 @@ const KINDS = new Set<string>([
   "crate",
   "dummy",
   "grass",
+  "wall",
+  "doorway",
   "cube",
   "ball",
   "cylinder",
@@ -280,6 +283,12 @@ export function captureActors(entities: Entity[]): LevelActor[] {
     } else if (kind === "crate") {
       const floor = sampleOf(`${e.id}-floor`);
       if (floor) pos = [round(floor.x), round(Math.max(0, floor.y - 0.018)), round(floor.z)];
+    } else if (kind === "wall") {
+      const p = sampleOf(e.id);
+      if (p) pos = [round(p.x), round(Math.max(0, p.y - WALL.h / 2)), round(p.z)];
+    } else if (kind === "doorway") {
+      const p = sampleOf(e.id);
+      if (p) pos = [round(p.x), round(Math.max(0, p.y - DOOR.h / 2)), round(p.z)];
     } else if (kind === "grass") {
       pos = [round(e.pos[0]), 0, round(e.pos[2])];
     } else {

@@ -5,14 +5,17 @@ import { Suspense, useEffect, useLayoutEffect, useRef, useState, type RefObject 
 import * as THREE from "three";
 import { AmmoCan } from "@/components/bay/ammo-can";
 import { Crate } from "@/components/bay/crate";
+import { Doorway } from "@/components/bay/doorway";
 import { Dummy } from "@/components/bay/dummy";
 import { Grass } from "@/components/bay/grass";
 import { Grenade } from "@/components/bay/grenade";
 import { Pack } from "@/components/bay/pack";
 import { Solid } from "@/components/bay/solid";
+import { Wall } from "@/components/bay/wall";
 import { isSolid } from "@/store/bay-store";
 import { ProbeTick } from "@/components/bay/probe-tick";
 import { FLOOR } from "@/lib/bay/parts";
+import { DUMMY_G } from "@/lib/bay/groups";
 import { listSamplers } from "@/lib/bay/probe";
 import { useBay } from "@/store/bay-store";
 
@@ -71,7 +74,7 @@ function BlastBus() {
         const nCol = b.numColliders();
         if (nCol > 0) {
           const membership = b.collider(0).collisionGroups() >>> 16;
-          if (membership & (1 << 1) || membership & (1 << 2)) return;
+          if (membership & (1 << DUMMY_G)) return;
         }
         let j = Math.min(2.4, (power * 0.18) / dist);
         if (p.y < 0.1) j *= 0.22;
@@ -145,6 +148,10 @@ function World() {
           <Crate key={e.id} id={e.id} pos={e.pos} />
         ) : e.kind === "dummy" ? (
           <Dummy key={e.id} id={e.id} pos={e.pos} />
+        ) : e.kind === "wall" ? (
+          <Wall key={e.id} id={e.id} pos={e.pos} />
+        ) : e.kind === "doorway" ? (
+          <Doorway key={e.id} id={e.id} pos={e.pos} />
         ) : e.kind === "grass" ? (
           <Grass key={e.id} id={e.id} pos={e.pos} />
         ) : isSolid(e.kind) ? (
