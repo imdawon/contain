@@ -6,8 +6,9 @@ import { poseOf } from "@/lib/bay/sample";
 import { useBay } from "@/store/bay-store";
 
 const GROUPS = interactionGroups([WORLD_G], [WORLD_G, DUMMY_G, CRATE_G, WAGON_G]);
-const dirt = 0x6e5a3c;
-const dirtHi = 0x8a734c;
+const dirt = 0xc9a15c;
+const dirtHi = 0xe2c47a;
+const dirtEdge = 0x6a4a2c;
 
 export function Hill({
   id,
@@ -51,11 +52,19 @@ export function Hill({
       <CuboidCollider args={[w / 2, h / 2, d / 2]} collisionGroups={GROUPS} friction={mu} restitution={0.02} />
       <mesh>
         <boxGeometry args={[w, h, d]} />
-        <meshStandardMaterial color={selected ? 0xd4d7cf : dirt} roughness={0.94} metalness={0.02} />
+        <meshStandardMaterial color={selected ? 0xd4d7cf : dirt} roughness={0.9} metalness={0.03} />
       </mesh>
-      <mesh position={[0, h / 2 + 0.006, 0]}>
-        <boxGeometry args={[w * 0.98, 0.012, d * 0.98]} />
-        <meshStandardMaterial color={dirtHi} roughness={0.96} metalness={0} />
+      <mesh position={[0, h / 2 + 0.008, 0]}>
+        <boxGeometry args={[w * 0.98, 0.016, d * 0.98]} />
+        <meshStandardMaterial color={dirtHi} roughness={0.92} metalness={0} />
+      </mesh>
+      <mesh position={[w / 2 + 0.004, 0, 0]}>
+        <boxGeometry args={[0.03, h, d]} />
+        <meshStandardMaterial color={dirtEdge} roughness={0.95} metalness={0} />
+      </mesh>
+      <mesh position={[-w / 2 - 0.004, 0, 0]}>
+        <boxGeometry args={[0.03, h, d]} />
+        <meshStandardMaterial color={dirtEdge} roughness={0.95} metalness={0} />
       </mesh>
     </RigidBody>
   );
