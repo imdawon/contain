@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 /** Call live `window.__bay` through the Vite `/__bay` pipe. No browser. */
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 const base = (process.env.BAY_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
 const fn = process.argv[2];
 if (!fn) {
@@ -7,13 +10,22 @@ if (!fn) {
   process.exit(2);
 }
 
-const args = process.argv.slice(3).map((s) => {
+function parseArg(s) {
+  const abs = resolve(s);
+  if (s.endsWith(".json") && existsSync(abs)) {
+    return JSON.parse(readFileSync(abs, "utf8"));
+  }
+  if (existsSync(s) && s.endsWith(".json")) {
+    return JSON.parse(readFileSync(s, "utf8"));
+  }
   try {
     return JSON.parse(s);
   } catch {
     return s;
   }
-});
+}
+
+const args = process.argv.slice(3).map(parseArg);
 
 async function readJson(r) {
   const text = await r.text();

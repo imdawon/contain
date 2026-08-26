@@ -9,8 +9,11 @@ import { Doorway } from "@/components/bay/doorway";
 import { Dummy } from "@/components/bay/dummy";
 import { Grass } from "@/components/bay/grass";
 import { Grenade } from "@/components/bay/grenade";
+import { Hill } from "@/components/bay/hill";
 import { Pack } from "@/components/bay/pack";
+import { SceneRig } from "@/components/bay/scene-rig";
 import { Solid } from "@/components/bay/solid";
+import { Wagon } from "@/components/bay/wagon";
 import { Wall } from "@/components/bay/wall";
 import { isSolid } from "@/store/bay-store";
 import { ProbeTick } from "@/components/bay/probe-tick";
@@ -146,6 +149,8 @@ function useFireMap() {
 function World() {
   const entities = useBay((s) => s.entities);
   const dragging = useBay((s) => s.dragging);
+  const scene = useBay((s) => s.scene);
+  const stageN = useBay((s) => s.stageN);
   const orbit = useRef<{ target: THREE.Vector3 } | null>(null);
   const fire = useFireMap();
 
@@ -154,6 +159,7 @@ function World() {
       <ProbeTick />
       <TrackCam orbit={orbit} />
       <BlastBus />
+      {scene ? <SceneRig key={`${scene.id}-${stageN}`} scene={scene} /> : null}
       <RigidBody type="fixed" colliders={false} friction={0.95} restitution={0.02}>
         <CuboidCollider args={[FLOOR.half, 0.25, FLOOR.half]} position={[0, -0.25, 0]} />
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
@@ -189,11 +195,15 @@ function World() {
         ) : e.kind === "pack" ? (
           <Pack key={e.id} id={e.id} pos={e.pos} fireMap={fire} />
         ) : e.kind === "grenade" || e.kind === "charge" ? (
-          <Grenade key={e.id} id={e.id} pos={e.pos} fireMap={fire} />
+          <Grenade key={e.id} id={e.id} pos={e.pos} rot={e.rot} fireMap={fire} />
         ) : e.kind === "crate" ? (
           <Crate key={e.id} id={e.id} pos={e.pos} />
         ) : e.kind === "dummy" ? (
-          <Dummy key={e.id} id={e.id} pos={e.pos} />
+          <Dummy key={e.id} id={e.id} pos={e.pos} rot={e.rot} live={e.live} />
+        ) : e.kind === "wagon" ? (
+          <Wagon key={e.id} id={e.id} pos={e.pos} rot={e.rot} grip={e.grip} bounce={e.bounce} mass={e.mass} />
+        ) : e.kind === "hill" ? (
+          <Hill key={e.id} id={e.id} pos={e.pos} rot={e.rot} size={e.size} grip={e.grip} />
         ) : e.kind === "wall" ? (
           <Wall key={e.id} id={e.id} pos={e.pos} />
         ) : e.kind === "doorway" ? (

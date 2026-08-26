@@ -9,15 +9,37 @@ import {
   type Level,
 } from "@/lib/bay/level";
 import { DEFAULT_RUN_ID, getRun, getTrial, materializeTrial, type Run } from "@/lib/bay/run";
+import { materializeScene, type Scene } from "@/lib/bay/scene";
 import { SOLID_SHAPES, type SolidShape } from "@/lib/bay/solids";
 
 export type Tool = "grab" | "nail";
-export type Kind = "pack" | "charge" | "grenade" | "can" | "crate" | "dummy" | "grass" | "wall" | "doorway" | SolidShape;
+export type Kind =
+  | "pack"
+  | "charge"
+  | "grenade"
+  | "can"
+  | "crate"
+  | "dummy"
+  | "grass"
+  | "wall"
+  | "doorway"
+  | "wagon"
+  | "hill"
+  | SolidShape;
 
 export interface Entity {
   id: string;
   kind: Kind;
   pos: [number, number, number];
+  rot?: [number, number, number];
+  vel?: [number, number, number];
+  grip?: number;
+  bounce?: number;
+  mass?: number;
+  live?: boolean;
+  fixed?: boolean;
+  size?: [number, number, number];
+  fuse?: number;
 }
 
 export function isSolid(kind: Kind): kind is SolidShape {
@@ -36,10 +58,13 @@ interface BayState {
   levelId: string;
   runId: string | null;
   trial: number;
+  scene: Scene | null;
+  stageN: number;
   spawn: (kind: Kind) => void;
   clear: () => void;
   reset: () => void;
   loadLevel: (id: string) => { ok: boolean; id: string; n: number; name: string };
+  loadScene: (scene: Scene) => { ok: boolean; id: string; n: number; name: string; file: string };
   loadRun: (id: string, lv?: number) => { ok: boolean; id: string; lv: number; n: number; name: string };
   nextTrial: () => { ok: boolean; id: string; lv: number; n: number; name: string; last?: boolean };
   saveLevel: (name?: string) => { ok: boolean; id: string; name: string; n: number };
@@ -60,7 +85,7 @@ function nid() {
 
 function stageLevel(id: string) {
   const level = getLevel(id) ?? getLevel(DEFAULT_LEVEL_ID)!;
-  return { ...materialize(level, nid), levelId: level.id, runId: null as string | null, trial: 0 };
+  return { ...materialize(level, nid), levelId: level.id, runId: null as string | null, trial: 0, scene: null as Scene | null, stageN: 0 };
 }
 
 function stageRun(run: Run, lv: number) {
@@ -70,6 +95,8 @@ function stageRun(run: Run, lv: number) {
     levelId: `${run.id}-${trial.lv}`,
     runId: run.id,
     trial: trial.lv,
+    scene: null as Scene | null,
+    stageN: 0,
   };
 }
 
@@ -87,7 +114,14 @@ export const useBay = create<BayState>((set, get) => ({
     if (kind === "charge") kind = "grenade";
     const r = () => (Math.random() - 0.5) * 1.4;
     const pos: [number, number, number] =
-      kind === "can" || kind === "crate" || kind === "grass" || kind === "dummy" || kind === "wall" || kind === "doorway"
+      kind === "can" ||
+      kind === "crate" ||
+      kind === "grass" ||
+      kind === "dummy" ||
+      kind === "wall" ||
+      kind === "doorway" ||
+      kind === "wagon" ||
+      kind === "hill"
         ? [r(), 0, r()]
         : kind === "pack" || kind === "grenade"
           ? [r() * 0.6, 1.15, r() * 0.6]
@@ -106,6 +140,10 @@ export const useBay = create<BayState>((set, get) => ({
   clear: () => set({ entities: [], selected: null, trackId: null, latch: "sealed" }),
   reset: () => {
     const s = get();
+    if (s.scene) {
+      set({ ...materializeScene(s.scene), dragging: false, latch: "sealed", stageN: s.stageN + 1 });
+      return;
+    }
     const run = getRun(s.runId);
     if (run) {
       set({ ...stageRun(run, s.trial), dragging: false, latch: "sealed" });
@@ -118,6 +156,17 @@ export const useBay = create<BayState>((set, get) => ({
     set({ ...staged, dragging: false });
     const level = getLevel(staged.levelId)!;
     return { ok: true, id: staged.levelId, n: staged.entities.length, name: level.name };
+  },
+  loadScene: (scene) => {
+    const staged = materializeScene(scene);
+    set({ ...staged, dragging: false, latch: "sealed", stageN: get().stageN + 1 });
+    return {
+      ok: true,
+      id: scene.id,
+      n: staged.entities.length,
+      name: scene.name,
+      file: scene.file ?? `scenes/${scene.id}.json`,
+    };
   },
   loadRun: (id, lv = 1) => {
     const run = getRun(id);

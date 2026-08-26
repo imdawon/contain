@@ -30,7 +30,7 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 10. **Probe, don’t screenshot.** Motion, latch, flop, and cook claims come from `window.__bay` (`peek`, `history`, `effects`, `until`). Screenshots are optional garnish.
 11. **Only number major product rules.** Tick rates, file maps, spawn lists, and API dumps are facts. Do not add them as axioms.
 12. **Commit when the bay actually moved.** Same turn as a verified slice. Message says what the bay does now.
-13. **A clip is a level.** Named arrangement of parts. Reset restages that clip. Save keeps a gag.
+13. **A clip is a level.** Named arrangement of parts. Reset restages that clip. Save keeps a gag. JSON scene files (`public/scenes/`) are the clips going forward — iterate the file.
 14. **A run is a bet.** Same victim. One variable. Premise on screen. Early rungs can fail. Next is the only loop.
 15. **Cover is occlusion.** A crate, can, wall, or door on the line blocks that bone’s blast. Grass is not cover. Rapier will not occlude a scripted radial impulse by itself.
 
@@ -61,6 +61,8 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 | `src/store/bay-store.ts` | Spawn/select/tool/latch/clip |
 | `src/lib/bay/level.ts` | Builtin gags + saved clips |
 | `src/lib/bay/run.ts` | vs ladders (grenades vs dummy, dummy vs cover) |
+| `src/lib/bay/scene.ts` | JSON scene loader. Restage the file, do not hardcode a new trial. |
+| `public/scenes/*.json` | Gags: layout, start velocity, grip, ties |
 | `src/components/contain/inspector.tsx` | Live xyz / mass / grip / bounce editor for the tracked body |
 | `src/lib/bay/solids.ts` | Collider-kit shapes |
 | `src/components/bay/solid.tsx` | Spawnable cube / ball / cylinder / capsule / platonic hulls / plank |

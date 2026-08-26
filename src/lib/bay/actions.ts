@@ -5,6 +5,7 @@ import { forgetCustom, getLevel, listLevels, levelCard } from "@/lib/bay/level";
 import { GRENADE, PACK } from "@/lib/bay/parts";
 import { clearLog, note } from "@/lib/bay/probe";
 import { getRun, runCard, RUNS } from "@/lib/bay/run";
+import { listSceneCards, resolveScene, sceneCard } from "@/lib/bay/scene";
 import { playEvent, silenceLoops } from "@/lib/contain/audio";
 import { useBay, type Kind, type Tool } from "@/store/bay-store";
 
@@ -12,10 +13,11 @@ function isFuse(kind: Kind | undefined) {
   return kind === "pack" || kind === "grenade" || kind === "charge";
 }
 
-function arm(ent: { id: string; kind: Kind }) {
+function arm(ent: { id: string; kind: Kind; fuse?: number }) {
   if (ent.kind === "grenade" || ent.kind === "charge") {
-    startCook(ent.id, "frag", GRENADE.fuse, GRENADE.peak, GRENADE.boom);
-    note("pin-pull", { id: ent.id });
+    const fuse = ent.fuse != null && ent.fuse > 0.2 ? ent.fuse : GRENADE.fuse;
+    startCook(ent.id, "frag", fuse, GRENADE.peak, GRENADE.boom);
+    note("pin-pull", { id: ent.id, fuse });
   } else {
     startCook(ent.id, "nmc", PACK.nmc.cook, PACK.nmc.peak, PACK.nmc.boom);
   }
@@ -84,6 +86,19 @@ export function listBayRuns() {
   return RUNS.map((r) => runCard(r, 1));
 }
 
+export function listBayScenes() {
+  return listSceneCards();
+}
+
+export async function restageScene(input: unknown) {
+  const scene = await resolveScene(input);
+  if (!scene) return { ok: false as const, reason: "missing" as const, id: typeof input === "string" ? input : null };
+  quietStage();
+  const r = useBay.getState().loadScene(scene);
+  note("restage-scene", { id: r.id, file: r.file, name: r.name, n: r.n });
+  return { ...r, ...stageInfo() };
+}
+
 export function loadBay(id: string) {
   const wanted = getLevel(id);
   if (!wanted) return { ok: false as const, reason: "missing" as const, id };
@@ -150,6 +165,7 @@ function stageInfo() {
     trial: s.trial,
     level: level ? levelCard(level) : null,
     run: run ? runCard(run, s.trial) : null,
+    scene: s.scene ? sceneCard(s.scene) : null,
     entities: s.entities.map((e) => ({ id: e.id, kind: e.kind, pos: e.pos })),
   };
 }
