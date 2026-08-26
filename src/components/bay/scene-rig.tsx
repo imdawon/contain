@@ -16,18 +16,18 @@ const _p = new THREE.Vector3();
 const _q = new THREE.Quaternion();
 const _e = new THREE.Euler();
 
-const DUMMY_LOCAL: Record<string, [number, number, number]> = {
-  hips: [0, 0.74, 0],
-  chest: [0, 1.0, 0],
-  head: [0, 1.28, 0],
-  "thigh-l": [-0.08, 0.5, 0],
-  "thigh-r": [0.08, 0.5, 0],
-  "shin-l": [-0.08, 0.17, 0],
-  "shin-r": [0.08, 0.17, 0],
-  "uarm-l": [-0.28, 1.08, 0],
-  "uarm-r": [0.28, 1.08, 0],
-  "larm-l": [-0.52, 1.08, 0],
-  "larm-r": [0.52, 1.08, 0],
+const DUMMY_SIT: Record<string, { p: [number, number, number]; e: [number, number, number] }> = {
+  hips: { p: [0, 0.3, -0.08], e: [0.18, 0, 0] },
+  chest: { p: [0, 0.54, -0.02], e: [0.28, 0, 0] },
+  head: { p: [0, 0.78, 0.04], e: [0.22, 0, 0] },
+  "thigh-l": { p: [-0.09, 0.22, 0.14], e: [1.18, 0, 0] },
+  "thigh-r": { p: [0.09, 0.22, 0.14], e: [1.18, 0, 0] },
+  "shin-l": { p: [-0.09, 0.14, 0.38], e: [0.22, 0, 0] },
+  "shin-r": { p: [0.09, 0.14, 0.38], e: [0.22, 0, 0] },
+  "uarm-l": { p: [-0.2, 0.5, 0.04], e: [0.35, 0, 0.95] },
+  "uarm-r": { p: [0.2, 0.5, 0.04], e: [0.35, 0, -0.95] },
+  "larm-l": { p: [-0.18, 0.3, 0.18], e: [0.55, 0, 0.7] },
+  "larm-r": { p: [0.18, 0.3, 0.18], e: [0.55, 0, -0.7] },
 };
 
 type Lock = {
@@ -151,11 +151,14 @@ export function SceneRig({ scene }: { scene: Scene }) {
         const rot = quatFromEuler(e.rot ?? [0, 0, 0]);
         if (e.kind === "dummy") {
           _q.set(rot.x, rot.y, rot.z, rot.w);
-          for (const [part, local] of Object.entries(DUMMY_LOCAL)) {
+          for (const [part, sit] of Object.entries(DUMMY_SIT)) {
             const bone = bodyOf(`${e.id}-${part}`);
             if (!bone) continue;
-            _p.set(local[0], local[1], local[2]).applyQuaternion(_q);
-            poseBody(bone, e.pos[0] + _p.x, e.pos[1] + _p.y, e.pos[2] + _p.z, rot);
+            _e.set(sit.e[0], sit.e[1], sit.e[2], "XYZ");
+            _qA.setFromEuler(_e);
+            _qRel.copy(_q).multiply(_qA);
+            _p.set(sit.p[0], sit.p[1], sit.p[2]).applyQuaternion(_q);
+            poseBody(bone, e.pos[0] + _p.x, e.pos[1] + _p.y, e.pos[2] + _p.z, { x: _qRel.x, y: _qRel.y, z: _qRel.z, w: _qRel.w });
             bone.setBodyType(0, true);
             bone.setGravityScale(0, true);
             setColliderGroups(bone, interactionGroups([DUMMY_G], []));
@@ -188,7 +191,7 @@ export function SceneRig({ scene }: { scene: Scene }) {
 
       const followIds = new Set<string>();
       if (dummy) {
-        for (const part of Object.keys(DUMMY_LOCAL)) followIds.add(`${dummy.id}-${part}`);
+        for (const part of Object.keys(DUMMY_SIT)) followIds.add(`${dummy.id}-${part}`);
       }
       if (nade) followIds.add(nade.id);
       for (const tie of scene.ties) {

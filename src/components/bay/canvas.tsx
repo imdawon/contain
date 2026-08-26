@@ -29,8 +29,16 @@ function TrackCam({
 }) {
   const trackId = useBay((s) => s.trackId);
   const offset = useBay((s) => s.scene?.cam?.offset);
+  const look = useBay((s) => s.scene?.cam?.look);
+  const eye = useBay((s) => s.scene?.cam?.eye);
   const camera = useThree((s) => s.camera);
   useFrame(() => {
+    if (eye && look) {
+      camera.position.set(eye[0], eye[1], eye[2]);
+      camera.lookAt(look[0], look[1], look[2]);
+      camera.updateMatrixWorld();
+      return;
+    }
     if (!trackId) return;
     const rec = listSamplers().get(trackId);
     if (!rec) return;
@@ -38,7 +46,10 @@ function TrackCam({
     if (orbit.current) orbit.current.target.set(p.x, p.y, p.z);
     if (offset) {
       camera.position.set(p.x + offset[0], p.y + offset[1], p.z + offset[2]);
-      camera.lookAt(p.x, p.y + 0.38, p.z);
+      const lx = look?.[0] ?? 0;
+      const ly = look?.[1] ?? 0.38;
+      const lz = look?.[2] ?? 0;
+      camera.lookAt(p.x + lx, p.y + ly, p.z + lz);
       camera.updateMatrixWorld();
     }
   }, -1);
