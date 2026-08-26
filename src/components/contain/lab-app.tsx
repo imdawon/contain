@@ -54,6 +54,7 @@ export function LabApp() {
   const runId = useBay((s) => s.runId);
   const trial = useBay((s) => s.trial);
   const scene = useBay((s) => s.scene);
+  const inspect = useBay((s) => s.inspect);
   const run = runId ? getRun(runId) : null;
   const runLive = run ? runCard(run, trial) : null;
 
@@ -143,7 +144,7 @@ export function LabApp() {
         ) : null}
       </section>
 
-      {client ? <Inspector /> : null}
+      {client && inspect ? <Inspector /> : null}
 
       {runLive ? (
         <div className="pointer-events-none absolute inset-x-0 top-[5.5rem] z-10 px-4 text-center md:top-28">

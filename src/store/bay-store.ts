@@ -60,6 +60,7 @@ interface BayState {
   trial: number;
   scene: Scene | null;
   stageN: number;
+  inspect: boolean;
   spawn: (kind: Kind) => void;
   clear: () => void;
   reset: () => void;
@@ -110,6 +111,7 @@ export const useBay = create<BayState>((set, get) => ({
   muted: false,
   dragging: false,
   cutaway: false,
+  inspect: true,
   spawn: (kind) => {
     if (kind === "charge") kind = "grenade";
     const r = () => (Math.random() - 0.5) * 1.4;
@@ -153,13 +155,13 @@ export const useBay = create<BayState>((set, get) => ({
   },
   loadLevel: (id) => {
     const staged = stageLevel(id);
-    set({ ...staged, dragging: false });
+    set({ ...staged, dragging: false, inspect: true });
     const level = getLevel(staged.levelId)!;
     return { ok: true, id: staged.levelId, n: staged.entities.length, name: level.name };
   },
   loadScene: (scene) => {
     const staged = materializeScene(scene);
-    set({ ...staged, dragging: false, latch: "sealed", stageN: get().stageN + 1 });
+    set({ ...staged, dragging: false, latch: "sealed", inspect: false, stageN: get().stageN + 1 });
     return {
       ok: true,
       id: scene.id,
@@ -172,7 +174,7 @@ export const useBay = create<BayState>((set, get) => ({
     const run = getRun(id);
     if (!run) return { ok: false, id, lv: 0, n: 0, name: id };
     const staged = stageRun(run, lv);
-    set({ ...staged, dragging: false });
+    set({ ...staged, dragging: false, inspect: true });
     return { ok: true, id: run.id, lv: staged.trial, n: staged.entities.length, name: run.name };
   },
   nextTrial: () => {

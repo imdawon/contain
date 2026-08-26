@@ -1,10 +1,11 @@
-import { useRapier } from "@react-three/rapier";
+import { interactionGroups, useRapier } from "@react-three/rapier";
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { cooks } from "@/lib/bay/cook";
-import { applyActor, listSamplers, note } from "@/lib/bay/probe";
+import { applyActor, listSamplers, note, setColliderGroups } from "@/lib/bay/probe";
 import type { Scene } from "@/lib/bay/scene";
+import { COVER_G, CRATE_G, DUMMY_G, WORLD_G } from "@/lib/bay/groups";
 import { useBay } from "@/store/bay-store";
 
 const _qA = new THREE.Quaternion();
@@ -12,6 +13,34 @@ const _qB = new THREE.Quaternion();
 const _inv = new THREE.Quaternion();
 const _rel = new THREE.Vector3();
 const _qRel = new THREE.Quaternion();
+const _p = new THREE.Vector3();
+const _q = new THREE.Quaternion();
+const _e = new THREE.Euler();
+
+const DUMMY_LOCAL: Record<string, [number, number, number]> = {
+  hips: [0, 0.74, 0],
+  chest: [0, 1.0, 0],
+  head: [0, 1.28, 0],
+  "thigh-l": [-0.08, 0.5, 0],
+  "thigh-r": [0.08, 0.5, 0],
+  "shin-l": [-0.08, 0.17, 0],
+  "shin-r": [0.08, 0.17, 0],
+  "uarm-l": [-0.28, 1.08, 0],
+  "uarm-r": [0.28, 1.08, 0],
+  "larm-l": [-0.52, 1.08, 0],
+  "larm-r": [0.52, 1.08, 0],
+};
+
+type Lock = {
+  id: string;
+  lx: number;
+  ly: number;
+  lz: number;
+  qx: number;
+  qy: number;
+  qz: number;
+  qw: number;
+};
 
 function bodyOf(id: string) {
   return listSamplers().get(id)?.getBody?.() ?? null;
@@ -19,17 +48,46 @@ function bodyOf(id: string) {
 
 function resolveRef(ref: string) {
   if (listSamplers().has(ref)) return ref;
-  const dummy = useBay.getState().entities.find((e) => e.kind === "dummy");
+  const ents = useBay.getState().entities;
+  const dummy = ents.find((e) => e.kind === "dummy");
   if (dummy && ref.startsWith("dummy-")) return `${dummy.id}-${ref.slice(6)}`;
-  const named = useBay.getState().entities.find((e) => e.id === ref || e.kind === ref);
+  const named = ents.find(
+    (e) => e.id === ref || e.kind === ref || (ref === "nade" && e.kind === "grenade"),
+  );
   return named?.id ?? ref;
 }
 
+function quatFromEuler(rot: [number, number, number]) {
+  _e.set(rot[0], rot[1], rot[2], "XYZ");
+  _q.setFromEuler(_e);
+  return { x: _q.x, y: _q.y, z: _q.z, w: _q.w };
+}
+
+function poseBody(
+  b: { isKinematic: () => boolean; setNextKinematicTranslation: (p: { x: number; y: number; z: number }) => void; setNextKinematicRotation: (q: { x: number; y: number; z: number; w: number }) => void; setTranslation: (p: { x: number; y: number; z: number }, w: boolean) => void; setRotation: (q: { x: number; y: number; z: number; w: number }, w: boolean) => void; setLinvel: (v: { x: number; y: number; z: number }, w: boolean) => void; setAngvel: (v: { x: number; y: number; z: number }, w: boolean) => void; wakeUp: () => void },
+  x: number,
+  y: number,
+  z: number,
+  rot: { x: number; y: number; z: number; w: number },
+) {
+  if (b.isKinematic()) {
+    b.setNextKinematicTranslation({ x, y, z });
+    b.setNextKinematicRotation(rot);
+  }
+  b.setTranslation({ x, y, z }, true);
+  b.setRotation(rot, true);
+  b.setLinvel({ x: 0, y: 0, z: 0 }, true);
+  b.setAngvel({ x: 0, y: 0, z: 0 }, true);
+  b.wakeUp();
+}
+
 export function SceneRig({ scene }: { scene: Scene }) {
-  const { world, rapier } = useRapier();
+  const { world } = useRapier();
   const phase = useRef(0);
   const airborne = useRef(false);
   const midBoom = useRef(false);
+  const released = useRef(false);
+  const locks = useRef<Lock[]>([]);
   const joints = useRef<Array<{ isValid?: () => boolean }>>([]);
   const stamp = `${scene.id}:${scene.entities.map((e) => e.name).join(",")}`;
 
@@ -37,6 +95,8 @@ export function SceneRig({ scene }: { scene: Scene }) {
     phase.current = 0;
     airborne.current = false;
     midBoom.current = false;
+    released.current = false;
+    locks.current = [];
     joints.current = [];
     note("scene-file", {
       id: scene.id,
@@ -55,14 +115,15 @@ export function SceneRig({ scene }: { scene: Scene }) {
         }
       }
       joints.current = [];
+      locks.current = [];
     };
   }, [stamp, scene, world]);
 
   useFrame(() => {
     if (phase.current === 0) {
       const ready = scene.entities.every((e) => {
-        if (e.kind === "dummy") return Boolean(bodyOf(`${e.name}-hips`));
-        return Boolean(bodyOf(e.name));
+        if (e.kind === "dummy") return Boolean(bodyOf(`${e.name}-hips`) || bodyOf(`${useBay.getState().entities.find((x) => x.kind === "dummy")?.id}-hips`));
+        return Boolean(bodyOf(e.name) || bodyOf(useBay.getState().entities.find((x) => x.id === e.name || x.kind === e.kind)?.id ?? ""));
       });
       if (!ready) return;
       phase.current = 1;
@@ -77,59 +138,157 @@ export function SceneRig({ scene }: { scene: Scene }) {
         if (e.bounce != null) patch.restitution = e.bounce;
         if (e.mass != null) patch.mass = e.mass;
         if (Object.keys(patch).length) applyActor(id, patch);
+        const b = bodyOf(id);
+        if (b && e.kind !== "hill") {
+          b.setGravityScale(0, true);
+          b.setLinvel({ x: 0, y: 0, z: 0 }, true);
+          b.setAngvel({ x: 0, y: 0, z: 0 }, true);
+        }
+      }
+      for (const e of useBay.getState().entities) {
+        const rot = quatFromEuler(e.rot ?? [0, 0, 0]);
+        if (e.kind === "dummy") {
+          _q.set(rot.x, rot.y, rot.z, rot.w);
+          for (const [part, local] of Object.entries(DUMMY_LOCAL)) {
+            const bone = bodyOf(`${e.id}-${part}`);
+            if (!bone) continue;
+            _p.set(local[0], local[1], local[2]).applyQuaternion(_q);
+            poseBody(bone, e.pos[0] + _p.x, e.pos[1] + _p.y, e.pos[2] + _p.z, rot);
+            bone.setGravityScale(0, true);
+          }
+          continue;
+        }
+        const b = bodyOf(e.id);
+        if (!b || e.kind === "hill") continue;
+        poseBody(b, e.pos[0], e.pos[1], e.pos[2], rot);
+        b.setGravityScale(0, true);
       }
       phase.current = 2;
       return;
     }
 
     if (phase.current === 2) {
-      for (const tie of scene.ties) {
-        const aId = resolveRef(tie.a);
-        const bId = resolveRef(tie.b);
-        const a = bodyOf(aId);
-        const b = bodyOf(bId);
-        if (!a || !b) continue;
-        const pa = a.translation();
-        const ra = a.rotation();
-        const pb = b.translation();
-        const rb = b.rotation();
-        _qA.set(ra.x, ra.y, ra.z, ra.w);
-        _qB.set(rb.x, rb.y, rb.z, rb.w);
-        _inv.copy(_qB).invert();
-        _rel.set(pa.x - pb.x, pa.y - pb.y, pa.z - pb.z).applyQuaternion(_inv);
-        _qRel.copy(_inv).multiply(_qA);
-        const joint = world.createImpulseJoint(
-          rapier.JointData.fixed(
-            { x: 0, y: 0, z: 0 },
-            { x: 0, y: 0, z: 0, w: 1 },
-            { x: _rel.x, y: _rel.y, z: _rel.z },
-            { x: _qRel.x, y: _qRel.y, z: _qRel.z, w: _qRel.w },
-          ),
-          a,
-          b,
-          true,
-        );
-        joints.current.push(joint);
-        note("tie", { a: aId, b: bId });
+      const dummy = useBay.getState().entities.find((e) => e.kind === "dummy" && e.live);
+      if (dummy) {
+        const hips = bodyOf(`${dummy.id}-hips`);
+        if (hips?.isKinematic()) return;
       }
       phase.current = 3;
       return;
     }
 
     if (phase.current === 3) {
-      const dummy = useBay.getState().entities.find((e) => e.kind === "dummy" && e.live);
-      if (dummy) {
-        const hips = bodyOf(`${dummy.id}-hips`);
-        if (hips?.isKinematic()) return;
+      const wagonEnt = useBay.getState().entities.find((e) => e.kind === "wagon");
+      const wagon = wagonEnt ? bodyOf(wagonEnt.id) : null;
+      if (!wagon) return;
+      const pb = wagon.translation();
+      const rb = wagon.rotation();
+      _qB.set(rb.x, rb.y, rb.z, rb.w);
+      _inv.copy(_qB).invert();
+
+      const followIds = new Set<string>();
+      for (const tie of scene.ties) {
+        const aId = resolveRef(tie.a);
+        const bId = resolveRef(tie.b);
+        const follower = aId === wagonEnt?.id ? bId : aId;
+        followIds.add(follower);
+        if (follower.startsWith(`${useBay.getState().entities.find((e) => e.kind === "dummy")?.id}-`)) {
+          const dummy = useBay.getState().entities.find((e) => e.kind === "dummy");
+          if (dummy) {
+            for (const part of Object.keys(DUMMY_LOCAL)) followIds.add(`${dummy.id}-${part}`);
+          }
+        }
       }
-      for (const e of useBay.getState().entities) {
-        if (!e.vel) continue;
-        const id = e.kind === "dummy" ? `${e.id}-hips` : e.id;
-        applyActor(id, { vx: e.vel[0], vy: e.vel[1], vz: e.vel[2] });
+
+      locks.current = [];
+      for (const id of followIds) {
+        const b = bodyOf(id);
+        if (!b || b === wagon) continue;
+        const pa = b.translation();
+        const ra = b.rotation();
+        _qA.set(ra.x, ra.y, ra.z, ra.w);
+        _rel.set(pa.x - pb.x, pa.y - pb.y, pa.z - pb.z).applyQuaternion(_inv);
+        _qRel.copy(_inv).multiply(_qA);
+        b.setBodyType(0, true);
+        b.setGravityScale(0, true);
+        if (id.includes("-")) setColliderGroups(b, interactionGroups([DUMMY_G], []));
+        locks.current.push({
+          id,
+          lx: _rel.x,
+          ly: _rel.y,
+          lz: _rel.z,
+          qx: _qRel.x,
+          qy: _qRel.y,
+          qz: _qRel.z,
+          qw: _qRel.w,
+        });
+        note("tie", { a: id, b: wagonEnt!.id });
       }
-      note("scene-kick", { id: scene.id, file: scene.file ?? `scenes/${scene.id}.json` });
+
+      const nade = useBay.getState().entities.find((e) => e.kind === "grenade" || e.kind === "charge");
+      if (nade) {
+        const nb = bodyOf(nade.id);
+        if (nb) {
+          setColliderGroups(nb, interactionGroups([WORLD_G], [WORLD_G]));
+        }
+      }
       phase.current = 4;
       return;
+    }
+
+    if (phase.current === 4) {
+      for (const e of useBay.getState().entities) {
+        if (!e.vel || e.kind === "dummy" || e.kind === "grenade" || e.kind === "charge") continue;
+        const b = bodyOf(e.id);
+        if (!b) continue;
+        b.setGravityScale(1, true);
+        b.setBodyType(0, true);
+        applyActor(e.id, { vx: e.vel[0], vy: e.vel[1], vz: e.vel[2] });
+      }
+      note("scene-kick", { id: scene.id, file: scene.file ?? `scenes/${scene.id}.json` });
+      phase.current = 5;
+      return;
+    }
+
+    const wagonEnt = useBay.getState().entities.find((e) => e.kind === "wagon");
+    const wagon = wagonEnt ? bodyOf(wagonEnt.id) : null;
+    const nade = useBay.getState().entities.find((e) => e.kind === "grenade" || e.kind === "charge");
+    const cook = nade ? cooks.get(nade.id) : undefined;
+    const boom = Boolean(cook && (cook.phase === "boom" || cook.phase === "dead"));
+
+    if (wagon && !released.current) {
+      const pb = wagon.translation();
+      const rb = wagon.rotation();
+      _qB.set(rb.x, rb.y, rb.z, rb.w);
+      for (const lock of locks.current) {
+        const b = bodyOf(lock.id);
+        if (!b) continue;
+        _rel.set(lock.lx, lock.ly, lock.lz).applyQuaternion(_qB);
+        _qRel.set(lock.qx, lock.qy, lock.qz, lock.qw);
+        _qA.copy(_qB).multiply(_qRel);
+        const x = pb.x + _rel.x;
+        const y = pb.y + _rel.y;
+        const z = pb.z + _rel.z;
+        const rot = { x: _qA.x, y: _qA.y, z: _qA.z, w: _qA.w };
+        b.setTranslation({ x, y, z }, true);
+        b.setRotation(rot, true);
+        const v = wagon.linvel();
+        b.setLinvel({ x: v.x, y: v.y, z: v.z }, true);
+        b.setAngvel(wagon.angvel(), true);
+        b.setGravityScale(0, true);
+      }
+    }
+
+    if (boom && !released.current) {
+      released.current = true;
+      for (const lock of locks.current) {
+        const b = bodyOf(lock.id);
+        if (!b) continue;
+        b.setBodyType(0, true);
+        b.setGravityScale(1, true);
+        setColliderGroups(b, interactionGroups([DUMMY_G], [WORLD_G, CRATE_G, COVER_G]));
+        b.wakeUp();
+      }
     }
 
     const dummy = useBay.getState().entities.find((e) => e.kind === "dummy");
@@ -152,8 +311,6 @@ export function SceneRig({ scene }: { scene: Scene }) {
         file: scene.file ?? `scenes/${scene.id}.json`,
       });
     }
-    const nade = useBay.getState().entities.find((e) => e.kind === "grenade" || e.kind === "charge");
-    const cook = nade ? cooks.get(nade.id) : undefined;
     if (cook && (cook.phase === "boom" || cook.phase === "dead") && !midBoom.current) {
       midBoom.current = true;
       note("boom-pose", {
@@ -170,3 +327,5 @@ export function SceneRig({ scene }: { scene: Scene }) {
 
   return null;
 }
+
+
