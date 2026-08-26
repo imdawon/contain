@@ -342,6 +342,27 @@ export function Dummy({ id, pos }: { id: string; pos: [number, number, number] }
       set(uarmR, kx + 1.1, ky + 0.4, kz, 0, 0, 3.4);
       set(larmL, kx - 1.6, ky + 0.2, kz, 0, 0, -2.2);
       set(larmR, kx + 1.6, ky + 0.2, kz, 0, 0, 2.2);
+      const pair = (hinge: HingeId, a: RefObject<RapierRigidBody>, b: RefObject<RapierRigidBody>) => {
+        const ja = a.current;
+        const jb = b.current;
+        if (!ja || !jb) return;
+        sampleHinge(id, hinge, toyJointImpulse({ isValid: () => true, body1: () => ja, body2: () => jb }));
+      };
+      pair("lumbar", hips, chest);
+      pair("upper-neck", chest, head);
+      pair("femur-l", hips, thighL);
+      pair("femur-r", hips, thighR);
+      pair("knee-l", thighL, shinL);
+      pair("knee-r", thighR, shinR);
+      pair("shoulder-l", chest, uarmL);
+      pair("shoulder-r", chest, uarmR);
+      pair("humerus-lower-l", uarmL, larmL);
+      pair("humerus-lower-r", uarmR, larmR);
+      const load = Math.max(0.55, kick * 1.7);
+      sampleHinge(id, "lumbar", load);
+      sampleHinge(id, "upper-neck", load * 0.72);
+      sampleHinge(id, "femur-l", load * 0.9);
+      sampleHinge(id, "femur-r", load * 0.9);
       if (first && n > 0) note("dummy-flop", { id, n, x: p.x, z: p.z });
     };
     window.addEventListener("bay-blast", onBlast);

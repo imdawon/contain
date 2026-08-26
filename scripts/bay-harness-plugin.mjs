@@ -34,7 +34,7 @@ export function bayHarnessPlugin() {
           if (!taker || taker.res.writableEnded) continue;
           clearTimeout(taker.timer);
           open.status = "out";
-          sendJson(taker.res, 200, { id: open.id, fn: open.fn, args: open.args });
+          sendJson(taker.res, 200, { id: open.id, fn: open.fn, args: open.args, waitMs: open.waitMs });
         }
       }
 
@@ -86,7 +86,7 @@ export function bayHarnessPlugin() {
           const open = [...jobs.values()].find((j) => j.status === "open");
           if (open) {
             open.status = "out";
-            sendJson(res, 200, { id: open.id, fn: open.fn, args: open.args });
+            sendJson(res, 200, { id: open.id, fn: open.fn, args: open.args, waitMs: open.waitMs });
             return;
           }
           const timer = setTimeout(() => {
@@ -132,9 +132,9 @@ export function bayHarnessPlugin() {
                   jobs.delete(id);
                   resolve({ error: "timeout", value: null });
                 }, waitMs);
-                jobs.set(id, { id, fn, args, status: "open", resolve, timer });
+                jobs.set(id, { id, fn, args, waitMs, status: "open", resolve, timer });
                 try {
-                  if (typeof server.hot?.send === "function") server.hot.send("bay:call", { id, fn, args });
+                  if (typeof server.hot?.send === "function") server.hot.send("bay:call", { id, fn, args, waitMs });
                 } catch {
                   /* ignore */
                 }
@@ -153,7 +153,7 @@ export function bayHarnessPlugin() {
   };
 }
 
-/** @typedef {{ id: string, fn: string, args: unknown[], status: "open" | "out" | "done", resolve: (v: { value?: unknown, error?: string | null }) => void, timer: NodeJS.Timeout }} Job */
+/** @typedef {{ id: string, fn: string, args: unknown[], waitMs?: number, status: "open" | "out" | "done", resolve: (v: { value?: unknown, error?: string | null }) => void, timer: NodeJS.Timeout }} Job */
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -213,7 +213,11 @@ if (!(g.__bayPipeCtl && !g.__bayPipeCtl.signal.aborted)) {
           const first = seen.values().next().value;
           if (first) seen.delete(first);
         }
-        const out = await run(String(msg.fn ?? ""), Array.isArray(msg.args) ? msg.args : []);
+        const cap = Math.min(20000, Number(msg.waitMs) || 16000);
+        const out = await Promise.race([
+          run(String(msg.fn ?? ""), Array.isArray(msg.args) ? msg.args : []),
+          new Promise((res) => setTimeout(() => res({ error: "run-timeout" }), cap)),
+        ]);
         await fetch("/__bay/done", {
           method: "POST",
           headers: { "content-type": "application/json" },
