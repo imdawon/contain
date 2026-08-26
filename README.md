@@ -12,7 +12,7 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 
 **Now (v0):** dummy + crate + charge + spreading grass. Phone-in-can still spawnable. Latch shears before the hinge.
 
-**Not yet:** shields, crowds, film chrome, 30s pose log.
+**Not yet:** shields, crowds, film chrome.
 
 ---
 
@@ -38,6 +38,15 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
     window.__bay.track(id)   // follow a part, or track(null) for free orbit
     window.__bay.cutaway()   // toggle x-ray on the camera-facing can wall
     window.__bay.apply(id, { x, y, z, vx, vy, vz, mass, friction, restitution })
+    window.__bay.help()      // command list
+    window.__bay.peek()      // compact stage (use this, not screenshots)
+    window.__bay.ui()        // DOM controls
+    window.__bay.click("puncture")
+    window.__bay.puncture(id)
+    window.__bay.drag(id, { x, y, z }, seconds)
+    window.__bay.history(30) // 10Hz pose ring, last 30s
+    window.__bay.effects(id) // path + events for one body
+    window.__bay.until("crate-break", 8000)
     ```
 
     **What the camera sees** = `snapshot().inView` (ids whose bounds intersect the active camera frustum).
@@ -60,10 +69,11 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 19. **Grab keeps its depth.** Pointer-down stores the click distance and the offset from the body. Drag slides on that depth; scroll pushes / pulls. Never snap the body to a point 1.4 m in front of the camera.
 20. **The can is sealed until you ask.** Walls are opaque steel. **X-ray** (button, or key `X`) ghosts only the wall facing the camera so you can see inside. Orbit and the ghosted face follows. Off = fully sealed. The lid popping is still the physical open.
 21. **Collider kit is how we test the sim.** Spawn platonic / primitive solids (cube, ball, cylinder, capsule, tetra, octa, dodeca, ico, plank) from **Solid**. Cube/plank = cuboid, ball = sphere, cylinder/capsule = native, the four platonic meshes = convex hull. Stack, tumble, throw. Not scenery.
-22. **A 30-second pose ring buffer is next, not now.** When we debug lid jitter, sample the tracked body every tick into a last-30s log on `window.__bay`. Do not build it until a twitch needs a timeline.
+22. **Last 30 seconds is a pose ring at 10 Hz.** `window.__bay.history(30)` and `effects(id)` are how you measure a twitch, a flop, or a lid. Not screenshots.
 23. **Dummy is a ragdoll, not a statue.** Hips, chest, head, thighs, shins, arms. Spherical shoulders/hips/neck, hinged knees/elbows. Collision group 1 vs world 0 so limbs do not fight each other. The punchline is the flop.
 24. **A charge dismantles a crate.** Crate is floor + four walls + lid, welded. `bay-blast` (capture) shears the welds, then impulses throw the panels. Phone NMC still does **not** blast. Charge does.
 25. **Fire spreads.** Grass cells ignite from the heat field (`src/lib/bay/heat.ts`) written by cooks and burning tufts. Idle → burn → ash. Not a fluid sim.
+26. **Agent harness is how the sim is played blind.** Every HUD control has `data-bay`. Every registered body can be selected, held, dragged, flung, dropped. Play via `window.__bay` (`peek`, `click`, `puncture`, `drag`, `history`, `effects`, `until`). Do not screenshot to operate the bay.
 
 ---
 
@@ -95,6 +105,8 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 | `src/components/bay/crate.tsx` | Welded crate that shears on blast |
 | `src/components/bay/grass.tsx` | Spreading grass fire |
 | `src/lib/bay/heat.ts` | Toy heat field |
+| `src/lib/bay/harness.ts` | Agent command API + 30s history |
+| `src/lib/bay/actions.ts` | Puncture / spawn / reset without the DOM |
 
 ---
 

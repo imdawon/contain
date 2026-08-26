@@ -1,6 +1,7 @@
 import { RigidBody, type RapierRigidBody } from "@react-three/rapier";
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
+import { punctureId } from "@/lib/bay/actions";
 import { cooks, startCook, stepCook } from "@/lib/bay/cook";
 import { clearHeat, setHeat } from "@/lib/bay/heat";
 import { PACK } from "@/lib/bay/parts";
@@ -151,13 +152,5 @@ export function Pack({
 }
 
 export function punctureSelected() {
-  const id = useBay.getState().selected;
-  if (!id) return false;
-  const ent = useBay.getState().entities.find((e) => e.id === id);
-  if (!ent || (ent.kind !== "pack" && ent.kind !== "charge")) return false;
-  const spec = ent.kind === "charge" ? PACK.charge : PACK.nmc;
-  startCook(id, "nmc", spec.cook, spec.peak, spec.boom);
-  playEvent("puncture", "nmc");
-  note("puncture", { id, kind: ent.kind });
-  return true;
+  return punctureId().ok;
 }

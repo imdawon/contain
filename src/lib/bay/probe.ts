@@ -81,7 +81,7 @@ type Actor = {
 
 const actors = new Map<string, Actor>();
 const events: ProbeEvent[] = [];
-const MAX_EVENTS = 120;
+const MAX_EVENTS = 240;
 let last: ProbeSnap = emptySnap();
 let started = 0;
 

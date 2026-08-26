@@ -1,7 +1,8 @@
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect } from "react";
 import * as THREE from "three";
-import { bindProbeWindow, listSamplers, writeSnap } from "@/lib/bay/probe";
+import { bindHarnessWindow, recordHistory, tickDrags } from "@/lib/bay/harness";
+import { listSamplers, probeTime, writeSnap } from "@/lib/bay/probe";
 import { useBay } from "@/store/bay-store";
 
 const _proj = new THREE.Matrix4();
@@ -22,7 +23,7 @@ export function ProbeTick() {
   const toggleCutaway = useBay((s) => s.toggleCutaway);
 
   useEffect(() => {
-    bindProbeWindow();
+    bindHarnessWindow();
     const w = window as unknown as {
       __baySetTrack: (id: string | null) => void;
       __bayToggleCutaway: () => void;
@@ -31,7 +32,8 @@ export function ProbeTick() {
     w.__bayToggleCutaway = toggleCutaway;
   }, [setTrack, toggleCutaway]);
 
-  useFrame(() => {
+  useFrame((_, dt) => {
+    tickDrags(Math.min(dt, 0.05));
     _proj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     _frustum.setFromProjectionMatrix(_proj);
     camera.getWorldDirection(_dir);
@@ -104,6 +106,7 @@ export function ProbeTick() {
       objects,
       inView,
     });
+    recordHistory(objects, probeTime());
   });
 
   return null;
