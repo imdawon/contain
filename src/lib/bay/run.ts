@@ -49,12 +49,12 @@ const NADES: Run = {
   victim: "1 DUMMY",
   trials: [
     trial(1, 1, 3.4),
-    trial(2, 1, 1.35),
-    trial(3, 1, 0.32),
-    trial(4, 2, 0.38),
-    trial(5, 3, 0.42),
-    trial(6, 4, 0.46),
-    trial(7, 6, 0.52),
+    trial(2, 1, 2.45),
+    trial(3, 1, 1.82),
+    trial(4, 1, 0.32),
+    trial(5, 2, 0.38),
+    trial(6, 3, 0.42),
+    trial(7, 4, 0.46),
     trial(8, 8, 0.58),
     {
       lv: 9,

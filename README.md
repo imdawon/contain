@@ -38,7 +38,7 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 ## v0 proof (what “works” means)
 
 - Default stage: **Grenades vs Dummy lv 1** — one grenade far enough that the dummy stays a T-statue.
-- **PULL PIN** arms every grenade. Fuse → `grenade-boom`. Close rungs flop the dummy; far rungs do not.
+- **PULL PIN** arms every grenade. Fuse → `grenade-boom`. Lv 1–3 miss. Lv 4 at the feet flops.
 - **Next** restages lv+1 with more bangs / closer range. Same dummy.
 - Phone pack still spawnable; it is a **fire**, not a charge, and must **not** loft an 8 kg can.
 
