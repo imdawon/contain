@@ -1,0 +1,133 @@
+{
+  "id": "v1",
+  "name": "Wagon hill",
+  "blurb": "Dummy tied to a rigid wagon. Down the hill. Grenade bangs mid-air.",
+  "file": "scenes/v1.json",
+  "select": "grenade",
+  "track": {
+    "ref": "dummy-hips"
+  },
+  "airborne": {
+    "minY": 1.2,
+    "minZ": 5.8
+  },
+  "entities": [
+    {
+      "name": "hill",
+      "kind": "hill",
+      "pos": [
+        0,
+        4.252,
+        -1.256
+      ],
+      "rot": [
+        0.46,
+        0,
+        0
+      ],
+      "size": [
+        4.8,
+        0.36,
+        12.0
+      ],
+      "fixed": true,
+      "grip": 0.2
+    },
+    {
+      "name": "pad",
+      "kind": "hill",
+      "pos": [
+        0,
+        1.62,
+        4.9
+      ],
+      "rot": [
+        -0.1,
+        0,
+        0
+      ],
+      "size": [
+        4.8,
+        0.32,
+        2.8
+      ],
+      "fixed": true,
+      "grip": 0.08
+    },
+    {
+      "name": "wagon",
+      "kind": "wagon",
+      "pos": [
+        0.0,
+        6.795,
+        -5.577
+      ],
+      "rot": [
+        0.46,
+        0,
+        0
+      ],
+      "vel": [
+        0,
+        -2.841,
+        5.735
+      ],
+      "grip": 0.05,
+      "bounce": 0.02
+    },
+    {
+      "name": "dummy",
+      "kind": "dummy",
+      "pos": [
+        0.0,
+        6.875,
+        -5.577
+      ],
+      "rot": [
+        0.46,
+        0,
+        0
+      ],
+      "vel": [
+        0,
+        -2.841,
+        5.735
+      ],
+      "live": true
+    },
+    {
+      "name": "nade",
+      "kind": "grenade",
+      "pos": [
+        0.0,
+        7.215,
+        -5.297
+      ],
+      "vel": [
+        0,
+        -2.841,
+        5.735
+      ],
+      "grip": 0.8,
+      "fuse": 1.38
+    }
+  ],
+  "ties": [
+    {
+      "a": "dummy-hips",
+      "b": "wagon"
+    },
+    {
+      "a": "dummy-shin-l",
+      "b": "wagon"
+    },
+    {
+      "a": "dummy-shin-r",
+      "b": "wagon"
+    },
+    {
+      "a": "nade",
+      "b": "wagon"
+    }
+  ]
+}

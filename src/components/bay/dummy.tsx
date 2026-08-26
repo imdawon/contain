@@ -191,7 +191,17 @@ function bonePos(r: RefObject<RapierRigidBody>) {
   return b.translation();
 }
 
-export function Dummy({ id, pos }: { id: string; pos: [number, number, number] }) {
+export function Dummy({
+  id,
+  pos,
+  rot,
+  live: startLive,
+}: {
+  id: string;
+  pos: [number, number, number];
+  rot?: [number, number, number];
+  live?: boolean;
+}) {
   const hips = useRef<RapierRigidBody>(null!);
   const chest = useRef<RapierRigidBody>(null!);
   const head = useRef<RapierRigidBody>(null!);
@@ -246,6 +256,11 @@ export function Dummy({ id, pos }: { id: string; pos: [number, number, number] }
   }
 
   useFrame(() => {
+    if (startLive && !live.current && !floppy.current && !blasted.current) {
+      setLive(true, 1, 0.18, 0.46);
+      note("dummy-live", { id, via: "scene" });
+      return;
+    }
     if (floppy.current || live.current || blasted.current) return;
     for (const c of cooks.values()) {
       if (c.chem === "frag" && (c.phase === "cook" || c.phase === "boom")) {
@@ -372,7 +387,7 @@ export function Dummy({ id, pos }: { id: string; pos: [number, number, number] }
   const boneProps = { dummyId: id, type: "kinematicPosition" as BodyType, linearDamping: 3.2, angularDamping: 8 };
 
   return (
-    <group position={pos}>
+    <group position={pos} rotation={rot ?? [0, 0, 0]}>
       <Bone r={hips} id={`${id}-hips`} pos={[0, 0.74, 0]} size={[0.3, 0.16, 0.18]} mass={DUMMY.hipMass} groups={GROUPS.hips} {...boneProps} />
       <Bone r={chest} id={`${id}-chest`} pos={[0, 1.0, 0]} size={[0.28, 0.34, 0.16]} mass={DUMMY.chestMass} groups={GROUPS.chest} {...boneProps} />
       <Bone r={head} id={`${id}-head`} pos={[0, 1.28, 0]} size={[0.16, 0.16, 0.16]} mass={DUMMY.headMass} color={jointCol} groups={GROUPS.head} {...boneProps} />

@@ -3,3 +3,4 @@ export const WORLD_G = 0;
 export const DUMMY_G = 1;
 export const CRATE_G = 2;
 export const COVER_G = 14;
+export const WAGON_G = 15;

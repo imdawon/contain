@@ -58,10 +58,12 @@ function FragBit({ id, pos, vel, size }: Frag & { id: string }) {
 export function Grenade({
   id,
   pos,
+  rot,
   fireMap,
 }: {
   id: string;
   pos: [number, number, number];
+  rot?: [number, number, number];
   fireMap: Texture;
 }) {
   const body = useRef<RapierRigidBody>(null);
@@ -195,6 +197,7 @@ export function Grenade({
       <RigidBody
         ref={body}
         position={pos}
+        rotation={rot ?? [0, 0, 0]}
         colliders={false}
         mass={GRENADE.mass}
         restitution={0.12}

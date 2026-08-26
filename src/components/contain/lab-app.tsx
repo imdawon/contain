@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Inspector } from "@/components/contain/inspector";
 import { bindHarnessPipe, bindHarnessWindow, resetStage } from "@/lib/bay/harness";
 import { ensureFuseClock } from "@/lib/bay/blast";
-import { loadBay, loadRun, nextTrial, saveBay } from "@/lib/bay/actions";
+import { loadBay, loadRun, nextTrial, restageScene, saveBay } from "@/lib/bay/actions";
 import { listLevels } from "@/lib/bay/level";
+import { listSceneCards } from "@/lib/bay/scene";
 import { getRun, runCard, RUNS } from "@/lib/bay/run";
 import { note } from "@/lib/bay/probe";
 import { punctureSelected } from "@/components/bay/pack";
@@ -52,6 +53,7 @@ export function LabApp() {
   const levelId = useBay((s) => s.levelId);
   const runId = useBay((s) => s.runId);
   const trial = useBay((s) => s.trial);
+  const scene = useBay((s) => s.scene);
   const run = runId ? getRun(runId) : null;
   const runLive = run ? runCard(run, trial) : null;
 
@@ -158,7 +160,7 @@ export function LabApp() {
         <div>
           <p className="font-display text-4xl leading-none tracking-[0.18em] md:text-5xl">CONTAIN</p>
           <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
-            {runLive ? `${runLive.name} · lv ${runLive.lv}` : (listLevels().find((l) => l.id === levelId)?.name ?? "clip")}
+            {runLive ? `${runLive.name} · lv ${runLive.lv}` : scene ? scene.name : (listLevels().find((l) => l.id === levelId)?.name ?? "clip")}
           </p>
         </div>
         <div className="pointer-events-auto flex items-center gap-2">
@@ -357,10 +359,11 @@ export function LabApp() {
           <label className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.12em] text-muted">
             Run
             <select
-              value={runId ? `run:${runId}` : `clip:${levelId}`}
+              value={scene ? `scene:${scene.id}` : runId ? `run:${runId}` : `clip:${levelId}`}
               onChange={(e) => {
                 const v = e.target.value;
                 if (v.startsWith("run:")) loadRun(v.slice(4), 1);
+                else if (v.startsWith("scene:")) void restageScene(v.slice(6));
                 else loadBay(v.slice(5));
               }}
               data-bay="run"
@@ -370,6 +373,13 @@ export function LabApp() {
                 {RUNS.map((r) => (
                   <option key={r.id} value={`run:${r.id}`}>
                     {r.name}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Scenes">
+                {listSceneCards().map((s) => (
+                  <option key={s.id} value={`scene:${s.id}`}>
+                    {s.name}
                   </option>
                 ))}
               </optgroup>

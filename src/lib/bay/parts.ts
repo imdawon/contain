@@ -80,5 +80,13 @@ export const GRASS = {
   ignite: 4.2,
 };
 
+/** One rigid cart. Not a vehicle. Wheels are visual / collider bulk. */
+export const WAGON = {
+  deck: [0.78, 0.1, 1.12] as [number, number, number],
+  wheelR: 0.11,
+  wheelT: 0.08,
+  mass: 18,
+};
+
 /** Half-extents of the physical floor, meters. Visual grid is infinite. */
 export const FLOOR = { half: 200 };

@@ -1,4 +1,4 @@
-import { forgetBay, listBayLevels, listBayRuns, loadBay, loadRun, nextTrial, punctureId, resetBay, saveBay, setToolName, spawnKind } from "@/lib/bay/actions";
+import { forgetBay, listBayLevels, listBayRuns, listBayScenes, loadBay, loadRun, nextTrial, punctureId, resetBay, restageScene, saveBay, setToolName, spawnKind } from "@/lib/bay/actions";
 import { hingeSnapshot } from "@/lib/bay/atd";
 import { ensureFuseClock, tickFuse } from "@/lib/bay/blast";
 import { getLevel, levelCard } from "@/lib/bay/level";
@@ -431,6 +431,16 @@ export function peek() {
     cutaway: store.cutaway,
     run: run ? runCard(run, store.trial) : null,
     level: level ? levelCard(level) : store.runId ? null : { id: store.levelId, name: store.levelId, blurb: "", builtin: false, n: store.entities.length },
+    scene: store.scene
+      ? {
+          id: store.scene.id,
+          name: store.scene.name,
+          blurb: store.scene.blurb,
+          file: store.scene.file ?? `scenes/${store.scene.id}.json`,
+          n: store.scene.entities.length,
+          ties: store.scene.ties.length,
+        }
+      : null,
     stage: store.entities.map((e) => ({ id: e.id, kind: e.kind, x: e.pos[0], y: e.pos[1], z: e.pos[2] })),
     camera,
     events: log()
@@ -541,6 +551,8 @@ export function help() {
     run: "(id, lv=1) restage a vs trial",
     next: "next vs rung",
     load: "(id) restage a clip",
+    restage: "(id|sceneJson) restage a JSON scene file",
+    scenes: "JSON scene catalog",
     save: "(name?) keep the current arrangement",
     forget: "(id) drop a saved clip",
     tool: "('grab'|'nail')",
@@ -587,6 +599,11 @@ export function harnessApi() {
       return nextTrial();
     },
     load: loadClip,
+    restage: (input?: unknown) => {
+      clearHist();
+      return restageScene(input ?? "v1");
+    },
+    scenes: listBayScenes,
     save: saveBay,
     forget: forgetBay,
     tool: setToolName,
