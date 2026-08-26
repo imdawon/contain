@@ -37,7 +37,10 @@ export function Inspector() {
   const speed = live?.vx != null ? Math.hypot(live.vx, live.vy ?? 0, live.vz ?? 0) : null;
 
   return (
-    <aside className="pointer-events-auto absolute left-4 top-24 z-10 w-60 rounded-[var(--radius-md)] border border-border bg-surface/92 p-3 md:left-5 md:top-[6.5rem] md:w-72">
+    <aside
+      data-bay="inspect"
+      className="pointer-events-auto absolute left-4 top-24 z-10 w-60 rounded-[var(--radius-md)] border border-border bg-surface/92 p-3 md:left-5 md:top-[6.5rem] md:w-72"
+    >
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-muted">Inspect</p>
         {airborne ? (
@@ -51,6 +54,7 @@ export function Inspector() {
         <select
           value={focusId ?? ""}
           onChange={(e) => setTrack(e.target.value || null)}
+          data-bay="inspect-id"
           className="h-10 w-full rounded-[var(--radius-sm)] border border-border bg-bg px-2 font-mono text-[11px] text-fg"
         >
           <option value="">none</option>

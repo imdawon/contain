@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Inspector } from "@/components/contain/inspector";
 import { cooks } from "@/lib/bay/cook";
 import { clearAllHeat } from "@/lib/bay/heat";
-import { bindProbeWindow, note } from "@/lib/bay/probe";
+import { bindHarnessWindow } from "@/lib/bay/harness";
+import { note } from "@/lib/bay/probe";
 import { punctureSelected } from "@/components/bay/pack";
 import { isMuted, setMuted, unlockAudio } from "@/lib/contain/audio";
 import { SOLID, SOLID_SHAPES } from "@/lib/bay/solids";
@@ -51,7 +52,7 @@ export function LabApp() {
 
   useEffect(() => {
     setClient(true);
-    bindProbeWindow();
+    bindHarnessWindow();
   }, []);
   useEffect(() => {
     setMuted(muted);
@@ -145,6 +146,7 @@ export function LabApp() {
             }}
             className="grid size-11 place-items-center rounded-[var(--radius-sm)] border border-border bg-surface text-muted hover:text-fg"
             aria-label={muted ? "Unmute" : "Mute"}
+            data-bay="mute"
           >
             {muted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
           </button>
@@ -164,6 +166,7 @@ export function LabApp() {
               cutaway ? "border-fg bg-raised text-fg" : "border-border bg-bg text-muted",
             )}
             title="Ghost the wall facing the camera (X)"
+            data-bay="xray"
           >
             X-ray
           </button>
@@ -172,6 +175,7 @@ export function LabApp() {
               key={t}
               type="button"
               onClick={() => setTool(t)}
+              data-bay={t}
               className={cn(
                 "h-11 rounded-[var(--radius-sm)] border px-3 font-mono text-[11px] uppercase tracking-[0.14em]",
                 tool === t ? "border-fg bg-raised text-fg" : "border-border bg-bg text-muted",
@@ -186,6 +190,7 @@ export function LabApp() {
               spawn("pack");
               note("spawn", { kind: "pack" });
             }}
+            data-bay="pack"
             className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 text-sm hover:bg-raised"
           >
             Pack
@@ -196,6 +201,7 @@ export function LabApp() {
               spawn("charge");
               note("spawn", { kind: "charge" });
             }}
+            data-bay="charge"
             className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 text-sm hover:bg-raised"
           >
             Charge
@@ -206,6 +212,7 @@ export function LabApp() {
               spawn("can");
               note("spawn", { kind: "can" });
             }}
+            data-bay="can"
             className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 text-sm hover:bg-raised"
           >
             Can
@@ -216,6 +223,7 @@ export function LabApp() {
               spawn("crate");
               note("spawn", { kind: "crate" });
             }}
+            data-bay="crate"
             className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 text-sm hover:bg-raised"
           >
             Crate
@@ -226,6 +234,7 @@ export function LabApp() {
               spawn("dummy");
               note("spawn", { kind: "dummy" });
             }}
+            data-bay="dummy"
             className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 text-sm hover:bg-raised"
           >
             Dummy
@@ -236,6 +245,7 @@ export function LabApp() {
               spawn("grass");
               note("spawn", { kind: "grass" });
             }}
+            data-bay="grass"
             className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 text-sm hover:bg-raised"
           >
             Grass
@@ -251,6 +261,7 @@ export function LabApp() {
                 note("spawn", { kind });
                 e.target.value = "";
               }}
+              data-bay="solid"
               className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-2 font-mono text-[11px] uppercase tracking-[0.12em] text-fg"
             >
               <option value="" disabled>
@@ -265,6 +276,7 @@ export function LabApp() {
           </label>
           <Button
             className="h-11 font-display text-lg tracking-[0.12em]"
+            data-bay="puncture"
             disabled={!packOn}
             onClick={() => {
               unlockAudio();
@@ -281,6 +293,7 @@ export function LabApp() {
               note("reset", {});
               reset();
             }}
+            data-bay="reset"
             className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 font-mono text-[11px] uppercase tracking-[0.12em] text-muted hover:text-fg"
           >
             Reset
@@ -290,6 +303,7 @@ export function LabApp() {
             <select
               value={trackId ?? ""}
               onChange={(e) => setTrack(e.target.value || null)}
+              data-bay="track"
               className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-2 text-fg"
             >
               <option value="">free orbit</option>
