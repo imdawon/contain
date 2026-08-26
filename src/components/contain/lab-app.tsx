@@ -3,8 +3,9 @@ import { Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Inspector } from "@/components/contain/inspector";
 import { bindHarnessPipe, bindHarnessWindow, resetStage } from "@/lib/bay/harness";
-import { loadBay, saveBay } from "@/lib/bay/actions";
+import { loadBay, loadRun, nextTrial, saveBay } from "@/lib/bay/actions";
 import { listLevels } from "@/lib/bay/level";
+import { getRun, runCard, RUNS } from "@/lib/bay/run";
 import { note } from "@/lib/bay/probe";
 import { punctureSelected } from "@/components/bay/pack";
 import { isMuted, setMuted, unlockAudio } from "@/lib/contain/audio";
@@ -48,6 +49,10 @@ export function LabApp() {
   const cutaway = useBay((s) => s.cutaway);
   const toggleCutaway = useBay((s) => s.toggleCutaway);
   const levelId = useBay((s) => s.levelId);
+  const runId = useBay((s) => s.runId);
+  const trial = useBay((s) => s.trial);
+  const run = runId ? getRun(runId) : null;
+  const runLive = run ? runCard(run, trial) : null;
 
   useEffect(() => {
     setClient(true);
@@ -69,6 +74,17 @@ export function LabApp() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [toggleCutaway]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "KeyN") return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      e.preventDefault();
+      nextTrial();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const fuseOn = entities.some((e) => e.kind === "pack" || e.kind === "grenade" || e.kind === "charge");
   const nadeOn = entities.some((e) => e.kind === "grenade" || e.kind === "charge");
@@ -117,11 +133,22 @@ export function LabApp() {
 
       {client ? <Inspector /> : null}
 
+      {runLive ? (
+        <div className="pointer-events-none absolute inset-x-0 top-[5.5rem] z-10 px-4 text-center md:top-28">
+          <p className="font-display text-[1.65rem] leading-none tracking-[0.12em] text-fg md:text-5xl">
+            {runLive.threat} <span className="text-muted">vs</span> {runLive.victim}
+          </p>
+          <p className="mt-2 font-mono text-[11px] uppercase tracking-[0.22em] text-muted">
+            lv {runLive.lv} / {runLive.n}
+          </p>
+        </div>
+      ) : null}
+
       <header className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between p-5">
         <div>
           <p className="font-display text-4xl leading-none tracking-[0.18em] md:text-5xl">CONTAIN</p>
           <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
-            {listLevels().find((l) => l.id === levelId)?.name ?? "clip"} · setup then watch
+            {runLive ? `${runLive.name} · lv ${runLive.lv}` : (listLevels().find((l) => l.id === levelId)?.name ?? "clip")}
           </p>
         </div>
         <div className="pointer-events-auto flex items-center gap-2">
@@ -296,18 +323,29 @@ export function LabApp() {
             Reset
           </button>
           <label className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.12em] text-muted">
-            Clip
+            Run
             <select
-              value={levelId}
-              onChange={(e) => loadBay(e.target.value)}
-              data-bay="level"
+              value={runId ? `run:${runId}` : `clip:${levelId}`}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v.startsWith("run:")) loadRun(v.slice(4), 1);
+                else loadBay(v.slice(5));
+              }}
+              data-bay="run"
               className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-2 text-fg"
             >
+              <optgroup label="vs">
+                {RUNS.map((r) => (
+                  <option key={r.id} value={`run:${r.id}`}>
+                    {r.name}
+                  </option>
+                ))}
+              </optgroup>
               <optgroup label="Gags">
                 {listLevels()
                   .filter((l) => l.builtin)
                   .map((l) => (
-                    <option key={l.id} value={l.id}>
+                    <option key={l.id} value={`clip:${l.id}`}>
                       {l.name}
                     </option>
                   ))}
@@ -317,7 +355,7 @@ export function LabApp() {
                   {listLevels()
                     .filter((l) => !l.builtin)
                     .map((l) => (
-                      <option key={l.id} value={l.id}>
+                      <option key={l.id} value={`clip:${l.id}`}>
                         {l.name}
                       </option>
                     ))}
@@ -325,6 +363,16 @@ export function LabApp() {
               ) : null}
             </select>
           </label>
+          <button
+            type="button"
+            onClick={() => nextTrial()}
+            data-bay="next"
+            disabled={!runLive || runLive.last}
+            className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 font-mono text-[11px] uppercase tracking-[0.12em] text-muted hover:text-fg disabled:opacity-40"
+            title="Next vs rung (N)"
+          >
+            Next
+          </button>
           <button
             type="button"
             onClick={() => {

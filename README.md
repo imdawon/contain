@@ -10,7 +10,7 @@ This file is the **living axiom list**. Axioms are product rules that still matt
 
 You place objects, then let them play. BeamNG energy: one setup, one run, a readable ending.
 
-**Now (v0):** dummy + crate + **grenade** + spreading grass + **named clips**. Phone pack still spawnable as a fire. Latch shears before the hinge.
+**Now (v0):** dummy + crate + **grenade** + **vs runs** (same victim, one knob ticks up). Phone pack still spawnable as a fire.
 
 **Not yet:** cars, ramps, shields, film chrome.
 
@@ -31,14 +31,15 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 11. **Only number major product rules.** Tick rates, file maps, spawn lists, and API dumps are facts. Do not add them as axioms.
 12. **Commit when the bay actually moved.** Same turn as a verified slice. Message says what the bay does now.
 13. **A clip is a level.** Named arrangement of parts. Reset restages that clip. Save keeps a gag.
+14. **A run is a bet.** Same victim. One variable. Premise on screen. Early rungs can fail. Next is the only loop.
 
 ---
 
 ## v0 proof (what “works” means)
 
-- Default stage: **crate + grenade inside + dummy in front + grass under the dummy**. Grenade selected.
-- **PULL PIN** → `pin-pull` → `grenade-boom` → `crate-break`. Crate panels leave the weld. Dummy hips/head move (flop, not a rigid statue).
-- Grass `burning` count rises (`grass-ignite`) from the blast heat.
+- Default stage: **Grenades vs Dummy lv 1** — one grenade far enough that the dummy stays a T-statue.
+- **PULL PIN** arms every grenade. Fuse → `grenade-boom`. Close rungs flop the dummy; far rungs do not.
+- **Next** restages lv+1 with more bangs / closer range. Same dummy.
 - Phone pack still spawnable; it is a **fire**, not a charge, and must **not** loft an 8 kg can.
 
 ---
@@ -57,6 +58,7 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 | `src/components/bay/probe-tick.tsx` | Camera frustum + per-frame snapshot |
 | `src/store/bay-store.ts` | Spawn/select/tool/latch/clip |
 | `src/lib/bay/level.ts` | Builtin gags + saved clips |
+| `src/lib/bay/run.ts` | vs ladders (grenades vs dummy, dummy vs cover) |
 | `src/components/contain/inspector.tsx` | Live xyz / mass / grip / bounce editor for the tracked body |
 | `src/lib/bay/solids.ts` | Collider-kit shapes |
 | `src/components/bay/solid.tsx` | Spawnable cube / ball / cylinder / capsule / platonic hulls / plank |
@@ -72,11 +74,10 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 
 ## How to play v0
 
-1. Orbit-drag empty floor, or **Track** a part (body / lid / hinge / latch / pack). Inspector follows that part.
-2. Pick a **Clip** (Pin-pull, Shoes, Roost, Can pop, Twins, Jenga, Pins). **PULL PIN**. Watch.
-3. **Grab** a part: it stays where it is, then follows the mouse at that depth. Scroll to push or pull. **X-ray** (or `X`) ghosts the wall you are looking at. **Solid** drops a cube / ball / hull for stacking tests.
-4. **Save** keeps the current arrangement. **Reset** restages that clip, not a blank floor.
-5. Spawn **Can** / **Pack** if you still want the quiet phone gag.
+1. Read the overlay: **N GRENADES vs 1 DUMMY**. That is the bet.
+2. **PULL PIN**. Watch whether the dummy stays up. **Next** (or `N`) is the next rung.
+3. Pick **Dummy vs Cover** to tick armor instead of grenade count. Gags (Pin-pull, Shoes, …) are still under Run.
+4. **Grab** a part to cheat the setup. **Save** keeps a layout. **Reset** restages this rung.
 
 ---
 

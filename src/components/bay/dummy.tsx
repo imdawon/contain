@@ -194,14 +194,18 @@ export function Dummy({ id, pos }: { id: string; pos: [number, number, number] }
       const h = hips.current;
       if (!h || power < 4) return;
       const p = h.translation();
-      if (Math.hypot(p.x - x, p.z - z) > 10) return;
+      const dist = Math.hypot(p.x - x, p.z - z);
+      /** Far bang is a shrug — the dummy stays a T-statue so early vs-rungs can fail. */
+      if (dist > 3.5) return;
+      const fall = Math.min(1, 0.7 / Math.max(0.35, dist));
+      const kick = Math.min(2.35, (1.4 + power * 0.07) * fall);
+      if (kick < 0.9) return;
       const first = !floppy.current;
       floppy.current = true;
       unregisterAssembly(id);
-      const away = Math.max(0.4, Math.hypot(p.x - x, p.z - z));
+      const away = Math.max(0.4, dist);
       const nx = (p.x - x) / away;
       const nz = (p.z - z) / away;
-      const kick = Math.min(2.35, 1.4 + power * 0.07);
       const kx = nx * kick;
       const kz = nz * kick;
       const ky = 1.05 + Math.min(0.4, power * 0.025);

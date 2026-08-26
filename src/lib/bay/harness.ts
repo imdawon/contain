@@ -1,5 +1,6 @@
-import { forgetBay, listBayLevels, loadBay, punctureId, resetBay, saveBay, setToolName, spawnKind } from "@/lib/bay/actions";
+import { forgetBay, listBayLevels, listBayRuns, loadBay, loadRun, nextTrial, punctureId, resetBay, saveBay, setToolName, spawnKind } from "@/lib/bay/actions";
 import { getLevel, levelCard } from "@/lib/bay/level";
+import { getRun, runCard } from "@/lib/bay/run";
 import { cooks } from "@/lib/bay/cook";
 import { loopLevels } from "@/lib/contain/audio";
 import {
@@ -407,6 +408,7 @@ export function peek() {
       ? { x: histCam.x, y: histCam.y, z: histCam.z, lookX: histCam.x, lookY: histCam.y, lookZ: histCam.z, fov: 42 }
       : null;
   const level = getLevel(store.levelId);
+  const run = getRun(store.runId);
   return {
     t: round(probeTime()),
     selected: store.selected,
@@ -414,7 +416,8 @@ export function peek() {
     tool: store.tool,
     latch: store.latch,
     cutaway: store.cutaway,
-    level: level ? levelCard(level) : { id: store.levelId, name: store.levelId, blurb: "", builtin: false, n: store.entities.length },
+    run: run ? runCard(run, store.trial) : null,
+    level: level ? levelCard(level) : store.runId ? null : { id: store.levelId, name: store.levelId, blurb: "", builtin: false, n: store.entities.length },
     stage: store.entities.map((e) => ({ id: e.id, kind: e.kind, x: e.pos[0], y: e.pos[1], z: e.pos[2] })),
     camera,
     events: log()
@@ -499,8 +502,11 @@ export function help() {
     spawn: "(kind) grenade|pack|can|crate|dummy|grass|cube|...",
     solid: "(shape)",
     puncture: "(id?) pull grenade pin or cook pack",
-    reset: "restage the current clip",
+    reset: "restage the current trial or clip",
     levels: "builtin + saved clips",
+    runs: "vs ladders",
+    run: "(id, lv=1) restage a vs trial",
+    next: "next vs rung",
     load: "(id) restage a clip",
     save: "(name?) keep the current arrangement",
     forget: "(id) drop a saved clip",
@@ -538,6 +544,15 @@ export function harnessApi() {
     puncture: punctureId,
     reset: resetStage,
     levels: listBayLevels,
+    runs: listBayRuns,
+    run: (id: string, lv?: number) => {
+      clearHist();
+      return loadRun(id, lv ?? 1);
+    },
+    next: () => {
+      clearHist();
+      return nextTrial();
+    },
     load: loadClip,
     save: saveBay,
     forget: forgetBay,
