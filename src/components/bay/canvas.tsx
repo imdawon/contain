@@ -4,6 +4,9 @@ import { CuboidCollider, Physics, RigidBody, useRapier } from "@react-three/rapi
 import { Suspense, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
 import { AmmoCan } from "@/components/bay/ammo-can";
+import { Crate } from "@/components/bay/crate";
+import { Dummy } from "@/components/bay/dummy";
+import { Grass } from "@/components/bay/grass";
 import { Pack } from "@/components/bay/pack";
 import { Solid } from "@/components/bay/solid";
 import { isSolid } from "@/store/bay-store";
@@ -63,14 +66,13 @@ function BlastBus() {
         const dx = p.x - x;
         const dy = p.y - y;
         const dz = p.z - z;
-        const dist = Math.max(0.25, Math.hypot(dx, dy, dz));
-        const m = Math.max(0.2, b.mass());
-        const impulse = power / (dist * dist) / m;
+        const dist = Math.max(0.28, Math.hypot(dx, dy, dz));
+        const j = Math.min(9.5, (power * 0.48) / dist);
         b.applyImpulse(
           {
-            x: (dx / dist) * impulse,
-            y: (dy / dist) * impulse + impulse * 0.12,
-            z: (dz / dist) * impulse,
+            x: (dx / dist) * j,
+            y: Math.max(0.2, (dy / dist) * j * 0.4) + j * 0.18,
+            z: (dz / dist) * j,
           },
           true,
         );
@@ -129,6 +131,14 @@ function World() {
           <AmmoCan key={e.id} id={e.id} pos={e.pos} />
         ) : e.kind === "pack" ? (
           <Pack key={e.id} id={e.id} pos={e.pos} fireMap={fire} />
+        ) : e.kind === "charge" ? (
+          <Pack key={e.id} id={e.id} pos={e.pos} fireMap={fire} variant="charge" />
+        ) : e.kind === "crate" ? (
+          <Crate key={e.id} id={e.id} pos={e.pos} />
+        ) : e.kind === "dummy" ? (
+          <Dummy key={e.id} id={e.id} pos={e.pos} />
+        ) : e.kind === "grass" ? (
+          <Grass key={e.id} id={e.id} pos={e.pos} />
         ) : isSolid(e.kind) ? (
           <Solid key={e.id} id={e.id} shape={e.kind} pos={e.pos} />
         ) : null,
@@ -143,7 +153,7 @@ function World() {
         minDistance={0.5}
         maxDistance={80}
         maxPolarAngle={1.48}
-        target={[0, 0.28, 0]}
+        target={[0, 0.7, 0.55]}
         enableDamping
         dampingFactor={0.08}
       />
@@ -174,7 +184,7 @@ export function BayCanvas() {
           style={{ position: "absolute", inset: 0 }}
           dpr={[1, 1.5]}
           frameloop="always"
-          camera={{ position: [2.3, 1.45, 2.6], fov: 42, near: 0.08, far: 280 }}
+          camera={{ position: [3.4, 1.7, 3.6], fov: 42, near: 0.08, far: 280 }}
           gl={{
             antialias: true,
             alpha: false,

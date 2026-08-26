@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { SOLID_SHAPES, type SolidShape } from "@/lib/bay/solids";
 
 export type Tool = "grab" | "nail";
-export type Kind = "pack" | "can" | SolidShape;
+export type Kind = "pack" | "charge" | "can" | "crate" | "dummy" | "grass" | SolidShape;
 
 export interface Entity {
   id: string;
@@ -43,11 +43,13 @@ function nid() {
 
 const start = (): Pick<BayState, "entities" | "selected" | "trackId" | "latch" | "tool"> => ({
   entities: [
-    { id: "can0", kind: "can", pos: [0, 0, 0] },
-    { id: "pack0", kind: "pack", pos: [0, 0.2, 0] },
+    { id: "crate0", kind: "crate", pos: [0, 0, 0] },
+    { id: "charge0", kind: "charge", pos: [0, 0.14, 0] },
+    { id: "dummy0", kind: "dummy", pos: [0, 0, 1.22] },
+    { id: "grass0", kind: "grass", pos: [0, 0, 0.9] },
   ],
-  selected: "pack0",
-  trackId: "can0",
+  selected: "charge0",
+  trackId: "dummy0-hips",
   latch: "sealed",
   tool: "grab",
 });
@@ -58,26 +60,32 @@ export const useBay = create<BayState>((set, get) => ({
   dragging: false,
   cutaway: false,
   spawn: (kind) => {
+    const r = () => (Math.random() - 0.5) * 1.4;
     const pos: [number, number, number] =
-      kind === "can"
-        ? [(Math.random() - 0.5) * 1.6, 0, (Math.random() - 0.5) * 1.6]
-        : kind === "pack"
-          ? [(Math.random() - 0.5) * 0.8, 1.25, (Math.random() - 0.5) * 0.8]
-          : [0.95 + (Math.random() - 0.5) * 0.5, 1.05, (Math.random() - 0.5) * 0.8];
+      kind === "can" || kind === "crate" || kind === "grass" || kind === "dummy"
+        ? [r(), 0, r()]
+        : kind === "pack" || kind === "charge"
+          ? [r() * 0.6, 1.15, r() * 0.6]
+          : [0.95 + r() * 0.4, 1.05, r() * 0.5];
     const e = { id: nid(), kind, pos };
-    set({ entities: [...get().entities, e], selected: e.id, trackId: e.id });
+    const trackId = kind === "dummy" ? `${e.id}-hips` : kind === "crate" ? `${e.id}-lid` : e.id;
+    set({ entities: [...get().entities, e], selected: e.id, trackId });
   },
   clear: () => set({ entities: [], selected: null, trackId: null, latch: "sealed" }),
   reset: () => {
-    const canId = nid();
-    const packId = nid();
+    const crateId = nid();
+    const chargeId = nid();
+    const dummyId = nid();
+    const grassId = nid();
     set({
       entities: [
-        { id: canId, kind: "can", pos: [0, 0, 0] },
-        { id: packId, kind: "pack", pos: [0, 0.2, 0] },
+        { id: crateId, kind: "crate", pos: [0, 0, 0] },
+        { id: chargeId, kind: "charge", pos: [0, 0.14, 0] },
+        { id: dummyId, kind: "dummy", pos: [0, 0, 1.22] },
+        { id: grassId, kind: "grass", pos: [0, 0, 0.9] },
       ],
-      selected: packId,
-      trackId: canId,
+      selected: chargeId,
+      trackId: `${dummyId}-hips`,
       latch: "sealed",
       tool: "grab",
       dragging: false,

@@ -2,6 +2,7 @@ import { RigidBody, type RapierRigidBody } from "@react-three/rapier";
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef } from "react";
 import { cooks, startCook, stepCook } from "@/lib/bay/cook";
+import { clearHeat, setHeat } from "@/lib/bay/heat";
 import { PACK } from "@/lib/bay/parts";
 import { playEvent } from "@/lib/contain/audio";
 import { note, registerBody, setBodyMass, unregisterBody } from "@/lib/bay/probe";
@@ -18,22 +19,25 @@ export function Pack({
   id,
   pos,
   fireMap,
+  variant = "nmc",
 }: {
   id: string;
   pos: [number, number, number];
   fireMap: Texture;
+  variant?: "nmc" | "charge";
 }) {
   const body = useRef<RapierRigidBody>(null);
   const boomOnce = useRef(false);
   const massPinned = useRef(false);
   const selected = useBay((s) => s.selected === id);
   const grab = useGrab(body, id);
-  const spec = PACK.nmc;
+  const spec = PACK[variant];
+  const isCharge = variant === "charge";
 
   useEffect(() => {
     registerBody(
       id,
-      "pack",
+      isCharge ? "charge" : "pack",
       () => {
         const b = body.current;
         const c = cooks.get(id);
@@ -61,8 +65,11 @@ export function Pack({
       },
       () => body.current,
     );
-    return () => unregisterBody(id);
-  }, [id]);
+    return () => {
+      unregisterBody(id);
+      clearHeat(id);
+    };
+  }, [id, isCharge]);
 
   useFrame((state, dt) => {
     const cap = Math.min(dt, 0.05);
@@ -74,6 +81,17 @@ export function Pack({
       massPinned.current = true;
     }
     const cook = cooks.get(id);
+    const p0 = b.translation();
+    if (cook && cook.phase !== "dead") {
+      setHeat(id, {
+        x: p0.x,
+        y: p0.y,
+        z: p0.z,
+        kW: isCharge ? (cook.phase === "boom" ? 24 : Math.min(7, cook.kW * 0.18)) : cook.kW,
+      });
+    } else {
+      clearHeat(id);
+    }
     if (!cook || cook.phase === "dead") return;
     const c = stepCook(id, cap);
     const p = b.translation();
@@ -82,9 +100,16 @@ export function Pack({
     }
     if (c?.phase === "boom" && !boomOnce.current) {
       boomOnce.current = true;
-      note("pack-boom", { id, x: p.x, y: p.y, z: p.z, boom: c.boom });
+      note(isCharge ? "charge-boom" : "pack-boom", { id, x: p.x, y: p.y, z: p.z, boom: c.boom });
       playEvent("burst", "nmc");
-      b.applyImpulse({ x: (Math.random() - 0.5) * 0.06, y: 0.08, z: (Math.random() - 0.5) * 0.06 }, true);
+      if (isCharge) {
+        window.dispatchEvent(
+          new CustomEvent("bay-blast", { detail: { x: p.x, y: p.y, z: p.z, power: Math.min(14, c.boom) } }),
+        );
+        b.applyImpulse({ x: (Math.random() - 0.5) * 0.4, y: 2.2, z: (Math.random() - 0.5) * 0.4 }, true);
+      } else {
+        b.applyImpulse({ x: (Math.random() - 0.5) * 0.06, y: 0.08, z: (Math.random() - 0.5) * 0.06 }, true);
+      }
     }
   });
 
@@ -93,7 +118,7 @@ export function Pack({
     if (useBay.getState().tool === "nail") {
       startCook(id, "nmc", spec.cook, spec.peak, spec.boom);
       playEvent("puncture", "nmc");
-      note("puncture", { id, via: "nail" });
+      note("puncture", { id, via: "nail", kind: variant });
     }
   }
 
@@ -113,7 +138,7 @@ export function Pack({
       <mesh onPointerDown={onDown}>
         <boxGeometry args={[sx, sy, sz]} />
         <meshStandardMaterial
-          color={selected ? 0xd4d7cf : 0x1a1c1e}
+          color={selected ? 0xd4d7cf : isCharge ? 0x6a3028 : 0x1a1c1e}
           metalness={0.55}
           roughness={0.3}
           emissive={selected ? 0x444438 : 0x000000}
@@ -129,9 +154,10 @@ export function punctureSelected() {
   const id = useBay.getState().selected;
   if (!id) return false;
   const ent = useBay.getState().entities.find((e) => e.id === id);
-  if (!ent || ent.kind !== "pack") return false;
-  startCook(id, "nmc", PACK.nmc.cook, PACK.nmc.peak, PACK.nmc.boom);
+  if (!ent || (ent.kind !== "pack" && ent.kind !== "charge")) return false;
+  const spec = ent.kind === "charge" ? PACK.charge : PACK.nmc;
+  startCook(id, "nmc", spec.cook, spec.peak, spec.boom);
   playEvent("puncture", "nmc");
-  note("puncture", { id });
+  note("puncture", { id, kind: ent.kind });
   return true;
 }
