@@ -36,6 +36,7 @@ export const Route = createRootRoute({
         <HeadContent />
       </head>
       <body className="bg-bg text-fg antialiased">
+        {import.meta.env.DEV ? <script type="module" src="/__bay/taker.js" /> : null}
         <PreviewHostBridge />
         <AuthProvider>
           <Outlet />

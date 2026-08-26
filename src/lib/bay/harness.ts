@@ -58,6 +58,8 @@ type DragJob = {
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
+  __bayPipeCtl?: AbortController;
+  __baySeen?: Set<string>;
 };
 const hist = (g.__bayHist ??= { frames: [], lastHistT: -1, lastEventN: 0 });
 const frames = hist.frames;
@@ -596,12 +598,9 @@ export function bindHarnessWindow() {
 }
 
 /** Live page polls the Vite `/__bay` pipe and runs `window.__bay`. Agent uses `scripts/bay.mjs`. */
-let pipeCtl: AbortController | null = null;
 let onHotCall: ((msg: { id?: string; fn?: string; args?: unknown[] }) => void) | null = null;
 
-function stopHarnessPipe() {
-  pipeCtl?.abort();
-  pipeCtl = null;
+function stopHotListener() {
   if (onHotCall) {
     import.meta.hot?.off("bay:call", onHotCall);
     onHotCall = null;
@@ -610,11 +609,7 @@ function stopHarnessPipe() {
 
 function startHarnessPipe() {
   if (typeof window === "undefined" || !import.meta.env.DEV) return;
-  if (pipeCtl && !pipeCtl.signal.aborted) return;
   bindHarnessWindow();
-  const ctl = new AbortController();
-  pipeCtl = ctl;
-  const seen = new Set<string>();
   const run = async (fn: string, args: unknown[]) => {
     const api = (window as unknown as { __bay?: Record<string, (...a: unknown[]) => unknown> }).__bay;
     if (!api || typeof api[fn] !== "function") return { error: `no-fn:${fn}` };
@@ -625,6 +620,7 @@ function startHarnessPipe() {
       return { error: err instanceof Error ? err.message : String(err) };
     }
   };
+  const seen = (g.__baySeen ??= new Set<string>());
   const handle = async (id: string, fn: string, args: unknown[]) => {
     if (!id || seen.has(id)) return null;
     seen.add(id);
@@ -634,6 +630,7 @@ function startHarnessPipe() {
     }
     return run(fn, args);
   };
+  stopHotListener();
   const onHot = async (msg: { id?: string; fn?: string; args?: unknown[] }) => {
     const out = await handle(String(msg?.id ?? ""), String(msg?.fn ?? ""), Array.isArray(msg?.args) ? msg.args : []);
     if (!out) return;
@@ -641,6 +638,9 @@ function startHarnessPipe() {
   };
   onHotCall = onHot;
   import.meta.hot?.on("bay:call", onHot);
+  if (g.__bayPipeCtl && !g.__bayPipeCtl.signal.aborted) return;
+  const ctl = new AbortController();
+  g.__bayPipeCtl = ctl;
   const loop = async () => {
     while (!ctl.signal.aborted) {
       try {
@@ -681,5 +681,5 @@ if (typeof window !== "undefined" && import.meta.env.DEV) {
 }
 
 if (import.meta.hot) {
-  import.meta.hot.dispose(() => stopHarnessPipe());
+  import.meta.hot.dispose(() => stopHotListener());
 }

@@ -25,6 +25,7 @@ export function bayHarnessPlugin() {
         return 0;
       }
 
+
       function pair() {
         while (takers.length) {
           const open = [...jobs.values()].find((j) => j.status === "open");
@@ -62,6 +63,11 @@ export function bayHarnessPlugin() {
 
         if (pathOnly === "/__bay/health" && method === "GET") {
           sendJson(res, 200, { ok: true, takers: takers.length, jobs: jobs.size, clients: clientCount() });
+          return;
+        }
+
+        if (pathOnly === "/__bay/taker.js" && method === "GET") {
+          sendJs(res, TAKER_SRC);
           return;
         }
 
@@ -170,6 +176,64 @@ function sendJson(res, status, obj) {
   res.statusCode = status;
   res.setHeader("content-type", "application/json; charset=utf-8");
   res.setHeader("cache-control", "no-cache");
+  res.setHeader("content-length", String(body.byteLength));
+  res.end(body);
+}
+
+const TAKER_SRC = `const g = globalThis;
+if (!(g.__bayPipeCtl && !g.__bayPipeCtl.signal.aborted)) {
+  const ctl = new AbortController();
+  g.__bayPipeCtl = ctl;
+  const seen = (g.__baySeen ??= new Set());
+  const run = async (fn, args) => {
+    const api = g.__bay;
+    if (!api || typeof api[fn] !== "function") return { error: "no-fn:" + fn };
+    try {
+      const value = await api[fn](...(args || []));
+      return { value: JSON.parse(JSON.stringify(value ?? null)) };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  };
+  const loop = async () => {
+    while (!ctl.signal.aborted) {
+      try {
+        const r = await fetch("/__bay/take?wait=10000", { signal: ctl.signal });
+        if (ctl.signal.aborted) return;
+        if (r.status === 204) continue;
+        if (!r.ok) {
+          await new Promise((res) => setTimeout(res, 400));
+          continue;
+        }
+        const msg = await r.json();
+        if (!msg?.id) continue;
+        if (seen.has(msg.id)) continue;
+        seen.add(msg.id);
+        if (seen.size > 80) {
+          const first = seen.values().next().value;
+          if (first) seen.delete(first);
+        }
+        const out = await run(String(msg.fn ?? ""), Array.isArray(msg.args) ? msg.args : []);
+        await fetch("/__bay/done", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ id: msg.id, ...out }),
+        });
+      } catch {
+        if (ctl.signal.aborted) return;
+        await new Promise((res) => setTimeout(res, 500));
+      }
+    }
+  };
+  void loop();
+}
+`;
+
+function sendJs(res, src) {
+  const body = Buffer.from(src, "utf8");
+  res.statusCode = 200;
+  res.setHeader("content-type", "text/javascript; charset=utf-8");
+  res.setHeader("cache-control", "no-store");
   res.setHeader("content-length", String(body.byteLength));
   res.end(body);
 }
