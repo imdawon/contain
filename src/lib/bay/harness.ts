@@ -57,7 +57,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 3;
+const PIPE_GEN = 5;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -456,6 +456,9 @@ export function peek() {
     })),
     objects,
     loads: hingeSnapshot(),
+    inspect: store.inspect,
+    paint: typeof document !== "undefined" && document.visibilityState === "visible",
+    hidden: typeof document !== "undefined" && document.hidden,
   };
 }
 
@@ -715,7 +718,14 @@ function startHarnessPipe() {
     while (!ctl.signal.aborted) {
       try {
         beat();
-        const r = await fetch("/__bay/take?wait=10000", { signal: ctl.signal });
+        const vis = typeof document !== "undefined" ? document.visibilityState : "hidden";
+        const nobj = listSamplers().size;
+        const bot = typeof navigator !== "undefined" && navigator.webdriver === true;
+        const paint = vis === "visible" && typeof document !== "undefined" && Boolean(document.querySelector("canvas")) && !bot;
+        const r = await fetch(
+          `/__bay/take?wait=10000&vis=${encodeURIComponent(vis)}&nobj=${nobj}&paint=${paint ? 1 : 0}&bot=${bot ? 1 : 0}`,
+          { signal: ctl.signal },
+        );
         if (ctl.signal.aborted) return;
         if (r.status === 204) continue;
         if (!r.ok) {
@@ -727,11 +737,15 @@ function startHarnessPipe() {
         const cap = Math.min(20000, Number(msg.waitMs) || 16000);
         const out = await handle(String(msg.id), String(msg.fn ?? ""), Array.isArray(msg.args) ? msg.args : [], cap);
         beat();
-        if (!out) continue;
         await fetch("/__bay/done", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ id: msg.id, ...out }),
+          body: JSON.stringify({
+            id: msg.id,
+            ...(out ?? { skipped: true }),
+            paint,
+            nobj: listSamplers().size,
+          }),
         });
       } catch {
         if (ctl.signal.aborted) return;
