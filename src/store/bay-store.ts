@@ -25,6 +25,7 @@ export type Kind =
   | "doorway"
   | "wagon"
   | "hill"
+  | "ramp"
   | SolidShape;
 
 export interface Entity {
@@ -123,7 +124,8 @@ export const useBay = create<BayState>((set, get) => ({
       kind === "wall" ||
       kind === "doorway" ||
       kind === "wagon" ||
-      kind === "hill"
+      kind === "hill" ||
+      kind === "ramp"
         ? [r(), 0, r()]
         : kind === "pack" || kind === "grenade"
           ? [r() * 0.6, 1.15, r() * 0.6]

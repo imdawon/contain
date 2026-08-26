@@ -141,7 +141,7 @@ export function SceneRig({ scene }: { scene: Scene }) {
       const dummy = ents.find((e) => e.kind === "dummy");
       const wagon = ents.find((e) => e.kind === "wagon");
       const nade = ents.find((e) => e.kind === "grenade" || e.kind === "charge");
-      const hill = ents.find((e) => e.kind === "hill");
+      const hill = ents.find((e) => e.kind === "hill" || e.kind === "ramp");
       if (hill && !bodyOf(hill.id)) return;
       if (wagon && !bodyOf(wagon.id)) return;
       if (nade && !bodyOf(nade.id)) return;
@@ -165,7 +165,7 @@ export function SceneRig({ scene }: { scene: Scene }) {
           }
           continue;
         }
-        if (e.kind === "hill") continue;
+        if (e.kind === "hill" || e.kind === "ramp") continue;
         const b = bodyOf(e.id);
         if (!b) continue;
         poseBody(b, e.pos[0], e.pos[1], e.pos[2], rot);
