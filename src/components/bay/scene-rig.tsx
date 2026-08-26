@@ -1,5 +1,4 @@
-import { interactionGroups, useRapier } from "@react-three/rapier";
-import { useFrame } from "@react-three/fiber";
+import { interactionGroups, useBeforePhysicsStep, useRapier, type RapierRigidBody } from "@react-three/rapier";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { cooks } from "@/lib/bay/cook";
@@ -42,8 +41,25 @@ type Lock = {
   qw: number;
 };
 
+type RapierBody = {
+  isKinematic: () => boolean;
+  setNextKinematicTranslation: (p: { x: number; y: number; z: number }) => void;
+  setNextKinematicRotation: (q: { x: number; y: number; z: number; w: number }) => void;
+  setTranslation: (p: { x: number; y: number; z: number }, w: boolean) => void;
+  setRotation: (q: { x: number; y: number; z: number; w: number }, w: boolean) => void;
+  setLinvel: (v: { x: number; y: number; z: number }, w: boolean) => void;
+  setAngvel: (v: { x: number; y: number; z: number }, w: boolean) => void;
+  setGravityScale: (s: number, w: boolean) => void;
+  setBodyType: (t: number, w: boolean) => void;
+  translation: () => { x: number; y: number; z: number };
+  rotation: () => { x: number; y: number; z: number; w: number };
+  linvel: () => { x: number; y: number; z: number };
+  angvel: () => { x: number; y: number; z: number };
+  wakeUp: () => void;
+};
+
 function bodyOf(id: string) {
-  return listSamplers().get(id)?.getBody?.() ?? null;
+  return (listSamplers().get(id)?.getBody?.() ?? null) as (RapierRigidBody & RapierBody) | null;
 }
 
 function resolveRef(ref: string) {
@@ -64,7 +80,7 @@ function quatFromEuler(rot: [number, number, number]) {
 }
 
 function poseBody(
-  b: { isKinematic: () => boolean; setNextKinematicTranslation: (p: { x: number; y: number; z: number }) => void; setNextKinematicRotation: (q: { x: number; y: number; z: number; w: number }) => void; setTranslation: (p: { x: number; y: number; z: number }, w: boolean) => void; setRotation: (q: { x: number; y: number; z: number; w: number }, w: boolean) => void; setLinvel: (v: { x: number; y: number; z: number }, w: boolean) => void; setAngvel: (v: { x: number; y: number; z: number }, w: boolean) => void; wakeUp: () => void },
+  b: RapierBody,
   x: number,
   y: number,
   z: number,
@@ -119,33 +135,19 @@ export function SceneRig({ scene }: { scene: Scene }) {
     };
   }, [stamp, scene, world]);
 
-  useFrame(() => {
+  useBeforePhysicsStep(() => {
     if (phase.current === 0) {
-      const ready = scene.entities.every((e) => {
-        if (e.kind === "dummy") return Boolean(bodyOf(`${e.name}-hips`) || bodyOf(`${useBay.getState().entities.find((x) => x.kind === "dummy")?.id}-hips`));
-        return Boolean(bodyOf(e.name) || bodyOf(useBay.getState().entities.find((x) => x.id === e.name || x.kind === e.kind)?.id ?? ""));
-      });
-      if (!ready) return;
-      phase.current = 1;
-      return;
-    }
+      const ents = useBay.getState().entities;
+      const dummy = ents.find((e) => e.kind === "dummy");
+      const wagon = ents.find((e) => e.kind === "wagon");
+      const nade = ents.find((e) => e.kind === "grenade" || e.kind === "charge");
+      const hill = ents.find((e) => e.kind === "hill");
+      if (hill && !bodyOf(hill.id)) return;
+      if (wagon && !bodyOf(wagon.id)) return;
+      if (nade && !bodyOf(nade.id)) return;
+      if (dummy && !bodyOf(`${dummy.id}-hips`)) return;
 
-    if (phase.current === 1) {
-      for (const e of useBay.getState().entities) {
-        const id = e.kind === "dummy" ? `${e.id}-hips` : e.id;
-        const patch: { friction?: number; restitution?: number; mass?: number } = {};
-        if (e.grip != null) patch.friction = e.grip;
-        if (e.bounce != null) patch.restitution = e.bounce;
-        if (e.mass != null) patch.mass = e.mass;
-        if (Object.keys(patch).length) applyActor(id, patch);
-        const b = bodyOf(id);
-        if (b && e.kind !== "hill") {
-          b.setGravityScale(0, true);
-          b.setLinvel({ x: 0, y: 0, z: 0 }, true);
-          b.setAngvel({ x: 0, y: 0, z: 0 }, true);
-        }
-      }
-      for (const e of useBay.getState().entities) {
+      for (const e of ents) {
         const rot = quatFromEuler(e.rot ?? [0, 0, 0]);
         if (e.kind === "dummy") {
           _q.set(rot.x, rot.y, rot.z, rot.w);
@@ -154,56 +156,52 @@ export function SceneRig({ scene }: { scene: Scene }) {
             if (!bone) continue;
             _p.set(local[0], local[1], local[2]).applyQuaternion(_q);
             poseBody(bone, e.pos[0] + _p.x, e.pos[1] + _p.y, e.pos[2] + _p.z, rot);
+            bone.setBodyType(0, true);
             bone.setGravityScale(0, true);
+            setColliderGroups(bone, interactionGroups([DUMMY_G], []));
           }
           continue;
         }
+        if (e.kind === "hill") continue;
         const b = bodyOf(e.id);
-        if (!b || e.kind === "hill") continue;
+        if (!b) continue;
         poseBody(b, e.pos[0], e.pos[1], e.pos[2], rot);
-        b.setGravityScale(0, true);
+        const patch: { friction?: number; restitution?: number; mass?: number } = {};
+        if (e.grip != null) patch.friction = e.grip;
+        if (e.bounce != null) patch.restitution = e.bounce;
+        if (e.mass != null) patch.mass = e.mass;
+        if (Object.keys(patch).length) applyActor(e.id, patch);
+        b.setBodyType(0, true);
+        if (e.kind === "wagon") {
+          b.setGravityScale(1, true);
+        } else {
+          b.setGravityScale(0, true);
+        }
       }
-      phase.current = 2;
-      return;
-    }
 
-    if (phase.current === 2) {
-      const dummy = useBay.getState().entities.find((e) => e.kind === "dummy" && e.live);
-      if (dummy) {
-        const hips = bodyOf(`${dummy.id}-hips`);
-        if (hips?.isKinematic()) return;
-      }
-      phase.current = 3;
-      return;
-    }
-
-    if (phase.current === 3) {
-      const wagonEnt = useBay.getState().entities.find((e) => e.kind === "wagon");
-      const wagon = wagonEnt ? bodyOf(wagonEnt.id) : null;
-      if (!wagon) return;
-      const pb = wagon.translation();
-      const rb = wagon.rotation();
+      const wagonBody = wagon ? bodyOf(wagon.id) : null;
+      if (!wagon || !wagonBody) return;
+      const pb = wagonBody.translation();
+      const rb = wagonBody.rotation();
       _qB.set(rb.x, rb.y, rb.z, rb.w);
       _inv.copy(_qB).invert();
 
       const followIds = new Set<string>();
+      if (dummy) {
+        for (const part of Object.keys(DUMMY_LOCAL)) followIds.add(`${dummy.id}-${part}`);
+      }
+      if (nade) followIds.add(nade.id);
       for (const tie of scene.ties) {
         const aId = resolveRef(tie.a);
         const bId = resolveRef(tie.b);
-        const follower = aId === wagonEnt?.id ? bId : aId;
-        followIds.add(follower);
-        if (follower.startsWith(`${useBay.getState().entities.find((e) => e.kind === "dummy")?.id}-`)) {
-          const dummy = useBay.getState().entities.find((e) => e.kind === "dummy");
-          if (dummy) {
-            for (const part of Object.keys(DUMMY_LOCAL)) followIds.add(`${dummy.id}-${part}`);
-          }
-        }
+        followIds.add(aId === wagon.id ? bId : aId);
       }
+      followIds.delete(wagon.id);
 
       locks.current = [];
       for (const id of followIds) {
         const b = bodyOf(id);
-        if (!b || b === wagon) continue;
+        if (!b) continue;
         const pa = b.translation();
         const ra = b.rotation();
         _qA.set(ra.x, ra.y, ra.z, ra.w);
@@ -222,43 +220,41 @@ export function SceneRig({ scene }: { scene: Scene }) {
           qz: _qRel.z,
           qw: _qRel.w,
         });
-        note("tie", { a: id, b: wagonEnt!.id });
+        note("tie", { a: id, b: wagon.id });
       }
-
-      const nade = useBay.getState().entities.find((e) => e.kind === "grenade" || e.kind === "charge");
       if (nade) {
         const nb = bodyOf(nade.id);
-        if (nb) {
-          setColliderGroups(nb, interactionGroups([WORLD_G], [WORLD_G]));
-        }
+        if (nb) setColliderGroups(nb, interactionGroups([WORLD_G], []));
       }
-      phase.current = 4;
+
+      const kick = wagon.vel ?? [0, 0, 0];
+      wagonBody.setBodyType(0, true);
+      wagonBody.setGravityScale(1, true);
+      wagonBody.setLinvel({ x: kick[0], y: kick[1], z: kick[2] }, true);
+      wagonBody.wakeUp();
+      applyActor(wagon.id, { vx: kick[0], vy: kick[1], vz: kick[2] });
+      note("scene-kick", {
+        id: scene.id,
+        file: scene.file ?? `scenes/${scene.id}.json`,
+        vx: kick[0],
+        vy: kick[1],
+        vz: kick[2],
+      });
+      phase.current = 1;
       return;
     }
 
-    if (phase.current === 4) {
-      for (const e of useBay.getState().entities) {
-        if (!e.vel || e.kind === "dummy" || e.kind === "grenade" || e.kind === "charge") continue;
-        const b = bodyOf(e.id);
-        if (!b) continue;
-        b.setGravityScale(1, true);
-        b.setBodyType(0, true);
-        applyActor(e.id, { vx: e.vel[0], vy: e.vel[1], vz: e.vel[2] });
-      }
-      note("scene-kick", { id: scene.id, file: scene.file ?? `scenes/${scene.id}.json` });
-      phase.current = 5;
-      return;
-    }
-
-    const wagonEnt = useBay.getState().entities.find((e) => e.kind === "wagon");
+    const ents = useBay.getState().entities;
+    const wagonEnt = ents.find((e) => e.kind === "wagon");
     const wagon = wagonEnt ? bodyOf(wagonEnt.id) : null;
-    const nade = useBay.getState().entities.find((e) => e.kind === "grenade" || e.kind === "charge");
+    const nade = ents.find((e) => e.kind === "grenade" || e.kind === "charge");
     const cook = nade ? cooks.get(nade.id) : undefined;
     const boom = Boolean(cook && (cook.phase === "boom" || cook.phase === "dead"));
 
     if (wagon && !released.current) {
       const pb = wagon.translation();
       const rb = wagon.rotation();
+      const v = wagon.linvel();
       _qB.set(rb.x, rb.y, rb.z, rb.w);
       for (const lock of locks.current) {
         const b = bodyOf(lock.id);
@@ -270,9 +266,11 @@ export function SceneRig({ scene }: { scene: Scene }) {
         const y = pb.y + _rel.y;
         const z = pb.z + _rel.z;
         const rot = { x: _qA.x, y: _qA.y, z: _qA.z, w: _qA.w };
+        if (b.isKinematic()) {
+          b.setBodyType(0, true);
+        }
         b.setTranslation({ x, y, z }, true);
         b.setRotation(rot, true);
-        const v = wagon.linvel();
         b.setLinvel({ x: v.x, y: v.y, z: v.z }, true);
         b.setAngvel(wagon.angvel(), true);
         b.setGravityScale(0, true);
@@ -291,7 +289,7 @@ export function SceneRig({ scene }: { scene: Scene }) {
       }
     }
 
-    const dummy = useBay.getState().entities.find((e) => e.kind === "dummy");
+    const dummy = ents.find((e) => e.kind === "dummy");
     if (!dummy) return;
     const hips = bodyOf(`${dummy.id}-hips`);
     if (!hips) return;
@@ -327,5 +325,3 @@ export function SceneRig({ scene }: { scene: Scene }) {
 
   return null;
 }
-
-

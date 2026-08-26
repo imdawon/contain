@@ -161,7 +161,7 @@ export const useBay = create<BayState>((set, get) => ({
   },
   loadScene: (scene) => {
     const staged = materializeScene(scene);
-    set({ ...staged, dragging: false, latch: "sealed", inspect: false, stageN: get().stageN + 1 });
+    set({ ...staged, dragging: false, latch: "sealed", inspect: false, tool: "grab", stageN: get().stageN + 1 });
     return {
       ok: true,
       id: scene.id,
