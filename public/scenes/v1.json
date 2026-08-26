@@ -1,7 +1,7 @@
 {
   "id": "v1",
   "name": "Wagon hill",
-  "blurb": "Dummy tied to a rigid wagon. Down the hill. Grenade bangs mid-air.",
+  "blurb": "Dummy tied to a wagon. Parabola hill, kick at the end, grenade bangs mid-air.",
   "file": "scenes/v1.json",
   "select": "grenade",
   "inspect": false,
@@ -9,25 +9,20 @@
     "ref": "dummy-hips"
   },
   "cam": {
-    "eye": [
-      7.15,
-      11.55,
-      -6.55
+    "offset": [
+      9.0,
+      1.8,
+      -1.0
     ],
     "look": [
       0.0,
-      10.05,
-      -4.55
-    ],
-    "offset": [
-      12.4,
-      3.4,
-      4.8
+      0.4,
+      2.2
     ]
   },
   "airborne": {
-    "minY": 2.4,
-    "minZ": 7.45
+    "minY": 2.0,
+    "minZ": 8.0
   },
   "entities": [
     {
@@ -35,7 +30,7 @@
       "kind": "ramp",
       "pos": [
         0.0,
-        7.7,
+        0.0,
         0.0
       ],
       "rot": [
@@ -44,74 +39,74 @@
         0
       ],
       "size": [
-        6.6,
-        6.2,
-        14.4
+        8.0,
+        8.0,
+        22.0
       ],
       "fixed": true,
-      "grip": 0.2
+      "grip": 0.08
     },
     {
       "name": "wagon",
       "kind": "wagon",
       "pos": [
         0.0,
-        10.215,
-        -5.259
+        6.9,
+        -8.8
       ],
       "rot": [
-        0.407,
+        0.748,
         0,
         0
       ],
       "vel": [
         0.0,
-        -0.87,
-        2.021
+        -1.904,
+        2.053
       ],
       "grip": 0.06,
-      "bounce": 0.02
+      "bounce": 0.0
     },
     {
       "name": "dummy",
       "kind": "dummy",
       "pos": [
         -0.02,
-        10.245,
-        -5.299
+        6.93,
+        -8.84
       ],
       "rot": [
-        0.407,
+        0.748,
         0,
         0
       ],
       "vel": [
         0.0,
-        -0.87,
-        2.021
+        -1.904,
+        2.053
       ],
-      "live": true
+      "live": false
     },
     {
       "name": "nade",
       "kind": "grenade",
       "pos": [
         0.24,
-        10.345,
-        -4.979
+        7.03,
+        -8.48
       ],
       "rot": [
-        0.407,
+        0.748,
         0,
         0
       ],
       "vel": [
         0.0,
-        -0.87,
-        2.021
+        -1.904,
+        2.053
       ],
       "grip": 0.8,
-      "fuse": 0.81
+      "fuse": 1.81
     }
   ],
   "ties": [
