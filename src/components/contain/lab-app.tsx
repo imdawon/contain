@@ -2,9 +2,7 @@ import { Component, lazy, Suspense, useEffect, useState, type ErrorInfo, type Re
 import { Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Inspector } from "@/components/contain/inspector";
-import { cooks } from "@/lib/bay/cook";
-import { clearAllHeat } from "@/lib/bay/heat";
-import { bindHarnessWindow } from "@/lib/bay/harness";
+import { bindHarnessWindow, resetStage } from "@/lib/bay/harness";
 import { note } from "@/lib/bay/probe";
 import { punctureSelected } from "@/components/bay/pack";
 import { isMuted, setMuted, unlockAudio } from "@/lib/contain/audio";
@@ -39,10 +37,8 @@ export function LabApp() {
   const tool = useBay((s) => s.tool);
   const muted = useBay((s) => s.muted);
   const latch = useBay((s) => s.latch);
-  const selected = useBay((s) => s.selected);
   const entities = useBay((s) => s.entities);
   const spawn = useBay((s) => s.spawn);
-  const reset = useBay((s) => s.reset);
   const setTool = useBay((s) => s.setTool);
   const toggleMuted = useBay((s) => s.toggleMuted);
   const trackId = useBay((s) => s.trackId);
@@ -70,8 +66,7 @@ export function LabApp() {
     return () => window.removeEventListener("keydown", onKey);
   }, [toggleCutaway]);
 
-  const selectedKind = selected ? entities.find((e) => e.id === selected)?.kind : null;
-  const packOn = selectedKind === "pack" || selectedKind === "charge";
+  const packOn = entities.some((e) => e.kind === "pack" || e.kind === "charge");
   const trackOpts = entities.flatMap((e) => {
     if (e.kind === "can") {
       return [
@@ -288,10 +283,7 @@ export function LabApp() {
           <button
             type="button"
             onClick={() => {
-              cooks.clear();
-              clearAllHeat();
-              note("reset", {});
-              reset();
+              resetStage();
             }}
             data-bay="reset"
             className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 font-mono text-[11px] uppercase tracking-[0.12em] text-muted hover:text-fg"

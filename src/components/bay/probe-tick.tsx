@@ -43,6 +43,7 @@ export function ProbeTick() {
     const inView: string[] = [];
     for (const [id, rec] of listSamplers()) {
       const s = rec.sample();
+      if (s.state?.missing) continue;
       _pt.set(s.x, s.y, s.z);
       _sphere.center.copy(_pt);
       _sphere.radius = 0.35;
@@ -106,7 +107,11 @@ export function ProbeTick() {
       objects,
       inView,
     });
-    recordHistory(objects, probeTime());
+    recordHistory(objects, probeTime(), {
+      x: round(camera.position.x),
+      y: round(camera.position.y),
+      z: round(camera.position.z),
+    });
   });
 
   return null;

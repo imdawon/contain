@@ -170,29 +170,49 @@ export function setBodyMass(b: RapierRigidBody, kg: number) {
   b.wakeUp();
 }
 
+function placeBody(b: RapierRigidBody, x: number, y: number, z: number) {
+  if (b.isKinematic()) {
+    b.setNextKinematicTranslation({ x, y, z });
+  }
+  b.setTranslation({ x, y, z }, true);
+}
+
 export function applyActor(id: string, patch: ActorPatch) {
   const actor = actors.get(id);
-  const b = actor?.getBody?.();
-  if (!b) return false;
-  const p = b.translation();
-  const v = b.linvel();
-  if (patch.x != null || patch.y != null || patch.z != null) {
-    b.setTranslation({ x: patch.x ?? p.x, y: patch.y ?? p.y, z: patch.z ?? p.z }, true);
-    b.setLinvel({ x: 0, y: 0, z: 0 }, true);
-    b.setAngvel({ x: 0, y: 0, z: 0 }, true);
+  const lead = actor?.getBody?.();
+  if (!lead) return false;
+  const moving = patch.x != null || patch.y != null || patch.z != null;
+  const vel = patch.vx != null || patch.vy != null || patch.vz != null;
+  const crew = moving || vel ? assemblyMembers(id) : [id];
+  const p = lead.translation();
+  const v = lead.linvel();
+  const dx = (patch.x ?? p.x) - p.x;
+  const dy = (patch.y ?? p.y) - p.y;
+  const dz = (patch.z ?? p.z) - p.z;
+  const vx = patch.vx ?? v.x;
+  const vy = patch.vy ?? v.y;
+  const vz = patch.vz ?? v.z;
+  for (const mid of crew) {
+    const b = mid === id ? lead : actors.get(mid)?.getBody?.();
+    if (!b) continue;
+    if (moving) {
+      const q = b.translation();
+      placeBody(b, q.x + dx, q.y + dy, q.z + dz);
+      b.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      b.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    }
+    if (vel) b.setLinvel({ x: vx, y: vy, z: vz }, true);
+    b.wakeUp();
   }
-  if (patch.vx != null || patch.vy != null || patch.vz != null) {
-    b.setLinvel({ x: patch.vx ?? v.x, y: patch.vy ?? v.y, z: patch.vz ?? v.z }, true);
-  }
-  if (patch.mass != null) setBodyMass(b, patch.mass);
-  const n = b.numColliders();
+  if (patch.mass != null) setBodyMass(lead, patch.mass);
+  const n = lead.numColliders();
   for (let i = 0; i < n; i++) {
-    const c = b.collider(i);
+    const c = lead.collider(i);
     if (!c) continue;
     if (patch.friction != null) c.setFriction(Math.max(0, patch.friction));
     if (patch.restitution != null) c.setRestitution(Math.max(0, patch.restitution));
   }
-  b.wakeUp();
+  lead.wakeUp();
   note("set-prop", {
     id,
     x: patch.x ?? null,
@@ -202,6 +222,7 @@ export function applyActor(id: string, patch: ActorPatch) {
     vx: patch.vx ?? null,
     vy: patch.vy ?? null,
     vz: patch.vz ?? null,
+    n: crew.length,
   });
   return true;
 }

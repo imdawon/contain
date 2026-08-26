@@ -5,20 +5,24 @@ import { clearLog, note } from "@/lib/bay/probe";
 import { playEvent } from "@/lib/contain/audio";
 import { useBay, type Kind, type Tool } from "@/store/bay-store";
 
+function isFuse(kind: Kind | undefined) {
+  return kind === "pack" || kind === "charge";
+}
+
 export function punctureId(id?: string | null) {
   const store = useBay.getState();
-  const target = id ?? store.selected;
-  if (!target) return { ok: false, reason: "no-id" as const };
-  const ent = store.entities.find((e) => e.id === target);
-  if (!ent || (ent.kind !== "pack" && ent.kind !== "charge")) {
-    return { ok: false, reason: "not-fuse" as const, id: target, kind: ent?.kind ?? null };
+  const wanted = id ?? store.selected;
+  const hit = store.entities.find((e) => e.id === wanted);
+  const ent = isFuse(hit?.kind) ? hit : store.entities.find((e) => isFuse(e.kind));
+  if (!ent || !isFuse(ent.kind)) {
+    return { ok: false, reason: "not-fuse" as const, id: wanted ?? null, kind: hit?.kind ?? null };
   }
-  store.select(target);
+  store.select(ent.id);
   const spec = ent.kind === "charge" ? PACK.charge : PACK.nmc;
-  startCook(target, "nmc", spec.cook, spec.peak, spec.boom);
+  startCook(ent.id, "nmc", spec.cook, spec.peak, spec.boom);
   playEvent("puncture", "nmc");
-  note("puncture", { id: target, kind: ent.kind });
-  return { ok: true, id: target, kind: ent.kind };
+  note("puncture", { id: ent.id, kind: ent.kind });
+  return { ok: true, id: ent.id, kind: ent.kind };
 }
 
 export function spawnKind(kind: string) {

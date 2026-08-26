@@ -32,6 +32,7 @@ export type HistFrame = {
   t: number;
   ev: HistEvent[];
   o: Record<string, PoseSample>;
+  cam: { x: number; y: number; z: number } | null;
 };
 
 type DragMember = { id: string; x0: number; y0: number; z0: number; kinematic: boolean };
@@ -56,7 +57,11 @@ function round(n: number) {
   return Math.round(n * 1000) / 1000;
 }
 
-export function recordHistory(objects: ProbeObject[], t: number) {
+export function recordHistory(
+  objects: ProbeObject[],
+  t: number,
+  camera?: { x: number; y: number; z: number } | null,
+) {
   if (t - lastHistT < 1 / HZ) return;
   lastHistT = t;
   const evs = log();
@@ -69,7 +74,12 @@ export function recordHistory(objects: ProbeObject[], t: number) {
   for (const obj of objects) {
     o[obj.id] = { x: obj.x, y: obj.y, z: obj.z, vx: obj.vx, vy: obj.vy, vz: obj.vz };
   }
-  frames.push({ t: round(t), ev: fresh, o });
+  frames.push({
+    t: round(t),
+    ev: fresh,
+    o,
+    cam: camera ? { x: camera.x, y: camera.y, z: camera.z } : null,
+  });
   if (frames.length > MAX_FRAMES) frames.splice(0, frames.length - MAX_FRAMES);
 }
 
@@ -78,13 +88,16 @@ export function tickDrags(dt: number) {
     const job = drags[i];
     job.t += dt;
     const u = Math.min(1, job.dur <= 0 ? 1 : job.t / job.dur);
+    let minY = Infinity;
+    for (const m of job.members) minY = Math.min(minY, m.y0 + job.dy * u);
+    const yLift = minY < 0.06 ? 0.06 - minY : 0;
     for (const m of job.members) {
       const b = listSamplers().get(m.id)?.getBody?.();
       if (!b) continue;
       b.setBodyType(2, true);
       b.setNextKinematicTranslation({
         x: m.x0 + job.dx * u,
-        y: Math.max(0.06, m.y0 + job.dy * u),
+        y: m.y0 + job.dy * u + yLift,
         z: m.z0 + job.dz * u,
       });
       b.setLinvel({ x: 0, y: 0, z: 0 }, true);
@@ -152,12 +165,46 @@ export function listUi() {
   }));
 }
 
-export function clickUi(name: string) {
+function setSelectValue(sel: HTMLSelectElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+  setter?.call(sel, value);
+  sel.dispatchEvent(new Event("input", { bubbles: true }));
+  sel.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+export function clickUi(name: string, value?: string) {
   if (typeof document === "undefined") return { ok: false, reason: "no-dom" as const };
-  const el = document.querySelector<HTMLElement>(`[data-bay="${name}"]`);
+  const alias = name === "ignite" ? "puncture" : name === "inspect" && value != null ? "inspect-id" : name;
+  const el = document.querySelector<HTMLElement>(`[data-bay="${alias}"]`);
   if (!el) return { ok: false, reason: "missing" as const, name };
   if ("disabled" in el && (el as HTMLButtonElement).disabled) {
+    if (alias === "puncture") {
+      const r = punctureId();
+      return r.ok ? { ok: true, name, via: "fuse" as const, id: r.id } : { ok: false, reason: "disabled" as const, name };
+    }
     return { ok: false, reason: "disabled" as const, name };
+  }
+  if (el.tagName === "SELECT") {
+    const sel = el as HTMLSelectElement;
+    if (value == null) {
+      return {
+        ok: false,
+        reason: "need-value" as const,
+        name,
+        options: [...sel.options].map((o) => o.value).filter(Boolean),
+      };
+    }
+    if (alias === "track" || alias === "inspect-id") {
+      setSelectValue(sel, value);
+      useBay.getState().setTrack(value || null);
+      note("ui-click", { name, value });
+      return { ok: true, name, value };
+    }
+    const allowed = [...sel.options].some((o) => o.value === value);
+    if (!allowed) return { ok: false, reason: "bad-value" as const, name, value };
+    setSelectValue(sel, value);
+    note("ui-click", { name, value });
+    return { ok: true, name, value };
   }
   el.click();
   note("ui-click", { name });
@@ -168,8 +215,7 @@ export function selectSolid(shape: string) {
   if (typeof document === "undefined") return spawnKind(shape);
   const el = document.querySelector<HTMLSelectElement>('[data-bay="solid"]');
   if (!el) return spawnKind(shape);
-  el.value = shape;
-  el.dispatchEvent(new Event("change", { bubbles: true }));
+  setSelectValue(el, shape);
   return { ok: true, shape };
 }
 
@@ -286,33 +332,69 @@ export function effects(id: string, seconds = KEEP) {
 }
 
 export function peek() {
+  const store = useBay.getState();
   const s = snapshot();
-  const live =
-    s.objects.length > 0
-      ? s.objects
-      : [...listSamplers()].map(([id, rec]) => {
-          const p = rec.sample();
-          return { id, kind: rec.kind, x: round(p.x), y: round(p.y), z: round(p.z), vx: 0, vy: 0, vz: 0, state: p.state ?? {} };
-        });
+  const objects: {
+    id: string;
+    kind: string;
+    x: number;
+    y: number;
+    z: number;
+    vx: number;
+    vy: number;
+    vz: number;
+    speed: number;
+    cook: string | number | boolean | null;
+    burning: string | number | boolean | null;
+    ash: string | number | boolean | null;
+  }[] = [];
+  for (const [id, rec] of listSamplers()) {
+    const p = rec.sample();
+    if (p.state?.missing) continue;
+    let vx = 0;
+    let vy = 0;
+    let vz = 0;
+    const b = rec.getBody?.();
+    if (b) {
+      const lv = b.linvel();
+      vx = round(lv.x);
+      vy = round(lv.y);
+      vz = round(lv.z);
+    }
+    objects.push({
+      id,
+      kind: rec.kind,
+      x: round(p.x),
+      y: round(p.y),
+      z: round(p.z),
+      vx,
+      vy,
+      vz,
+      speed: round(Math.hypot(vx, vy, vz)),
+      cook: p.state?.cook ?? null,
+      burning: p.state?.burning ?? null,
+      ash: p.state?.ash ?? null,
+    });
+  }
+  const cam = s.camera;
+  const histCam = frames.at(-1)?.cam ?? null;
+  const camera = cam
+    ? { x: cam.x, y: cam.y, z: cam.z, lookX: cam.lookX, lookY: cam.lookY, lookZ: cam.lookZ, fov: cam.fov }
+    : histCam
+      ? { x: histCam.x, y: histCam.y, z: histCam.z, lookX: histCam.x, lookY: histCam.y, lookZ: histCam.z, fov: 42 }
+      : null;
   return {
-    t: round(s.t),
-    selected: s.selected ?? useBay.getState().selected,
-    trackId: s.trackId,
-    tool: s.tool,
-    latch: s.latch,
-    cutaway: s.cutaway,
-    events: s.events.slice(-12).map((e) => e.type),
-    objects: live.map((o) => ({
-      id: o.id,
-      kind: o.kind,
-      x: o.x,
-      y: o.y,
-      z: o.z,
-      speed: round(Math.hypot("vx" in o ? (o.vx ?? 0) : 0, "vy" in o ? (o.vy ?? 0) : 0, "vz" in o ? (o.vz ?? 0) : 0)),
-      cook: o.state?.cook ?? null,
-      burning: o.state?.burning ?? null,
-      ash: o.state?.ash ?? null,
-    })),
+    t: round(probeTime()),
+    selected: store.selected,
+    trackId: store.trackId,
+    tool: store.tool,
+    latch: store.latch,
+    cutaway: store.cutaway,
+    camera,
+    events: log()
+      .slice(-12)
+      .map((e) => e.type),
+    objects,
   };
 }
 
@@ -338,6 +420,14 @@ export function until(type: string, timeoutMs = 8000) {
   });
 }
 
+export function resetStage() {
+  frames.length = 0;
+  drags.length = 0;
+  lastHistT = -1;
+  lastEventN = 0;
+  return resetBay();
+}
+
 export function help() {
   return {
     peek: "compact stage: objects xyz/speed + recent events",
@@ -346,7 +436,8 @@ export function help() {
     history: "(seconds=30) pose+velocity ring at 30Hz (every other 60Hz tick); events ride on the same frames",
     effects: "(id, seconds=30) path + events for one body",
     ui: "DOM controls with data-bay",
-    click: "(name) click [data-bay=name]",
+    click: "(name, value?) click [data-bay=name]; selects need a value (track id, solid shape)",
+    camera: "snapshot().camera xyz + look",
     spawn: "(kind) pack|charge|can|crate|dummy|grass|cube|...",
     solid: "(shape)",
     puncture: "(id?) cook selected pack/charge",
@@ -376,15 +467,11 @@ export function harnessApi() {
     effects,
     ui: listUi,
     click: clickUi,
+    camera: () => snapshot().camera,
     spawn: spawnKind,
     solid: selectSolid,
     puncture: punctureId,
-    reset: () => {
-      frames.length = 0;
-      lastHistT = -1;
-      lastEventN = 0;
-      return resetBay();
-    },
+    reset: resetStage,
     tool: setToolName,
     select: (id: string | null) => {
       useBay.getState().select(id);

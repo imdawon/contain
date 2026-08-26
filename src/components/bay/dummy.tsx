@@ -10,7 +10,7 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import { useGrab } from "@/components/bay/grab";
 import { DUMMY } from "@/lib/bay/parts";
-import { registerAssembly, registerBody, setBodyMass, unregisterAssembly, unregisterBody } from "@/lib/bay/probe";
+import { note, registerAssembly, registerBody, setBodyMass, unregisterAssembly, unregisterBody } from "@/lib/bay/probe";
 import { poseOf } from "@/lib/bay/sample";
 import { useBay } from "@/store/bay-store";
 
@@ -154,6 +154,7 @@ export function Dummy({ id, pos }: { id: string; pos: [number, number, number] }
       if (!h || power < 4) return;
       const p = h.translation();
       if (Math.hypot(p.x - x, p.z - z) > 6) return;
+      let n = 0;
       for (const r of bones.current) {
         const b = r.current;
         if (!b) continue;
@@ -161,7 +162,9 @@ export function Dummy({ id, pos }: { id: string; pos: [number, number, number] }
         b.setLinearDamping(0.12);
         b.setAngularDamping(0.16);
         b.wakeUp();
+        n += 1;
       }
+      if (n > 0) note("dummy-flop", { id, n, x: p.x, z: p.z });
     };
     window.addEventListener("bay-blast", onBlast, true);
     return () => window.removeEventListener("bay-blast", onBlast, true);
