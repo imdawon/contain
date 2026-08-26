@@ -80,8 +80,10 @@ type Actor = {
 };
 
 const actors = new Map<string, Actor>();
+const assemblies = new Map<string, string[]>();
+const memberOf = new Map<string, string>();
 const events: ProbeEvent[] = [];
-const MAX_EVENTS = 240;
+const MAX_EVENTS = 800;
 let last: ProbeSnap = emptySnap();
 let started = 0;
 
@@ -116,6 +118,28 @@ export function registerBody(
 
 export function unregisterBody(id: string) {
   actors.delete(id);
+}
+
+export function registerAssembly(group: string, ids: string[]) {
+  assemblies.set(group, ids.slice());
+  for (const id of ids) memberOf.set(id, group);
+}
+
+export function unregisterAssembly(group: string) {
+  const ids = assemblies.get(group);
+  assemblies.delete(group);
+  if (!ids) return;
+  for (const id of ids) if (memberOf.get(id) === group) memberOf.delete(id);
+}
+
+export function assemblyMembers(id: string): string[] {
+  const group = memberOf.get(id);
+  if (!group) return [id];
+  return assemblies.get(group) ?? [id];
+}
+
+export function assemblyGroup(id: string) {
+  return memberOf.get(id) ?? null;
 }
 
 export function note(type: string, data: Record<string, string | number | boolean | null> = {}) {
@@ -192,6 +216,10 @@ export function writeSnap(partial: Omit<ProbeSnap, "events" | "t">) {
 
 export function snapshot(): ProbeSnap {
   return last;
+}
+
+export function clearLog() {
+  events.length = 0;
 }
 
 export function log(): ProbeEvent[] {

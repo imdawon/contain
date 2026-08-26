@@ -10,7 +10,7 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import { useGrab } from "@/components/bay/grab";
 import { DUMMY } from "@/lib/bay/parts";
-import { registerBody, setBodyMass, unregisterBody } from "@/lib/bay/probe";
+import { registerAssembly, registerBody, setBodyMass, unregisterAssembly, unregisterBody } from "@/lib/bay/probe";
 import { poseOf } from "@/lib/bay/sample";
 import { useBay } from "@/store/bay-store";
 
@@ -128,6 +128,24 @@ export function Dummy({ id, pos }: { id: string; pos: [number, number, number] }
   const larmL = useRef<RapierRigidBody>(null!);
   const larmR = useRef<RapierRigidBody>(null!);
   const bones = useRef([hips, chest, head, thighL, thighR, shinL, shinR, uarmL, uarmR, larmL, larmR]);
+
+  useEffect(() => {
+    const ids = [
+      `${id}-hips`,
+      `${id}-chest`,
+      `${id}-head`,
+      `${id}-thigh-l`,
+      `${id}-thigh-r`,
+      `${id}-shin-l`,
+      `${id}-shin-r`,
+      `${id}-uarm-l`,
+      `${id}-uarm-r`,
+      `${id}-larm-l`,
+      `${id}-larm-r`,
+    ];
+    registerAssembly(id, ids);
+    return () => unregisterAssembly(id);
+  }, [id]);
 
   useEffect(() => {
     const onBlast = (ev: Event) => {

@@ -10,7 +10,7 @@ import { useFrame } from "@react-three/fiber";
 import { useRef } from "react";
 import { cooks } from "@/lib/bay/cook";
 import { CAN } from "@/lib/bay/parts";
-import { note, registerBody, setBodyMass, unregisterBody } from "@/lib/bay/probe";
+import { note, registerAssembly, registerBody, setBodyMass, unregisterAssembly, unregisterBody } from "@/lib/bay/probe";
 import { playEvent } from "@/lib/contain/audio";
 import { useBay } from "@/store/bay-store";
 import { useGrab } from "@/components/bay/grab";
@@ -138,7 +138,9 @@ export function AmmoCan({ id, pos }: { id: string; pos: [number, number, number]
     };
     part("hinge", "can-hinge", [0, h / 2, -d / 2]);
     part("latch", "can-latch", [0, h / 2, d / 2]);
+    registerAssembly(id, [id, `${id}-lid`]);
     return () => {
+      unregisterAssembly(id);
       unregisterBody(id);
       unregisterBody(`${id}-lid`);
       unregisterBody(`${id}-hinge`);
@@ -223,6 +225,7 @@ export function AmmoCan({ id, pos }: { id: string; pos: [number, number, number]
 
     if (latchGone.current && !hingeGone.current && boomHit && pressure.current >= CAN.hinge && hinge.current) {
       hingeGone.current = true;
+      unregisterAssembly(id);
       world.removeImpulseJoint(hinge.current, true);
       useBay.getState().setLatch("free");
       note("hinge-break", { id, pressure: pressure.current });
