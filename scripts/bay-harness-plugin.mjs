@@ -65,6 +65,16 @@ export function bayHarnessPlugin() {
           return;
         }
 
+        if (pathOnly === "/__bay/reload" && method === "POST") {
+          try {
+            server.ws?.send({ type: "full-reload" });
+          } catch {
+            /* ignore */
+          }
+          sendJson(res, 200, { ok: true, clients: clientCount() });
+          return;
+        }
+
         if (pathOnly === "/__bay/take" && method === "GET") {
           const wait = Math.min(30000, Number(new URL(req.url ?? "", "http://127.0.0.1").searchParams.get("wait")) || 10000);
           const open = [...jobs.values()].find((j) => j.status === "open");

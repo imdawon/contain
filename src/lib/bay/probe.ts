@@ -79,17 +79,28 @@ type Actor = {
   getBody?: () => RapierRigidBody | null | undefined;
 };
 
-const actors = new Map<string, Actor>();
-const assemblies = new Map<string, string[]>();
-const memberOf = new Map<string, string>();
-const events: ProbeEvent[] = [];
+const g = globalThis as unknown as {
+  __bayActors?: Map<string, Actor>;
+  __bayAssemblies?: Map<string, string[]>;
+  __bayMemberOf?: Map<string, string>;
+  __bayEvents?: ProbeEvent[];
+  __bayLast?: ProbeSnap;
+  __bayStarted?: number;
+};
+const actors = (g.__bayActors ??= new Map<string, Actor>());
+const assemblies = (g.__bayAssemblies ??= new Map<string, string[]>());
+const memberOf = (g.__bayMemberOf ??= new Map<string, string>());
+const events: ProbeEvent[] = (g.__bayEvents ??= []);
 const MAX_EVENTS = 800;
-let last: ProbeSnap = emptySnap();
-let started = 0;
+let last: ProbeSnap = (g.__bayLast ??= emptySnap());
+function setLast(s: ProbeSnap) {
+  last = s;
+  g.__bayLast = s;
+}
 
 function now() {
-  if (!started) started = performance.now();
-  return (performance.now() - started) / 1000;
+  if (!g.__bayStarted) g.__bayStarted = performance.now();
+  return (performance.now() - g.__bayStarted) / 1000;
 }
 
 function emptySnap(): ProbeSnap {
@@ -257,15 +268,15 @@ export function applyActor(id: string, patch: ActorPatch) {
 }
 
 export function writeSnap(partial: Omit<ProbeSnap, "events" | "t">) {
-  last = {
+  setLast({
     t: now(),
     ...partial,
     events: events.slice(-40),
-  };
+  });
 }
 
 export function snapshot(): ProbeSnap {
-  return last;
+  return g.__bayLast ?? last;
 }
 
 export function clearLog() {

@@ -14,7 +14,8 @@ export interface Cook {
   pos?: [number, number, number];
 }
 
-export const cooks = new Map<string, Cook>();
+const g = globalThis as unknown as { __bayCooks?: Map<string, Cook> };
+export const cooks: Map<string, Cook> = (g.__bayCooks ??= new Map());
 
 export function startCook(id: string, chem: CookChem, delay: number, peak: number, boom: number) {
   cooks.set(id, {

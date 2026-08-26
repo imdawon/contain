@@ -40,8 +40,8 @@ function dummyGroups(self: number, skip: number[]) {
 
 const GROUPS = {
   hips: dummyGroups(BONE_G.hips, [BONE_G.chest, BONE_G.thighL, BONE_G.thighR]),
-  chest: dummyGroups(BONE_G.chest, [BONE_G.hips, BONE_G.uarmL, BONE_G.uarmR]),
-  head: dummyGroups(BONE_G.head, []),
+  chest: dummyGroups(BONE_G.chest, [BONE_G.hips, BONE_G.head, BONE_G.uarmL, BONE_G.uarmR]),
+  head: dummyGroups(BONE_G.head, [BONE_G.chest]),
   thighL: dummyGroups(BONE_G.thighL, [BONE_G.hips, BONE_G.shinL]),
   thighR: dummyGroups(BONE_G.thighR, [BONE_G.hips, BONE_G.shinR]),
   shinL: dummyGroups(BONE_G.shinL, [BONE_G.thighL]),
@@ -134,15 +134,14 @@ function Bone({
       colliders={false}
       type={type}
       mass={mass}
-      friction={0.92}
-      restitution={0.02}
+      friction={0.78}
+      restitution={0.05}
       linearDamping={linearDamping}
       angularDamping={angularDamping}
-      gravityScale={0.68}
       collisionGroups={groups}
       ccd
     >
-      <CuboidCollider args={[sx * 0.47, sy * 0.47, sz * 0.47]} collisionGroups={groups} />
+      <CuboidCollider args={[sx * 0.44, sy * 0.44, sz * 0.44]} collisionGroups={groups} />
       <mesh onPointerDown={grab.down}>
         <boxGeometry args={size} />
         <meshStandardMaterial
@@ -193,30 +192,48 @@ export function Dummy({ id, pos }: { id: string; pos: [number, number, number] }
     const onBlast = (ev: Event) => {
       const { x, z, power } = (ev as CustomEvent<{ x: number; y: number; z: number; power: number }>).detail;
       const h = hips.current;
-      const c = chest.current;
       if (!h || power < 4) return;
       const p = h.translation();
       if (Math.hypot(p.x - x, p.z - z) > 10) return;
       const first = !floppy.current;
       floppy.current = true;
       unregisterAssembly(id);
-      const away = Math.max(0.35, Math.hypot(p.x - x, p.z - z));
-      const kick = Math.min(1.6, 0.85 + power * 0.04);
-      const kx = ((p.x - x) / away) * kick;
-      const kz = ((p.z - z) / away) * (kick + 0.2);
-      const ky = 0.55 + Math.min(0.35, power * 0.015);
+      const away = Math.max(0.4, Math.hypot(p.x - x, p.z - z));
+      const nx = (p.x - x) / away;
+      const nz = (p.z - z) / away;
+      const kick = Math.min(2.35, 1.4 + power * 0.07);
+      const kx = nx * kick;
+      const kz = nz * kick;
+      const ky = 1.05 + Math.min(0.4, power * 0.025);
+      /** +ωx on a +Y torso sends the chest toward +Z — onto its back, away from the crate. */
+      const wx = nz >= 0 ? 5.3 : -5.3;
       let n = 0;
       for (const r of bones.current) {
         const b = r.current;
         if (!b) continue;
         b.setBodyType(0, true);
-        b.setLinearDamping(0.42);
-        b.setAngularDamping(1.35);
+        b.setLinearDamping(0.16);
+        b.setAngularDamping(0.42);
         b.wakeUp();
         n += 1;
       }
-      h.setLinvel({ x: kx, y: ky, z: kz }, true);
-      if (c) c.setLinvel({ x: kx * 0.9, y: ky * 0.8, z: kz * 0.9 }, true);
+      const set = (r: RefObject<RapierRigidBody>, vx: number, vy: number, vz: number, ax = 0, ay = 0, az = 0) => {
+        const b = r.current;
+        if (!b) return;
+        b.setLinvel({ x: vx, y: vy, z: vz }, true);
+        b.setAngvel({ x: ax, y: ay, z: az }, true);
+      };
+      set(hips, kx, ky, kz, wx, 0.4, 0);
+      set(chest, kx * 1.05, ky + 0.35, kz * 1.12, wx * 0.85, 0, 0);
+      set(head, kx * 1.05, ky + 0.4, kz * 1.12, wx * 0.22, 0, 0);
+      set(thighL, kx * 0.7, ky * 0.35, kz * 0.7, 1.4, 0, 0);
+      set(thighR, kx * 0.7, ky * 0.35, kz * 0.7, 1.4, 0, 0);
+      set(shinL, kx * 0.45, ky * 0.15, kz * 0.45, 0.8, 0, 0);
+      set(shinR, kx * 0.45, ky * 0.15, kz * 0.45, 0.8, 0, 0);
+      set(uarmL, kx - 1.1, ky + 0.4, kz, 0, 0, -3.4);
+      set(uarmR, kx + 1.1, ky + 0.4, kz, 0, 0, 3.4);
+      set(larmL, kx - 1.6, ky + 0.2, kz, 0, 0, -2.2);
+      set(larmR, kx + 1.6, ky + 0.2, kz, 0, 0, 2.2);
       if (first && n > 0) note("dummy-flop", { id, n, x: p.x, z: p.z });
     };
     window.addEventListener("bay-blast", onBlast);
@@ -239,16 +256,16 @@ export function Dummy({ id, pos }: { id: string; pos: [number, number, number] }
       <Bone r={larmL} id={`${id}-larm-l`} pos={[-0.52, 1.08, 0]} size={[0.22, 0.07, 0.07]} mass={DUMMY.larmMass} groups={GROUPS.larmL} {...boneProps} />
       <Bone r={larmR} id={`${id}-larm-r`} pos={[0.52, 1.08, 0]} size={[0.22, 0.07, 0.07]} mass={DUMMY.larmMass} groups={GROUPS.larmR} {...boneProps} />
 
-      <Hinge a={hips} b={chest} pa={[0, 0.08, 0]} pb={[0, -0.17, 0]} axis={[1, 0, 0]} lim={[-0.22, 0.55]} />
-      <Hinge a={chest} b={head} pa={[0, 0.17, 0]} pb={[0, -0.08, 0]} axis={[1, 0, 0]} lim={[-0.35, 0.4]} />
-      <Hinge a={hips} b={thighL} pa={[-0.08, -0.08, 0]} pb={[0, 0.16, 0]} axis={[1, 0, 0]} lim={[-0.12, 1.45]} />
-      <Hinge a={hips} b={thighR} pa={[0.08, -0.08, 0]} pb={[0, 0.16, 0]} axis={[1, 0, 0]} lim={[-0.12, 1.45]} />
-      <Hinge a={thighL} b={shinL} pa={[0, -0.16, 0]} pb={[0, 0.16, 0]} axis={[1, 0, 0]} lim={[-2.1, 0.06]} />
-      <Hinge a={thighR} b={shinR} pa={[0, -0.16, 0]} pb={[0, 0.16, 0]} axis={[1, 0, 0]} lim={[-2.1, 0.06]} />
-      <Hinge a={chest} b={uarmL} pa={[-0.16, 0.1, 0]} pb={[0.13, 0, 0]} axis={[0, 0, 1]} lim={[-2.0, 0.35]} />
-      <Hinge a={chest} b={uarmR} pa={[0.16, 0.1, 0]} pb={[-0.13, 0, 0]} axis={[0, 0, 1]} lim={[-0.35, 2.0]} />
-      <Hinge a={uarmL} b={larmL} pa={[-0.13, 0, 0]} pb={[0.11, 0, 0]} axis={[0, 0, 1]} lim={[-0.08, 2.0]} />
-      <Hinge a={uarmR} b={larmR} pa={[0.13, 0, 0]} pb={[-0.11, 0, 0]} axis={[0, 0, 1]} lim={[-2.0, 0.08]} />
+      <Hinge a={hips} b={chest} pa={[0, 0.08, 0]} pb={[0, -0.17, 0]} axis={[1, 0, 0]} lim={[-1.15, 0.5]} />
+      <Hinge a={chest} b={head} pa={[0, 0.17, 0]} pb={[0, -0.08, 0]} axis={[1, 0, 0]} lim={[-0.75, 0.55]} />
+      <Hinge a={hips} b={thighL} pa={[-0.08, -0.08, 0]} pb={[0, 0.16, 0]} axis={[1, 0, 0]} lim={[-0.2, 1.65]} />
+      <Hinge a={hips} b={thighR} pa={[0.08, -0.08, 0]} pb={[0, 0.16, 0]} axis={[1, 0, 0]} lim={[-0.2, 1.65]} />
+      <Hinge a={thighL} b={shinL} pa={[0, -0.16, 0]} pb={[0, 0.16, 0]} axis={[1, 0, 0]} lim={[-2.2, 0.05]} />
+      <Hinge a={thighR} b={shinR} pa={[0, -0.16, 0]} pb={[0, 0.16, 0]} axis={[1, 0, 0]} lim={[-2.2, 0.05]} />
+      <Hinge a={chest} b={uarmL} pa={[-0.16, 0.1, 0]} pb={[0.13, 0, 0]} axis={[0, 0, 1]} lim={[-2.1, 0.45]} />
+      <Hinge a={chest} b={uarmR} pa={[0.16, 0.1, 0]} pb={[-0.13, 0, 0]} axis={[0, 0, 1]} lim={[-0.45, 2.1]} />
+      <Hinge a={uarmL} b={larmL} pa={[-0.13, 0, 0]} pb={[0.11, 0, 0]} axis={[0, 0, 1]} lim={[-0.08, 2.15]} />
+      <Hinge a={uarmR} b={larmR} pa={[0.13, 0, 0]} pb={[-0.11, 0, 0]} axis={[0, 0, 1]} lim={[-2.15, 0.08]} />
     </group>
   );
 }

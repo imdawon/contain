@@ -147,29 +147,32 @@ export function Crate({ id, pos }: { id: string; pos: [number, number, number] }
         const b = panel.current;
         if (!b) continue;
         b.setBodyType(0, true);
-        b.setLinearDamping(0.35);
-        b.setAngularDamping(0.28);
+        b.setLinearDamping(0.22);
+        b.setAngularDamping(0.16);
         setColliderGroups(b, APART);
         const q = b.translation();
         const dx = q.x - x;
         const dy = q.y - y;
         const dz = q.z - z;
         const dist = Math.max(0.14, Math.hypot(dx, dy, dz));
-        const jolt = panel === floor ? 0.7 : panel === lid ? 3.8 : 3.2;
-        const up = panel === floor ? 0.35 : panel === lid ? 3.6 : 2.1;
+        const jolt = panel === floor ? 0.35 : panel === lid ? 2.4 : 2.2;
+        const up = panel === floor ? 0.18 : panel === lid ? 3.2 : 1.25;
+        // Centered blast would leave the lid with 0 xz — nudge it off the crate.
+        const sidex = panel === lid ? 0.95 : 0;
+        const sidez = panel === lid ? -0.7 : 0;
         b.setLinvel(
           {
-            x: (dx / dist) * jolt,
+            x: (dx / dist) * jolt + sidex,
             y: up,
-            z: (dz / dist) * jolt,
+            z: (dz / dist) * jolt + sidez,
           },
           true,
         );
         b.setAngvel(
           {
-            x: (dz / dist) * (panel === lid ? 4.2 : 2.4),
-            y: (dx / dist) * 1.6,
-            z: -(dx / dist) * (panel === lid ? 3.2 : 1.8),
+            x: (panel === lid ? -5.8 : (dz / dist) * 3.4),
+            y: (panel === lid ? 3.2 : (dx / dist) * 2.2),
+            z: (panel === lid ? 4.1 : -(dx / dist) * 2.4),
           },
           true,
         );

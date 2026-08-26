@@ -1,4 +1,5 @@
 import { punctureId, resetBay, setToolName, spawnKind } from "@/lib/bay/actions";
+import { cooks } from "@/lib/bay/cook";
 import { loopLevels } from "@/lib/contain/audio";
 import {
   applyActor,
@@ -22,6 +23,9 @@ export type PoseSample = {
   x: number;
   y: number;
   z: number;
+  rx?: number;
+  ry?: number;
+  rz?: number;
   vx: number | null;
   vy: number | null;
   vz: number | null;
@@ -49,10 +53,12 @@ type DragJob = {
   floppy: boolean;
 };
 
-const frames: HistFrame[] = [];
+const g = globalThis as unknown as {
+  __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
+};
+const hist = (g.__bayHist ??= { frames: [], lastHistT: -1, lastEventN: 0 });
+const frames = hist.frames;
 const drags: DragJob[] = [];
-let lastHistT = -1;
-let lastEventN = 0;
 
 function round(n: number) {
   return Math.round(n * 1000) / 1000;
@@ -63,17 +69,17 @@ export function recordHistory(
   t: number,
   camera?: { x: number; y: number; z: number } | null,
 ) {
-  if (t - lastHistT < 1 / HZ) return;
-  lastHistT = t;
+  if (t - hist.lastHistT < 1 / HZ) return;
+  hist.lastHistT = t;
   const evs = log();
-  const fresh: HistEvent[] = evs.slice(lastEventN).map((e) => ({
+  const fresh: HistEvent[] = evs.slice(hist.lastEventN).map((e) => ({
     type: e.type,
     id: typeof e.data.id === "string" ? e.data.id : null,
   }));
-  lastEventN = evs.length;
+  hist.lastEventN = evs.length;
   const o: HistFrame["o"] = {};
   for (const obj of objects) {
-    o[obj.id] = { x: obj.x, y: obj.y, z: obj.z, vx: obj.vx, vy: obj.vy, vz: obj.vz };
+    o[obj.id] = { x: obj.x, y: obj.y, z: obj.z, rx: obj.rx, ry: obj.ry, rz: obj.rz, vx: obj.vx, vy: obj.vy, vz: obj.vz };
   }
   frames.push({
     t: round(t),
@@ -341,6 +347,9 @@ export function peek() {
     x: number;
     y: number;
     z: number;
+    rx: number;
+    ry: number;
+    rz: number;
     vx: number;
     vy: number;
     vz: number;
@@ -375,6 +384,9 @@ export function peek() {
       x: round(p.x),
       y: round(p.y),
       z: round(p.z),
+      rx: round(p.rx),
+      ry: round(p.ry),
+      rz: round(p.rz),
       vx,
       vy,
       vz,
@@ -404,13 +416,21 @@ export function peek() {
     events: log()
       .slice(-12)
       .map((e) => e.type),
+    cooks: [...cooks.entries()].map(([id, c]) => ({
+      id,
+      phase: c.phase,
+      chem: c.chem,
+      t: round(c.t),
+      delay: round(c.delay),
+      boom: c.boom,
+    })),
     objects,
   };
 }
 
 export function until(type: string, timeoutMs = 8000) {
   const t0 = probeTime();
-  const already = () => log().some((e: ProbeEvent) => e.type === type && e.t >= t0 - 30);
+  const already = () => log().some((e: ProbeEvent) => e.type === type && e.t >= t0 - 1.5);
   if (already()) {
     return Promise.resolve({ ok: true, type, waited: 0 });
   }
@@ -431,11 +451,25 @@ export function until(type: string, timeoutMs = 8000) {
   });
 }
 
+
+export function waitFrames(ms = 1000) {
+  return new Promise<{ ok: boolean; waited: number }>((resolve) => {
+    const tStart = performance.now();
+    const tick = () => {
+      if (performance.now() - tStart >= ms) {
+        resolve({ ok: true, waited: (performance.now() - tStart) / 1000 });
+        return;
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+}
 export function resetStage() {
   frames.length = 0;
   drags.length = 0;
-  lastHistT = -1;
-  lastEventN = 0;
+  hist.lastHistT = -1;
+  hist.lastEventN = 0;
   return resetBay();
 }
 
@@ -464,7 +498,9 @@ export function help() {
     fling: "(id, {x,y,z}) set velocity",
     drop: "(id) dynamic",
     until: "(eventType, timeoutMs) promise",
+    wait: "(ms) rAF-wait so physics keeps ticking",
     audio: "hiss/roar loop levels",
+    reload: "location.reload — last-ditch if the pipe died",
   };
 }
 
@@ -506,8 +542,13 @@ export function harnessApi() {
     fling,
     drop,
     until,
+    wait: waitFrames,
     note,
     audio: loopLevels,
+    reload: () => {
+      location.reload();
+      return { ok: true };
+    },
   };
 }
 
@@ -517,9 +558,24 @@ export function bindHarnessWindow() {
 }
 
 /** Live page polls the Vite `/__bay` pipe and runs `window.__bay`. Agent uses `scripts/bay.mjs`. */
-export function bindHarnessPipe() {
-  if (typeof window === "undefined" || !import.meta.env.DEV) return () => {};
-  let stop = false;
+let pipeCtl: AbortController | null = null;
+let onHotCall: ((msg: { id?: string; fn?: string; args?: unknown[] }) => void) | null = null;
+
+function stopHarnessPipe() {
+  pipeCtl?.abort();
+  pipeCtl = null;
+  if (onHotCall) {
+    import.meta.hot?.off("bay:call", onHotCall);
+    onHotCall = null;
+  }
+}
+
+function startHarnessPipe() {
+  if (typeof window === "undefined" || !import.meta.env.DEV) return;
+  if (pipeCtl && !pipeCtl.signal.aborted) return;
+  bindHarnessWindow();
+  const ctl = new AbortController();
+  pipeCtl = ctl;
   const seen = new Set<string>();
   const run = async (fn: string, args: unknown[]) => {
     const api = (window as unknown as { __bay?: Record<string, (...a: unknown[]) => unknown> }).__bay;
@@ -545,12 +601,13 @@ export function bindHarnessPipe() {
     if (!out) return;
     import.meta.hot?.send("bay:return", { id: msg.id, ...out });
   };
+  onHotCall = onHot;
   import.meta.hot?.on("bay:call", onHot);
   const loop = async () => {
-    while (!stop) {
+    while (!ctl.signal.aborted) {
       try {
-        const r = await fetch("/__bay/take?wait=10000");
-        if (stop) return;
+        const r = await fetch("/__bay/take?wait=10000", { signal: ctl.signal });
+        if (ctl.signal.aborted) return;
         if (r.status === 204) continue;
         if (!r.ok) {
           await new Promise((res) => setTimeout(res, 400));
@@ -566,14 +623,25 @@ export function bindHarnessPipe() {
           body: JSON.stringify({ id: msg.id, ...out }),
         });
       } catch {
-        if (stop) return;
+        if (ctl.signal.aborted) return;
         await new Promise((res) => setTimeout(res, 500));
       }
     }
   };
   void loop();
-  return () => {
-    stop = true;
-    import.meta.hot?.off("bay:call", onHot);
-  };
+}
+
+/** React unmount must not kill the pipe — HMR would leave takers at 0. */
+export function bindHarnessPipe() {
+  startHarnessPipe();
+  return () => {};
+}
+
+if (typeof window !== "undefined" && import.meta.env.DEV) {
+  bindHarnessWindow();
+  startHarnessPipe();
+}
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => stopHarnessPipe());
 }
