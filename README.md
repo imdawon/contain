@@ -10,7 +10,7 @@ This file is the **living axiom list**. Axioms are product rules that still matt
 
 You place objects, then let them play. BeamNG energy: one setup, one run, a readable ending.
 
-**Now (v0):** dummy + crate + charge + spreading grass. Phone-in-can still spawnable. Latch shears before the hinge.
+**Now (v0):** dummy + crate + **grenade** + spreading grass. Phone pack still spawnable as a fire. Latch shears before the hinge.
 
 **Not yet:** shields, crowds, film chrome.
 
@@ -35,10 +35,10 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 
 ## v0 proof (what “works” means)
 
-- Default stage: **crate + charge inside + dummy in front + grass under the dummy**. Charge selected.
-- **PUNCTURE** → cook → `charge-boom` → `crate-break`. Crate panels leave the weld. Dummy hips/head move (flop, not a rigid statue).
-- Grass `burning` count rises (`grass-ignite`) from the heat field.
-- Phone pack still spawnable; it still must **not** loft an 8 kg can.
+- Default stage: **crate + grenade inside + dummy in front + grass under the dummy**. Grenade selected.
+- **PULL PIN** → `pin-pull` → `grenade-boom` → `crate-break`. Crate panels leave the weld. Dummy hips/head move (flop, not a rigid statue).
+- Grass `burning` count rises (`grass-ignite`) from the blast heat.
+- Phone pack still spawnable; it is a **fire**, not a charge, and must **not** loft an 8 kg can.
 
 ---
 
@@ -48,10 +48,11 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 | --- | --- |
 | `README.md` | This axiom list |
 | `src/lib/bay/parts.ts` | Masses, latch/hinge numbers, sizes |
-| `src/lib/bay/cook.ts` | Pack cook phases |
+| `src/lib/bay/cook.ts` | Pack / grenade cook phases |
 | `src/lib/bay/probe.ts` | State stream (`window.__bay`) |
 | `src/components/bay/ammo-can.tsx` | Body + lid + revolute hinge + breakable fixed latch |
 | `src/components/bay/pack.tsx` | Grabbable pack, puncture, fire |
+| `src/components/bay/grenade.tsx` | Pin, fuse tick, bang, fragments |
 | `src/components/bay/probe-tick.tsx` | Camera frustum + per-frame snapshot |
 | `src/store/bay-store.ts` | Spawn/select/tool/latch |
 | `src/components/contain/inspector.tsx` | Live xyz / mass / grip / bounce editor for the tracked body |
@@ -62,6 +63,7 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 | `src/components/bay/grass.tsx` | Spreading grass fire |
 | `src/lib/bay/heat.ts` | Toy heat field |
 | `src/lib/bay/harness.ts` | Agent command API + 30s history |
+| `scripts/bay.mjs` | POST `/__bay` → live `window.__bay` (no browser) |
 | `src/lib/bay/actions.ts` | Puncture / spawn / reset without the DOM |
 
 ---
@@ -70,7 +72,7 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 
 1. Orbit-drag empty floor, or **Track** a part (body / lid / hinge / latch / pack). Inspector follows that part.
 2. **Grab** a part: it stays where it is, then follows the mouse at that depth. Scroll to push or pull. **X-ray** (or `X`) ghosts the wall you are looking at. **Solid** drops a cube / ball / hull beside the can for stacking tests.
-3. Charge starts selected. **PUNCTURE**. Grass should catch. Crate should come apart. Dummy should flop.
+3. Grenade starts selected. **PULL PIN**. Grass should catch. Crate should come apart. Dummy should flop.
 4. Spawn **Can** / **Pack** if you still want the quiet phone gag.
 5. **Reset** restages the clip.
 

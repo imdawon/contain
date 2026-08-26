@@ -20,8 +20,16 @@ export const CAN = {
 export const PACK = {
   /** Phone-size NMC. Fire + vent, not a charge. No world blast. */
   nmc: { size: [0.16, 0.28, 0.04] as [number, number, number], mass: 0.28, cook: 1.6, peak: 8, boom: 3.2 },
-  /** Directed charge. Dispatches world blast. */
-  charge: { size: [0.2, 0.16, 0.12] as [number, number, number], mass: 1.6, cook: 0.85, peak: 36, boom: 14 },
+};
+
+export const GRENADE = {
+  radius: 0.052,
+  mass: 0.46,
+  /** Pin-to-bang, seconds. */
+  fuse: 1.7,
+  peak: 28,
+  /** World-blast power. Bigger than a phone fire; not a truck bomb. */
+  boom: 11,
 };
 
 export const CRATE = {

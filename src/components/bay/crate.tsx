@@ -155,12 +155,21 @@ export function Crate({ id, pos }: { id: string; pos: [number, number, number] }
         const dy = q.y - y;
         const dz = q.z - z;
         const dist = Math.max(0.14, Math.hypot(dx, dy, dz));
-        const jolt = panel === floor ? 1.1 : panel === lid ? 4.2 : 2.6;
-        b.applyImpulse(
+        const jolt = panel === floor ? 0.7 : panel === lid ? 3.8 : 3.2;
+        const up = panel === floor ? 0.35 : panel === lid ? 3.6 : 2.1;
+        b.setLinvel(
           {
             x: (dx / dist) * jolt,
-            y: panel === floor ? 0.4 : panel === lid ? 5.2 : 2.4,
+            y: up,
             z: (dz / dist) * jolt,
+          },
+          true,
+        );
+        b.setAngvel(
+          {
+            x: (dz / dist) * (panel === lid ? 4.2 : 2.4),
+            y: (dx / dist) * 1.6,
+            z: -(dx / dist) * (panel === lid ? 3.2 : 1.8),
           },
           true,
         );
@@ -169,8 +178,8 @@ export function Crate({ id, pos }: { id: string; pos: [number, number, number] }
       note("crate-break", { id, dist, power });
       playEvent("lid", "nmc");
     };
-    window.addEventListener("bay-blast", onBlast, true);
-    return () => window.removeEventListener("bay-blast", onBlast, true);
+    window.addEventListener("bay-blast", onBlast);
+    return () => window.removeEventListener("bay-blast", onBlast);
   }, [id, world, jL, jR, jB, jF, jLid]);
 
   const floorY = t / 2;

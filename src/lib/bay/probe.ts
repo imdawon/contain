@@ -145,8 +145,8 @@ export function assemblyGroup(id: string) {
 /** Turn an assembly into live dynamic bodies without touching React RigidBody props. */
 export function awakenRagdoll(
   id: string,
-  lin = 0.12,
-  ang = 0.16,
+  lin = 0.28,
+  ang = 0.62,
 ): number {
   const ids = assemblyMembers(id);
   let n = 0;

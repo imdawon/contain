@@ -2,7 +2,7 @@ import { Component, lazy, Suspense, useEffect, useState, type ErrorInfo, type Re
 import { Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Inspector } from "@/components/contain/inspector";
-import { bindHarnessWindow, resetStage } from "@/lib/bay/harness";
+import { bindHarnessPipe, bindHarnessWindow, resetStage } from "@/lib/bay/harness";
 import { note } from "@/lib/bay/probe";
 import { punctureSelected } from "@/components/bay/pack";
 import { isMuted, setMuted, unlockAudio } from "@/lib/contain/audio";
@@ -49,6 +49,7 @@ export function LabApp() {
   useEffect(() => {
     setClient(true);
     bindHarnessWindow();
+    return bindHarnessPipe();
   }, []);
   useEffect(() => {
     setMuted(muted);
@@ -66,7 +67,8 @@ export function LabApp() {
     return () => window.removeEventListener("keydown", onKey);
   }, [toggleCutaway]);
 
-  const packOn = entities.some((e) => e.kind === "pack" || e.kind === "charge");
+  const fuseOn = entities.some((e) => e.kind === "pack" || e.kind === "grenade" || e.kind === "charge");
+  const nadeOn = entities.some((e) => e.kind === "grenade" || e.kind === "charge");
   const trackOpts = entities.flatMap((e) => {
     if (e.kind === "can") {
       return [
@@ -116,7 +118,7 @@ export function LabApp() {
         <div>
           <p className="font-display text-4xl leading-none tracking-[0.18em] md:text-5xl">CONTAIN</p>
           <p className="mt-1 font-mono text-[11px] uppercase tracking-[0.16em] text-muted">
-            v0 · dummy · crate · grass
+            v0 · grenade · dummy · crate · grass
           </p>
         </div>
         <div className="pointer-events-auto flex items-center gap-2">
@@ -193,13 +195,13 @@ export function LabApp() {
           <button
             type="button"
             onClick={() => {
-              spawn("charge");
-              note("spawn", { kind: "charge" });
+              spawn("grenade");
+              note("spawn", { kind: "grenade" });
             }}
-            data-bay="charge"
+            data-bay="grenade"
             className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 text-sm hover:bg-raised"
           >
-            Charge
+            Grenade
           </button>
           <button
             type="button"
@@ -272,13 +274,13 @@ export function LabApp() {
           <Button
             className="h-11 font-display text-lg tracking-[0.12em]"
             data-bay="puncture"
-            disabled={!packOn}
+            disabled={!fuseOn}
             onClick={() => {
               unlockAudio();
               punctureSelected();
             }}
           >
-            PUNCTURE
+            {nadeOn ? "PULL PIN" : "PUNCTURE"}
           </Button>
           <button
             type="button"
