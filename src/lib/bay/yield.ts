@@ -82,13 +82,18 @@ export function makeSteelShell(kind: SteelKind): SteelShell {
     }
   }
   const slices: Slice[] = [];
-  for (let i = 0; i < segs; i++) {
-    const j = (i + 1) % segs;
-    const idx: number[] = [];
-    for (let y = 0; y < ringsY; y++) {
-      idx.push(vid(i, y, 0, ringsY, ringsR), vid(j, y, 0, ringsY, ringsR));
-    }
-    slices.push({ idx });
+  const hullN = kind === "wheel" ? 16 : 14;
+  for (let h = 0; h < hullN; h++) {
+    const i = Math.round((h / hullN) * segs) % segs;
+    const j = Math.round(((h + 1) / hullN) * segs) % segs;
+    slices.push({
+      idx: [
+        vid(i, 0, 0, ringsY, ringsR),
+        vid(i, ringsY - 1, 0, ringsY, ringsR),
+        vid(j, 0, 0, ringsY, ringsR),
+        vid(j, ringsY - 1, 0, ringsY, ringsR),
+      ],
+    });
   }
   const top: number[] = [];
   const bot: number[] = [];
@@ -225,7 +230,7 @@ export function applySteelHits(shell: SteelShell, hits: SteelHit[]) {
         const restAlong = rx * nx + rz * nz;
         if (restAlong > 0.02 && along > inner * 0.4) {
           const floor = kind === "wheel" ? 0.05 : Math.max(0.055, inner * 0.5);
-          const nextAlong = Math.max(floor * Math.sign(restAlong || 1), along - take);
+          const nextAlong = Math.max(floor, along - take);
           const push = along - nextAlong;
           live[o]! = px - nx * push;
           live[o + 2]! = pz - nz * push;
