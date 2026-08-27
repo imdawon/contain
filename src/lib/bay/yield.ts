@@ -238,13 +238,13 @@ export function applySteelHits(shell: SteelShell, hits: SteelHit[]) {
   if (hits.length === 0) return 0;
   const { rest, live, dent, yieldJ, stiff, maxDent, inner, kind } = shell;
   const n = dent.length;
-  const sigma = kind === "wheel" ? 0.07 : 0.09;
+  const sigma = kind === "wheel" ? 0.07 : 0.14;
   const twoSig = 2 * sigma * sigma;
   const floor =
     kind === "wheel"
       ? Math.max(shell.radius - maxDent, inner + 0.05)
-      : Math.max(shell.radius - maxDent, inner + 0.02);
-  const cap = kind === "wheel" ? 0.016 : 0.05;
+      : Math.max(0.05, shell.radius - maxDent);
+  const cap = kind === "wheel" ? 0.016 : 0.09;
   let added = 0;
   for (const hit of hits) {
     const excess = hit.impulse - yieldJ;
@@ -279,9 +279,8 @@ export function applySteelHits(shell: SteelShell, hits: SteelHit[]) {
       live[o + 2] = pz - nz * push;
       if (kind === "drum") {
         const rad = Math.hypot(live[o]!, live[o + 2]!);
-        const restRad = Math.hypot(rx, rz);
-        if (restRad > inner + 0.01 && rad > inner) {
-          const nr = Math.max(inner, rad - take * 0.22);
+        if (rad > floor + 0.002) {
+          const nr = Math.max(floor, rad - take * 0.55);
           const s = nr / rad;
           live[o] *= s;
           live[o + 2] *= s;
