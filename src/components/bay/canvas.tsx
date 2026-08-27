@@ -201,12 +201,12 @@ function World() {
   const fire = useFireMap();
 
   return (
-    <Physics key={stageN} gravity={[0, -6.4, 0]} timeStep={1 / 60} interpolate numSolverIterations={12} numInternalPgsIterations={8}>
+    <Physics key={stageN} gravity={[0, -9.81, 0]} timeStep={1 / 60} interpolate numSolverIterations={16} numInternalPgsIterations={10}>
       <TrackCam orbit={orbit} />
       <ProbeTick />
       <BlastBus />
       {scene ? <SceneRig key={`${scene.id}-${stageN}`} scene={scene} /> : null}
-      <RigidBody type="fixed" colliders={false} friction={0.95} restitution={0.02}>
+      <RigidBody type="fixed" colliders={false} friction={0.95} restitution={0}>
         <CuboidCollider args={[FLOOR.half, 0.25, FLOOR.half]} position={[0, -0.25, 0]} />
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
           <planeGeometry args={[FLOOR.half * 2, FLOOR.half * 2]} />
