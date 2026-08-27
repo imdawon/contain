@@ -173,7 +173,10 @@ export function Ramp({
       {hill.hulls.map((hull, i) => (
         <ConvexHullCollider key={i} args={[hull]} collisionGroups={GROUPS} friction={mu} restitution={0} />
       ))}
-      <mesh geometry={hill.geo}>
+      <mesh geometry={hill.geo} scale={1.012} frustumCulled={false} userData={{ labSkip: true }}>
+        <meshBasicMaterial color="#140e08" side={THREE.BackSide} toneMapped={false} fog={false} />
+      </mesh>
+      <mesh geometry={hill.geo} receiveShadow>
         <meshStandardMaterial
           color={selected ? 0xd4d7cf : dirt}
           roughness={0.82}

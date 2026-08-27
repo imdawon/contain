@@ -211,21 +211,20 @@ function World() {
         <CuboidCollider args={[FLOOR.half, 0.25, FLOOR.half]} position={[0, -0.25, 0]} />
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
           <planeGeometry args={[FLOOR.half * 2, FLOOR.half * 2]} />
-          <meshStandardMaterial color="#35312c" roughness={0.94} metalness={0.06} />
+          <meshStandardMaterial color="#35312c" roughness={0.94} metalness={0.06} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
         </mesh>
       </RigidBody>
       <Grid
         infiniteGrid
-        followCamera
-        fadeDistance={280}
-        fadeStrength={0.72}
-        cellSize={1}
-        cellThickness={0.7}
-        cellColor="#7a7368"
-        sectionSize={10}
-        sectionThickness={1.35}
-        sectionColor="#c4bba8"
-        position={[0, 0.004, 0]}
+        fadeDistance={34}
+        fadeStrength={2.4}
+        cellSize={20}
+        cellThickness={0.2}
+        cellColor="#5a544c"
+        sectionSize={40}
+        sectionThickness={1.05}
+        sectionColor="#8f8678"
+        position={[0, 0.012, 0]}
       />
       {entities.map((e) =>
         e.kind === "can" ? (
@@ -330,7 +329,7 @@ export function BayCanvas() {
           <FitGl />
           <KickFrames />
           <color attach="background" args={["#8a7c6a"]} />
-          <fog attach="fog" args={["#6a5e50", 70, 420]} />
+          <fog attach="fog" args={["#6a5e50", 32, 120]} />
           <LabLook />
           <World />
         </Canvas>

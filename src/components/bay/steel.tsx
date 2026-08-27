@@ -198,7 +198,10 @@ function SteelBody({
               restitution={rest}
             />
           )}
-      <mesh ref={mesh} geometry={geo} onPointerDown={grab.down} frustumCulled={false}>
+      <mesh geometry={geo} scale={kind === "wheel" ? 1.09 : 1.08} frustumCulled={false} userData={{ labSkip: true }}>
+        <meshBasicMaterial color="#000000" side={THREE.FrontSide} toneMapped={false} fog={false} />
+      </mesh>
+      <mesh ref={mesh} geometry={geo} onPointerDown={grab.down} castShadow receiveShadow frustumCulled={false}>
         <meshStandardMaterial
           color={color}
           vertexColors
@@ -291,7 +294,7 @@ function collectHits(world: { contactPairsWith: Function; contactPair: Function 
 
 function WheelBits({ half }: { half: number }) {
   return (
-    <mesh>
+    <mesh castShadow>
       <cylinderGeometry args={[0.028, 0.028, half * 2 + 0.03, 8]} />
       <meshStandardMaterial color={0x8a8478} metalness={0.45} roughness={0.5} />
     </mesh>
