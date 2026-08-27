@@ -80,7 +80,7 @@ if (fn === "reload") {
 
 let waitMs = 20000;
 if (fn === "until") waitMs = Math.max(waitMs, Number(args[1] || 8000) + 4000);
-if (fn === "tape") waitMs = 90000;
+if (fn === "tape") waitMs = 200000;
 let pipeArgs = args;
 let tapeDest = null;
 if (fn === "tape") {

@@ -2,7 +2,7 @@ import "@/lib/bay/raf";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 
 import { Grid, OrbitControls } from "@react-three/drei";
-import { CuboidCollider, Physics, RigidBody, useRapier } from "@react-three/rapier";
+import { CuboidCollider, Physics, RigidBody, interactionGroups, useRapier } from "@react-three/rapier";
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
 import { AmmoCan } from "@/components/bay/ammo-can";
@@ -21,7 +21,7 @@ import { Wall } from "@/components/bay/wall";
 import { isSolid } from "@/store/bay-store";
 import { ProbeTick } from "@/components/bay/probe-tick";
 import { FLOOR } from "@/lib/bay/parts";
-import { DUMMY_G } from "@/lib/bay/groups";
+import { CRATE_G, DUMMY_G, WAGON_G, WORLD_G } from "@/lib/bay/groups";
 import { listSamplers } from "@/lib/bay/probe";
 import { useBay } from "@/store/bay-store";
 import { LabLook } from "@/components/bay/look";
@@ -208,7 +208,7 @@ function World() {
       <BlastBus />
       {scene ? <SceneRig key={`${scene.id}-${stageN}`} scene={scene} /> : null}
       <RigidBody type="fixed" colliders={false} friction={0.95} restitution={0}>
-        <CuboidCollider args={[FLOOR.half, 0.25, FLOOR.half]} position={[0, -0.25, 0]} />
+        <CuboidCollider args={[FLOOR.half, 0.25, FLOOR.half]} position={[0, -0.25, 0]} collisionGroups={interactionGroups([WORLD_G], [WORLD_G, DUMMY_G, CRATE_G, WAGON_G])} />
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
           <planeGeometry args={[FLOOR.half * 2, FLOOR.half * 2]} />
           <meshStandardMaterial color="#4c463f" roughness={0.94} metalness={0.06} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
@@ -240,7 +240,7 @@ function World() {
         ) : e.kind === "wagon" ? (
           <Wagon key={e.id} id={e.id} pos={e.pos} rot={e.rot} grip={e.grip} bounce={e.bounce} mass={e.mass} />
         ) : e.kind === "hill" || e.kind === "ramp" ? (
-          <Ramp key={e.id} id={e.id} pos={e.pos} rot={e.rot} size={e.size} grip={e.grip} cut={e.cut} />
+          <Ramp key={e.id} id={e.id} pos={e.pos} rot={e.rot} size={e.size} grip={e.grip} bounce={e.bounce} cut={e.cut} grade={e.grade} />
         ) : e.kind === "wall" ? (
           <Wall key={e.id} id={e.id} pos={e.pos} />
         ) : e.kind === "doorway" ? (
@@ -307,7 +307,7 @@ export function BayCanvas() {
           dpr={[1, 1.5]}
           shadows
           frameloop="always"
-          camera={{ position: [3.4, 1.7, 3.6], fov: 42, near: 0.08, far: 800 }}
+          camera={{ position: [3.4, 1.7, 3.6], fov: 42, near: 0.08, far: 2500 }}
           gl={{
             antialias: true,
             alpha: false,
@@ -329,7 +329,7 @@ export function BayCanvas() {
           <FitGl />
           <KickFrames />
           <color attach="background" args={["#8a7c6a"]} />
-          <fog attach="fog" args={["#8a7c6a", 170, 560]} />
+          <fog attach="fog" args={["#8a7c6a", 90, 1400]} />
           <LabLook />
           <World />
         </Canvas>

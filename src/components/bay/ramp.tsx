@@ -7,7 +7,7 @@ import { poseOf } from "@/lib/bay/sample";
 import { useBay } from "@/store/bay-store";
 
 const GROUPS = interactionGroups([WORLD_G], [WORLD_G, DUMMY_G, CRATE_G, WAGON_G]);
-const dirt = 0xc9a15c;
+const dirt = 0xb7aea0;
 const dirtHi = 0xe2c47a;
 const CUT = 0.75;
 const SEG = 48;
@@ -48,7 +48,7 @@ function thickAt(z: number, d: number, cut: number) {
   return Math.max(0.05, THICK * (1 - 0.88 * u * u));
 }
 
-function buildHill(w: number, h: number, d: number, cut: number) {
+function buildHill(w: number, h: number, d: number, cut: number, grade = 0) {
   const hw = w / 2;
   const hd = d / 2;
   const z0 = -hd;
@@ -65,8 +65,8 @@ function buildHill(w: number, h: number, d: number, cut: number) {
   const top: number[] = [];
   const bot: number[] = [];
   for (const p of samples) {
-    top.push(-hw, p.y, p.z, hw, p.y, p.z);
-    bot.push(-hw, p.y - p.t, p.z, hw, p.y - p.t, p.z);
+    top.push(-hw, p.y - hw * grade, p.z, hw, p.y + hw * grade, p.z);
+    bot.push(-hw, p.y - p.t - hw * grade, p.z, hw, p.y - p.t + hw * grade, p.z);
   }
   const verts: number[] = [];
   verts.push(...top, ...bot);
@@ -105,14 +105,14 @@ function buildHill(w: number, h: number, d: number, cut: number) {
     const tb = thickAt(zb, d, cut);
     hulls.push(
       new Float32Array([
-        -hw, ya, za,
-         hw, ya, za,
-        -hw, ya - ta, za,
-         hw, ya - ta, za,
-        -hw, yb, zb,
-         hw, yb, zb,
-        -hw, yb - tb, zb,
-         hw, yb - tb, zb,
+        -hw, ya - hw * grade, za,
+         hw, ya + hw * grade, za,
+        -hw, ya - ta - hw * grade, za,
+         hw, ya - ta + hw * grade, za,
+        -hw, yb - hw * grade, zb,
+         hw, yb + hw * grade, zb,
+        -hw, yb - tb - hw * grade, zb,
+         hw, yb - tb + hw * grade, zb,
       ]),
     );
   }
@@ -126,21 +126,27 @@ export function Ramp({
   rot,
   size,
   grip,
+  bounce,
   cut: cutArg,
+  grade: gradeArg,
 }: {
   id: string;
   pos: [number, number, number];
   rot?: [number, number, number];
   size?: [number, number, number];
   grip?: number;
+  bounce?: number;
   cut?: number;
+  grade?: number;
 }) {
   const r = useRef<RapierRigidBody>(null);
   const selected = useBay((s) => s.selected === id);
   const [w, h, d] = size ?? [8, 8, 22];
   const cut = cutArg != null && cutArg > 0.2 ? cutArg : CUT;
   const mu = grip ?? 0.55;
-  const hill = useMemo(() => buildHill(w, h, d, cut), [w, h, d, cut]);
+  const rest = bounce ?? 0;
+  const grade = gradeArg ?? 0;
+  const hill = useMemo(() => buildHill(w, h, d, cut, grade), [w, h, d, cut, grade]);
 
   useEffect(() => {
     registerBody(
@@ -167,11 +173,11 @@ export function Ramp({
       rotation={rot ?? [0, 0, 0]}
       colliders={false}
       friction={mu}
-      restitution={0}
+      restitution={rest}
       collisionGroups={GROUPS}
     >
       {hill.hulls.map((hull, i) => (
-        <ConvexHullCollider key={i} args={[hull]} collisionGroups={GROUPS} friction={mu} restitution={0} />
+        <ConvexHullCollider key={i} args={[hull]} collisionGroups={GROUPS} friction={mu} restitution={rest} />
       ))}
       <mesh geometry={hill.geo} receiveShadow>
         <meshStandardMaterial

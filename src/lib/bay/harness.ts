@@ -60,7 +60,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 13;
+const PIPE_GEN = 19;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -604,13 +604,13 @@ async function tape(scene?: unknown, ms = 0) {
   raf = window.requestAnimationFrame(tick);
   clearHist();
   const staged = scene != null && scene !== "" ? await restageScene(scene) : { ok: true, id: null };
-  const hard = Number(ms) > 400 ? Number(ms) : 28000;
+  const hard = Number(ms) > 400 ? Number(ms) : 95000;
   const t0 = performance.now();
   let floorAt = 0;
   while (performance.now() - t0 < hard) {
     await waitFrames(180);
     const w = peek().objects.find((o) => o.kind === "wheel");
-    const onFloor = Boolean(w && w.z > 96 && w.y < 3.2);
+    const onFloor = Boolean(w && w.z > 1520 && w.y < 8);
     if (onFloor && floorAt === 0) floorAt = performance.now();
     if (floorAt > 0 && performance.now() - floorAt >= 7000) break;
   }
@@ -794,7 +794,7 @@ function startHarnessPipe() {
     const api = (window as unknown as { __bay?: Record<string, (...a: unknown[]) => unknown> }).__bay;
     if (!api || typeof api[fn] !== "function") return { error: `no-fn:${fn}` };
     try {
-      const cap = Math.max(4000, Math.min(60000, Number(capMs) || 16000));
+      const cap = Math.max(4000, Math.min(240000, Number(capMs) || 16000));
       const value = await Promise.race([
         Promise.resolve(api[fn](...args)),
         new Promise((_, reject) => setTimeout(() => reject(new Error("run-timeout")), cap)),
@@ -849,7 +849,7 @@ function startHarnessPipe() {
         }
         const msg = (await r.json()) as { id?: string; fn?: string; args?: unknown[]; waitMs?: number };
         if (!msg?.id) continue;
-        const cap = Math.min(60000, Number(msg.waitMs) || 16000);
+        const cap = Math.min(240000, Number(msg.waitMs) || 16000);
         const out = await handle(String(msg.id), String(msg.fn ?? ""), Array.isArray(msg.args) ? msg.args : [], cap);
         beat();
         await fetch("/__bay/done", {

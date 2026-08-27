@@ -16,6 +16,7 @@ export type SceneActor = {
   size?: Vec3;
   fuse?: number;
   cut?: number;
+  grade?: number;
 };
 
 export type SceneTie = {
@@ -135,7 +136,9 @@ export function coerceScene(raw: unknown): Scene | null {
     const fuse = num(e.fuse);
     if (fuse != null && fuse > 0) actor.fuse = fuse;
     const cut = num(e.cut);
+    const grade = num(e.grade);
     if (cut != null && cut > 0.2) actor.cut = cut;
+    if (grade != null) actor.grade = grade;
     entities.push(actor);
   }
   if (entities.length === 0) return null;
@@ -238,6 +241,7 @@ export function materializeScene(scene: Scene, nextId: () => string): {
     if (a.size) e.size = a.size;
     if (a.fuse != null) e.fuse = a.fuse;
     if (a.cut != null) e.cut = a.cut;
+    if (a.grade != null) e.grade = a.grade;
     return e;
   });
   const selectName = scene.select;

@@ -203,7 +203,7 @@ export function bayHarnessPlugin() {
                 return;
               }
               const args = Array.isArray(body.args) ? body.args : [];
-              const waitMs = Math.min(60000, Number(body.waitMs) || 20000);
+              const waitMs = Math.min(240000, Number(body.waitMs) || 20000);
               const id = `c${++seq}`;
               const payload = await new Promise((resolve) => {
                 const timer = setTimeout(() => {
@@ -308,7 +308,7 @@ if (!(g.__bayPipeCtl && !g.__bayPipeCtl.signal.aborted)) {
         const jobs = (g.__bayJobs ??= new Map());
         let pending = jobs.get(msg.id);
         if (!pending) {
-          const cap = Math.min(20000, Number(msg.waitMs) || 16000);
+          const cap = Math.min(240000, Number(msg.waitMs) || 16000);
           pending = Promise.race([
             run(String(msg.fn ?? ""), Array.isArray(msg.args) ? msg.args : []),
             new Promise((res) => setTimeout(() => res({ error: "run-timeout" }), cap)),
