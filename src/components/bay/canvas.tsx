@@ -25,16 +25,23 @@ import { DUMMY_G } from "@/lib/bay/groups";
 import { listSamplers } from "@/lib/bay/probe";
 import { useBay } from "@/store/bay-store";
 
+const _chase = new THREE.Vector3();
+
 function TrackCam({
   orbit,
 }: {
   orbit: RefObject<{ target: THREE.Vector3 } | null>;
 }) {
   const trackId = useBay((s) => s.trackId);
+  const stageN = useBay((s) => s.stageN);
   const offset = useBay((s) => s.scene?.cam?.offset);
   const look = useBay((s) => s.scene?.cam?.look);
   const eye = useBay((s) => s.scene?.cam?.eye);
   const camera = useThree((s) => s.camera);
+  const primed = useRef(false);
+  useEffect(() => {
+    primed.current = false;
+  }, [trackId, stageN]);
   useFrame(() => {
     if (eye && look) {
       camera.position.set(eye[0], eye[1], eye[2]);
@@ -44,14 +51,27 @@ function TrackCam({
     }
     if (!trackId) return;
     const rec = listSamplers().get(trackId);
-    if (!rec) return;
+    if (!rec) {
+      const ent = useBay.getState().entities.find((e) => e.id === trackId);
+      if (!ent || !offset) return;
+      camera.position.set(ent.pos[0] + offset[0], ent.pos[1] + offset[1], ent.pos[2] + offset[2]);
+      camera.lookAt(ent.pos[0], ent.pos[1] + 0.2, ent.pos[2] + 2.4);
+      camera.updateMatrixWorld();
+      return;
+    }
     const p = rec.sample();
     if (orbit.current) orbit.current.target.set(p.x, p.y, p.z);
     if (offset) {
-      camera.position.set(p.x + offset[0], p.y + offset[1], p.z + offset[2]);
+      _chase.set(p.x + offset[0], p.y + offset[1], p.z + offset[2]);
+      if (!primed.current) {
+        camera.position.copy(_chase);
+        primed.current = true;
+      } else {
+        camera.position.lerp(_chase, 0.22);
+      }
       const lx = look?.[0] ?? 0;
-      const ly = look?.[1] ?? 0.38;
-      const lz = look?.[2] ?? 0;
+      const ly = look?.[1] ?? 0.2;
+      const lz = look?.[2] ?? 2.4;
       camera.lookAt(p.x + lx, p.y + ly, p.z + lz);
       camera.updateMatrixWorld();
     }
@@ -224,7 +244,7 @@ function World() {
         ) : e.kind === "wagon" ? (
           <Wagon key={e.id} id={e.id} pos={e.pos} rot={e.rot} grip={e.grip} bounce={e.bounce} mass={e.mass} />
         ) : e.kind === "hill" || e.kind === "ramp" ? (
-          <Ramp key={e.id} id={e.id} pos={e.pos} rot={e.rot} size={e.size} grip={e.grip} />
+          <Ramp key={e.id} id={e.id} pos={e.pos} rot={e.rot} size={e.size} grip={e.grip} cut={e.cut} />
         ) : e.kind === "wall" ? (
           <Wall key={e.id} id={e.id} pos={e.pos} />
         ) : e.kind === "doorway" ? (
