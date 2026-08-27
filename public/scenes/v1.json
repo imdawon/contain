@@ -1,7 +1,7 @@
 {
   "id": "v1",
   "name": "Wagon hill",
-  "blurb": "Dummy tied to a wagon. Parabola hill, kick at the end, grenade bangs mid-air.",
+  "blurb": "Dummy tied to a wagon. Parabola hill, kick at the end, both leave the lip together.",
   "file": "scenes/v1.json",
   "select": "grenade",
   "inspect": false,
@@ -61,8 +61,8 @@
       ],
       "vel": [
         0.0,
-        -1.904,
-        2.053
+        -17.678,
+        19.065
       ],
       "grip": 0.06,
       "bounce": 0.0
@@ -82,8 +82,8 @@
       ],
       "vel": [
         0.0,
-        -1.904,
-        2.053
+        -17.678,
+        19.065
       ],
       "live": false
     },
@@ -102,8 +102,8 @@
       ],
       "vel": [
         0.0,
-        -1.904,
-        2.053
+        -17.678,
+        19.065
       ],
       "grip": 0.8,
       "fuse": 1.81

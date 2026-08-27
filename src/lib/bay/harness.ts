@@ -33,6 +33,9 @@ export type PoseSample = {
   vx: number | null;
   vy: number | null;
   vz: number | null;
+  dent?: number | null;
+  strain?: number | null;
+  rim?: number | null;
 };
 
 export type HistEvent = { type: string; id: string | null };
@@ -57,12 +60,13 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 5;
+const PIPE_GEN = 6;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
   __bayPipeCtl?: AbortController;
   __baySeen?: Set<string>;
+  __bayJobs?: Map<string, Promise<{ value?: unknown; error?: string }>>;
   __bayPipeGen?: number;
   __bayTakeBeat?: number;
   __bayWatch?: ReturnType<typeof setInterval>;
@@ -94,7 +98,23 @@ export function recordHistory(
   hist.lastEventN = evs.length;
   const o: HistFrame["o"] = {};
   for (const obj of objects) {
-    o[obj.id] = { x: obj.x, y: obj.y, z: obj.z, rx: obj.rx, ry: obj.ry, rz: obj.rz, vx: obj.vx, vy: obj.vy, vz: obj.vz };
+    const dent = typeof obj.state?.dent === "number" ? obj.state.dent : undefined;
+    const strain = typeof obj.state?.strain === "number" ? obj.state.strain : undefined;
+    const rim = typeof obj.state?.rim === "number" ? obj.state.rim : undefined;
+    o[obj.id] = {
+      x: obj.x,
+      y: obj.y,
+      z: obj.z,
+      rx: obj.rx,
+      ry: obj.ry,
+      rz: obj.rz,
+      vx: obj.vx,
+      vy: obj.vy,
+      vz: obj.vz,
+      ...(dent != null ? { dent } : {}),
+      ...(strain != null ? { strain } : {}),
+      ...(rim != null ? { rim } : {}),
+    };
   }
   frames.push({
     t: round(t),
@@ -372,6 +392,9 @@ export function peek() {
     cook: string | number | boolean | null;
     burning: string | number | boolean | null;
     ash: string | number | boolean | null;
+    dent: string | number | boolean | null;
+    strain: string | number | boolean | null;
+    rim: string | number | boolean | null;
     kin: boolean | null;
     spin: number;
   }[] = [];
@@ -409,6 +432,9 @@ export function peek() {
       cook: p.state?.cook ?? null,
       burning: p.state?.burning ?? null,
       ash: p.state?.ash ?? null,
+      dent: p.state?.dent ?? null,
+      strain: p.state?.strain ?? null,
+      rim: p.state?.rim ?? null,
       kin,
       spin,
     });
@@ -692,15 +718,18 @@ function startHarnessPipe() {
       return { error: err instanceof Error ? err.message : String(err) };
     }
   };
-  const seen = (g.__baySeen ??= new Set<string>());
+  const jobs = (g.__bayJobs ??= new Map());
   const handle = async (id: string, fn: string, args: unknown[], capMs?: number) => {
-    if (!id || seen.has(id)) return null;
-    seen.add(id);
-    if (seen.size > 80) {
-      const first = seen.values().next().value;
-      if (first) seen.delete(first);
+    if (!id) return { error: "no-id" };
+    const hit = jobs.get(id);
+    if (hit) return hit;
+    const p = run(fn, args, capMs);
+    jobs.set(id, p);
+    if (jobs.size > 80) {
+      const first = jobs.keys().next().value;
+      if (first && first !== id) jobs.delete(first);
     }
-    return run(fn, args, capMs);
+    return p;
   };
   stopHotListener();
   const onHot = async (msg: { id?: string; fn?: string; args?: unknown[]; waitMs?: number }) => {
@@ -742,7 +771,7 @@ function startHarnessPipe() {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             id: msg.id,
-            ...(out ?? { skipped: true }),
+            ...out,
             paint,
             nobj: listSamplers().size,
           }),

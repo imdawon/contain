@@ -54,6 +54,7 @@ export function LabApp() {
   const runId = useBay((s) => s.runId);
   const trial = useBay((s) => s.trial);
   const scene = useBay((s) => s.scene);
+  const stageN = useBay((s) => s.stageN);
   const inspect = useBay((s) => s.inspect);
   const run = runId ? getRun(runId) : null;
   const runLive = run ? runCard(run, trial) : null;
@@ -130,7 +131,7 @@ export function LabApp() {
     <div className="relative h-dvh overflow-hidden bg-bg text-fg">
       <section className="absolute inset-0">
         {client ? (
-          <StageErrorBoundary>
+          <StageErrorBoundary key={`${scene?.id ?? levelId}-${stageN}`}>
             <Suspense
               fallback={
                 <p className="absolute bottom-8 left-0 right-0 text-center font-mono text-[11px] uppercase tracking-[0.2em] text-muted">
@@ -267,6 +268,28 @@ export function LabApp() {
             className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 text-sm hover:bg-raised"
           >
             Crate
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              spawn("wheel");
+              note("spawn", { kind: "wheel" });
+            }}
+            data-bay="wheel"
+            className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 text-sm hover:bg-raised"
+          >
+            Wheel
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              spawn("drum");
+              note("spawn", { kind: "drum" });
+            }}
+            data-bay="drum"
+            className="h-11 rounded-[var(--radius-sm)] border border-border bg-bg px-3 text-sm hover:bg-raised"
+          >
+            Drum
           </button>
           <button
             type="button"
@@ -451,3 +474,4 @@ export function LabApp() {
     </div>
   );
 }
+

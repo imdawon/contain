@@ -1,3 +1,13 @@
+# CONTAIN — harness override (read this first)
+
+This is CONTAIN, not a Grok App Builder sandbox. App Builder QA later in this file is **void**.
+
+Validate and restage only with `node scripts/bay.mjs` against `window.__bay`. Do not open Chrome. Do not click RUN or RESET. Do not watch the canvas. Named miss: `omp-browser-harness`.
+
+See `.cursor/rules/contain-bay.mdc`.
+
+---
+
 # App Builder Workspace
 
 **The single source of truth** for the App Builder sandbox contract. You are

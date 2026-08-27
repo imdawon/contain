@@ -1,0 +1,239 @@
+{
+  "id": "wheel-300",
+  "name": "Wheel 300",
+  "blurb": "Same track. Steel wheel into stacked oil drums. Mesh and hulls yield.",
+  "file": "scenes/wheel-300.json",
+  "select": "wheel",
+  "inspect": false,
+  "track": {
+    "ref": "wheel"
+  },
+  "cam": {
+    "offset": [
+      6.2,
+      1.7,
+      -1.8
+    ],
+    "look": [
+      0,
+      0.1,
+      1.8
+    ]
+  },
+  "entities": [
+    {
+      "name": "track",
+      "kind": "ramp",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        2.4,
+        0.22,
+        20
+      ],
+      "fixed": true,
+      "grip": 0.05
+    },
+    {
+      "name": "wheel",
+      "kind": "wheel",
+      "pos": [
+        0,
+        1.443,
+        -7.4
+      ],
+      "rot": [
+        0,
+        0,
+        1.571
+      ],
+      "vel": [
+        0,
+        0,
+        11.0
+      ],
+      "mass": 300,
+      "grip": 0.08,
+      "bounce": 0
+    },
+    {
+      "name": "drum-1",
+      "kind": "drum",
+      "pos": [
+        -0.52,
+        1.268,
+        -2.8
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "mass": 34,
+      "grip": 0.62,
+      "bounce": 0
+    },
+    {
+      "name": "drum-2",
+      "kind": "drum",
+      "pos": [
+        0.0,
+        1.268,
+        -2.8
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "mass": 34,
+      "grip": 0.62,
+      "bounce": 0
+    },
+    {
+      "name": "drum-3",
+      "kind": "drum",
+      "pos": [
+        0.52,
+        1.268,
+        -2.8
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "mass": 34,
+      "grip": 0.62,
+      "bounce": 0
+    },
+    {
+      "name": "drum-4",
+      "kind": "drum",
+      "pos": [
+        -0.52,
+        1.92,
+        -2.8
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "mass": 34,
+      "grip": 0.62,
+      "bounce": 0
+    },
+    {
+      "name": "drum-5",
+      "kind": "drum",
+      "pos": [
+        0.0,
+        1.92,
+        -2.8
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "mass": 34,
+      "grip": 0.62,
+      "bounce": 0
+    },
+    {
+      "name": "drum-6",
+      "kind": "drum",
+      "pos": [
+        0.52,
+        1.92,
+        -2.8
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "mass": 34,
+      "grip": 0.62,
+      "bounce": 0
+    },
+    {
+      "name": "drum-7",
+      "kind": "drum",
+      "pos": [
+        -0.26,
+        1.255,
+        -2.18
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "mass": 28,
+      "grip": 0.55,
+      "bounce": 0
+    },
+    {
+      "name": "drum-8",
+      "kind": "drum",
+      "pos": [
+        0.26,
+        1.255,
+        -2.18
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "mass": 28,
+      "grip": 0.55,
+      "bounce": 0
+    },
+    {
+      "name": "drum-9",
+      "kind": "drum",
+      "pos": [
+        -0.48,
+        1.231,
+        6.3
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "mass": 18,
+      "grip": 0.18,
+      "bounce": 0
+    },
+    {
+      "name": "drum-10",
+      "kind": "drum",
+      "pos": [
+        0.48,
+        1.231,
+        6.3
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "mass": 18,
+      "grip": 0.18,
+      "bounce": 0
+    }
+  ],
+  "ties": []
+}

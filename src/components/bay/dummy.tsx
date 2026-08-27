@@ -18,6 +18,7 @@ import { DUMMY } from "@/lib/bay/parts";
 import { note, registerAssembly, registerBody, setBodyMass, unregisterAssembly, unregisterBody } from "@/lib/bay/probe";
 import { poseOf } from "@/lib/bay/sample";
 import { useBay } from "@/store/bay-store";
+import { carriedHang, onRide, ridePeakY } from "@/lib/bay/ride";
 
 /** World 0, dummy 1, crate 2, cover 14. Unique 3–13 let non-adjacent bones hit each other. */
 const BONE_G = {
@@ -278,6 +279,10 @@ export function Dummy({
       if (!h || power < 4) return;
       blasted.current = true;
       const p = h.translation();
+      if (onRide(id)) {
+        const vy = h.linvel().y;
+        if (!carriedHang(p.y, vy, ridePeakY())) return;
+      }
       const dist = Math.hypot(p.x - x, p.z - z);
       const blast = { x, y, z };
       const hipsBlock = lineOccluded(world, rapier, blast, p);

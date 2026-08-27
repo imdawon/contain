@@ -5,6 +5,8 @@ import { cooks } from "@/lib/bay/cook";
 import { applyActor, listSamplers, note, setColliderGroups } from "@/lib/bay/probe";
 import type { Scene } from "@/lib/bay/scene";
 import { COVER_G, CRATE_G, DUMMY_G, WORLD_G } from "@/lib/bay/groups";
+import { WHEEL } from "@/lib/bay/parts";
+import { carriedHang, holdRide, noteRideY, resetRide, ridePeakY } from "@/lib/bay/ride";
 import { useBay } from "@/store/bay-store";
 
 const _qA = new THREE.Quaternion();
@@ -50,6 +52,8 @@ type RapierBody = {
   setLinvel: (v: { x: number; y: number; z: number }, w: boolean) => void;
   setAngvel: (v: { x: number; y: number; z: number }, w: boolean) => void;
   setGravityScale: (s: number, w: boolean) => void;
+  setLinearDamping: (s: number) => void;
+  setAngularDamping: (s: number) => void;
   setBodyType: (t: number, w: boolean) => void;
   translation: () => { x: number; y: number; z: number };
   rotation: () => { x: number; y: number; z: number; w: number };
@@ -68,7 +72,7 @@ function resolveRef(ref: string) {
   const dummy = ents.find((e) => e.kind === "dummy");
   if (dummy && ref.startsWith("dummy-")) return `${dummy.id}-${ref.slice(6)}`;
   const named = ents.find(
-    (e) => e.id === ref || e.kind === ref || (ref === "nade" && e.kind === "grenade"),
+    (e) => e.id === ref || e.name === ref || e.kind === ref || (ref === "nade" && e.kind === "grenade"),
   );
   return named?.id ?? ref;
 }
@@ -114,6 +118,7 @@ export function SceneRig({ scene }: { scene: Scene }) {
     released.current = false;
     locks.current = [];
     joints.current = [];
+    resetRide();
     note("scene-file", {
       id: scene.id,
       file: scene.file ?? `scenes/${scene.id}.json`,
@@ -140,12 +145,17 @@ export function SceneRig({ scene }: { scene: Scene }) {
       const ents = useBay.getState().entities;
       const dummy = ents.find((e) => e.kind === "dummy");
       const wagon = ents.find((e) => e.kind === "wagon");
+      const wheel = ents.find((e) => e.kind === "wheel");
       const nade = ents.find((e) => e.kind === "grenade" || e.kind === "charge");
       const hill = ents.find((e) => e.kind === "hill" || e.kind === "ramp");
       if (hill && !bodyOf(hill.id)) return;
       if (wagon && !bodyOf(wagon.id)) return;
+      if (wheel && !bodyOf(wheel.id)) return;
       if (nade && !bodyOf(nade.id)) return;
       if (dummy && !bodyOf(`${dummy.id}-hips`)) return;
+      for (const e of ents) {
+        if (e.kind === "drum" && !bodyOf(e.id)) return;
+      }
 
       for (const e of ents) {
         const rot = quatFromEuler(e.rot ?? [0, 0, 0]);
@@ -175,7 +185,7 @@ export function SceneRig({ scene }: { scene: Scene }) {
         if (e.mass != null) patch.mass = e.mass;
         if (Object.keys(patch).length) applyActor(e.id, patch);
         b.setBodyType(0, true);
-        if (e.kind === "wagon") {
+        if (e.kind === "wagon" || e.kind === "wheel" || e.kind === "drum") {
           b.setGravityScale(1, true);
         } else {
           b.setGravityScale(0, true);
@@ -183,66 +193,79 @@ export function SceneRig({ scene }: { scene: Scene }) {
       }
 
       const wagonBody = wagon ? bodyOf(wagon.id) : null;
-      if (!wagon || !wagonBody) return;
-      const pb = wagonBody.translation();
-      const rb = wagonBody.rotation();
-      _qB.set(rb.x, rb.y, rb.z, rb.w);
-      _inv.copy(_qB).invert();
+      const wheelBody = wheel ? bodyOf(wheel.id) : null;
+      const leadEnt = wagon ?? wheel;
+      const leadBody = wagonBody ?? wheelBody;
+      if (wagon && !wagonBody) return;
+      if (!wagon && wheel && !wheelBody) return;
+      if (wagon && wagonBody) {
+        const pb = wagonBody.translation();
+        const rb = wagonBody.rotation();
+        _qB.set(rb.x, rb.y, rb.z, rb.w);
+        _inv.copy(_qB).invert();
 
-      const followIds = new Set<string>();
-      if (dummy) {
-        for (const part of Object.keys(DUMMY_SIT)) followIds.add(`${dummy.id}-${part}`);
-      }
-      if (nade) followIds.add(nade.id);
-      for (const tie of scene.ties) {
-        const aId = resolveRef(tie.a);
-        const bId = resolveRef(tie.b);
-        followIds.add(aId === wagon.id ? bId : aId);
-      }
-      followIds.delete(wagon.id);
+        const followIds = new Set<string>();
+        if (dummy) {
+          for (const part of Object.keys(DUMMY_SIT)) followIds.add(`${dummy.id}-${part}`);
+        }
+        if (nade) followIds.add(nade.id);
+        for (const tie of scene.ties) {
+          const aId = resolveRef(tie.a);
+          const bId = resolveRef(tie.b);
+          followIds.add(aId === wagon.id ? bId : aId);
+        }
+        followIds.delete(wagon.id);
 
-      locks.current = [];
-      for (const id of followIds) {
-        const b = bodyOf(id);
-        if (!b) continue;
-        const pa = b.translation();
-        const ra = b.rotation();
-        _qA.set(ra.x, ra.y, ra.z, ra.w);
-        _rel.set(pa.x - pb.x, pa.y - pb.y, pa.z - pb.z).applyQuaternion(_inv);
-        _qRel.copy(_inv).multiply(_qA);
-        b.setBodyType(0, true);
-        b.setGravityScale(0, true);
-        if (id.includes("-")) setColliderGroups(b, interactionGroups([DUMMY_G], []));
-        locks.current.push({
-          id,
-          lx: _rel.x,
-          ly: _rel.y,
-          lz: _rel.z,
-          qx: _qRel.x,
-          qy: _qRel.y,
-          qz: _qRel.z,
-          qw: _qRel.w,
+        locks.current = [];
+        for (const id of followIds) {
+          const b = bodyOf(id);
+          if (!b) continue;
+          const pa = b.translation();
+          const ra = b.rotation();
+          _qA.set(ra.x, ra.y, ra.z, ra.w);
+          _rel.set(pa.x - pb.x, pa.y - pb.y, pa.z - pb.z).applyQuaternion(_inv);
+          _qRel.copy(_inv).multiply(_qA);
+          b.setBodyType(0, true);
+          b.setGravityScale(0, true);
+          if (id.includes("-")) setColliderGroups(b, interactionGroups([DUMMY_G], []));
+          locks.current.push({
+            id,
+            lx: _rel.x,
+            ly: _rel.y,
+            lz: _rel.z,
+            qx: _qRel.x,
+            qy: _qRel.y,
+            qz: _qRel.z,
+            qw: _qRel.w,
+          });
+          note("tie", { a: id, b: wagon.id });
+        }
+        if (dummy) holdRide(dummy.id);
+        if (nade) {
+          const nb = bodyOf(nade.id);
+          if (nb) setColliderGroups(nb, interactionGroups([WORLD_G], []));
+        }
+      }
+
+      if (leadEnt && leadBody) {
+        const kick = leadEnt.vel ?? [0, 0, 0];
+        leadBody.setBodyType(0, true);
+        leadBody.setGravityScale(1, true);
+        leadBody.setLinvel({ x: kick[0], y: kick[1], z: kick[2] }, true);
+        if (leadEnt.kind === "wheel") {
+          const r = WHEEL.radius;
+          leadBody.setAngvel({ x: -(kick[2] || 0) / Math.max(0.08, r), y: 0, z: 0 }, true);
+        }
+        leadBody.wakeUp();
+        applyActor(leadEnt.id, { vx: kick[0], vy: kick[1], vz: kick[2] });
+        note("scene-kick", {
+          id: scene.id,
+          file: scene.file ?? `scenes/${scene.id}.json`,
+          vx: kick[0],
+          vy: kick[1],
+          vz: kick[2],
         });
-        note("tie", { a: id, b: wagon.id });
       }
-      if (nade) {
-        const nb = bodyOf(nade.id);
-        if (nb) setColliderGroups(nb, interactionGroups([WORLD_G], []));
-      }
-
-      const kick = wagon.vel ?? [0, 0, 0];
-      wagonBody.setBodyType(0, true);
-      wagonBody.setGravityScale(1, true);
-      wagonBody.setLinvel({ x: kick[0], y: kick[1], z: kick[2] }, true);
-      wagonBody.wakeUp();
-      applyActor(wagon.id, { vx: kick[0], vy: kick[1], vz: kick[2] });
-      note("scene-kick", {
-        id: scene.id,
-        file: scene.file ?? `scenes/${scene.id}.json`,
-        vx: kick[0],
-        vy: kick[1],
-        vz: kick[2],
-      });
       phase.current = 1;
       return;
     }
@@ -253,6 +276,25 @@ export function SceneRig({ scene }: { scene: Scene }) {
     const nade = ents.find((e) => e.kind === "grenade" || e.kind === "charge");
     const cook = nade ? cooks.get(nade.id) : undefined;
     const boom = Boolean(cook && (cook.phase === "boom" || cook.phase === "dead"));
+    const dummy = ents.find((e) => e.kind === "dummy");
+    const hips = dummy ? bodyOf(`${dummy.id}-hips`) : null;
+    if (hips) noteRideY(hips.translation().y);
+
+    if (boom && !released.current && hips) {
+      const hp = hips.translation();
+      const hv = hips.linvel();
+      if (carriedHang(hp.y, hv.y, ridePeakY())) {
+        released.current = true;
+        for (const lock of locks.current) {
+          const b = bodyOf(lock.id);
+          if (!b) continue;
+          b.setBodyType(0, true);
+          b.setGravityScale(1, true);
+          setColliderGroups(b, interactionGroups([DUMMY_G], [WORLD_G, CRATE_G, COVER_G]));
+          b.wakeUp();
+        }
+      }
+    }
 
     if (wagon && !released.current) {
       const pb = wagon.translation();
@@ -277,24 +319,12 @@ export function SceneRig({ scene }: { scene: Scene }) {
         b.setLinvel({ x: v.x, y: v.y, z: v.z }, true);
         b.setAngvel(wagon.angvel(), true);
         b.setGravityScale(0, true);
+        b.setLinearDamping(0.12);
+        b.setAngularDamping(0.28);
       }
     }
 
-    if (boom && !released.current) {
-      released.current = true;
-      for (const lock of locks.current) {
-        const b = bodyOf(lock.id);
-        if (!b) continue;
-        b.setBodyType(0, true);
-        b.setGravityScale(1, true);
-        setColliderGroups(b, interactionGroups([DUMMY_G], [WORLD_G, CRATE_G, COVER_G]));
-        b.wakeUp();
-      }
-    }
-
-    const dummy = ents.find((e) => e.kind === "dummy");
     if (!dummy) return;
-    const hips = bodyOf(`${dummy.id}-hips`);
     if (!hips) return;
     const p = hips.translation();
     const v = hips.linvel();

@@ -1,0 +1,303 @@
+import {
+  ConvexHullCollider,
+  RigidBody,
+  interactionGroups,
+  useAfterPhysicsStep,
+  useRapier,
+  type RapierCollider,
+  type RapierRigidBody,
+} from "@react-three/rapier";
+import { useFrame } from "@react-three/fiber";
+import { useEffect, useMemo, useRef } from "react";
+import * as THREE from "three";
+import { useGrab } from "@/components/bay/grab";
+import { CRATE_G, DRUM_G, WHEEL_G, WORLD_G } from "@/lib/bay/groups";
+import { DRUM, WHEEL } from "@/lib/bay/parts";
+import { note, registerBody, setBodyMass, unregisterBody } from "@/lib/bay/probe";
+import { poseOf } from "@/lib/bay/sample";
+import { useBay } from "@/store/bay-store";
+import {
+  applySteelHits,
+  makeSteelShell,
+  pushSteelHulls,
+  refreshSteelMesh,
+  sliceHull,
+  steelDish,
+  steelGeometry,
+  steelMeshRim,
+  steelRim,
+  type SteelKind,
+} from "@/lib/bay/yield";
+
+const WHEEL_GROUPS = interactionGroups([WHEEL_G], [WORLD_G, DRUM_G, CRATE_G]);
+const DRUM_GROUPS = interactionGroups([DRUM_G], [WORLD_G, DRUM_G, WHEEL_G]);
+const WHEEL_MEMBER = 1 << WHEEL_G;
+const _q = new THREE.Quaternion();
+const _e = new THREE.Euler();
+
+function SteelBody({
+  id,
+  kind,
+  pos,
+  rot,
+  grip,
+  bounce,
+  mass,
+}: {
+  id: string;
+  kind: SteelKind;
+  pos: [number, number, number];
+  rot?: [number, number, number];
+  grip?: number;
+  bounce?: number;
+  mass?: number;
+}) {
+  const body = useRef<RapierRigidBody>(null);
+  const hulls = useRef<Array<RapierCollider | null>>([]);
+  const mesh = useRef<THREE.Mesh>(null);
+  const grab = useGrab(body, id);
+  const pinned = useRef(false);
+  const armed = useRef(false);
+  const selected = useBay((s) => s.selected === id);
+  const { world, rapier } = useRapier();
+  const spec = kind === "wheel" ? WHEEL : DRUM;
+  const kg = mass ?? spec.mass;
+  const mu = grip ?? (kind === "wheel" ? 0.72 : 0.48);
+  const rest = bounce ?? 0.03;
+  const groups = kind === "wheel" ? WHEEL_GROUPS : DRUM_GROUPS;
+  const shell = useMemo(() => makeSteelShell(kind), [kind]);
+  const geo = useMemo(() => steelGeometry(shell), [shell]);
+  const parts = useMemo(() => shell.slices, [shell]);
+  const hullArgs = useMemo(() => parts.map((p) => sliceHull(shell, p)), [parts, shell]);
+
+  useEffect(() => {
+    registerBody(
+      id,
+      kind,
+      () =>
+        poseOf(body.current, {
+          dent: Math.round(shell.maxTaken * 1000) / 1000,
+          strain: Math.round(shell.strain * 1000) / 1000,
+          rim: Math.round(steelRim(shell) * 1000) / 1000,
+          meshRim: Math.round(steelMeshRim(geo, shell) * 1000) / 1000,
+          dish: Math.round(steelDish(shell) * 1000) / 1000,
+          yield: true,
+        }),
+      () => body.current,
+    );
+    note("spawn", { kind, id });
+    return () => unregisterBody(id);
+  }, [id, kind, shell]);
+
+  useEffect(
+    () => () => {
+      geo.dispose();
+    },
+    [geo],
+  );
+
+  useFrame((state, dt) => {
+    grab.tick(state.raycaster.ray, Math.min(dt, 0.05));
+    const b = body.current;
+    if (!b) return;
+    if (!pinned.current) {
+      setBodyMass(b, kg);
+      pinned.current = true;
+    }
+    if (!armed.current) {
+      const n = b.numColliders();
+      for (let i = 0; i < n; i++) {
+        const c = b.collider(i);
+        if (!c) continue;
+        c.setContactForceEventThreshold(0.08);
+      }
+      armed.current = true;
+    }
+  });
+
+  useAfterPhysicsStep(() => {
+    const b = body.current;
+    if (!b || b.numColliders() === 0) return;
+    if (kind === "wheel") {
+      const p = b.translation();
+      const v = b.linvel();
+      const r = b.rotation();
+      _q.set(r.x, r.y, r.z, r.w);
+      _e.setFromQuaternion(_q, "XYZ");
+      _e.set(_e.x, 0, Math.PI / 2);
+      _q.setFromEuler(_e);
+      b.setTranslation({ x: 0, y: p.y, z: p.z }, true);
+      b.setRotation({ x: _q.x, y: _q.y, z: _q.z, w: _q.w }, true);
+      b.setLinvel({ x: 0, y: v.y, z: v.z }, true);
+      b.setAngvel({ x: -v.z / Math.max(0.08, WHEEL.radius), y: 0, z: 0 }, true);
+    }
+    let local: ReturnType<typeof collectHits> = [];
+    try {
+      local = collectHits(world, b, kind);
+    } catch {
+      return;
+    }
+    if (local.length === 0) return;
+    const added = applySteelHits(shell, local);
+    if (added <= 0) return;
+    refreshSteelMesh(geo, shell.live);
+    const drawn = mesh.current;
+    if (drawn) {
+      drawn.geometry = geo;
+      drawn.frustumCulled = false;
+    }
+    pushSteelHulls(shell, hulls.current, rapier.ConvexPolyhedron, hullArgs);
+    setBodyMass(b, kg);
+    b.wakeUp();
+    const mark = shell.kind === "wheel" ? 0.012 : 0.02;
+    if (shell.maxTaken >= mark && shell.noted < Math.floor(shell.maxTaken / mark)) {
+      shell.noted = Math.floor(shell.maxTaken / mark);
+      note("dent", {
+        id,
+        kind,
+        dent: Math.round(shell.maxTaken * 1000) / 1000,
+        strain: Math.round(shell.strain * 1000) / 1000,
+        rim: Math.round(steelRim(shell) * 1000) / 1000,
+        meshRim: Math.round(steelMeshRim(geo, shell) * 1000) / 1000,
+        dish: Math.round(steelDish(shell) * 1000) / 1000,
+      });
+    }
+  });
+
+  const color = selected ? 0xd4d7cf : spec.color;
+
+  return (
+    <RigidBody
+      ref={body}
+      position={pos}
+      rotation={rot ?? [0, 0, 0]}
+      colliders={false}
+      mass={kg}
+      friction={mu}
+      restitution={rest}
+      linearDamping={kind === "wheel" ? 0.02 : 0.07}
+      angularDamping={kind === "wheel" ? 0.04 : 0.12}
+      collisionGroups={groups}
+      canSleep={false}
+      ccd
+      enabledRotations={[true, true, true]}
+    >
+      {hullArgs.map((args, i) => (
+        <ConvexHullCollider
+          key={i}
+          ref={(c) => {
+            hulls.current[i] = c;
+          }}
+          args={[args]}
+          collisionGroups={groups}
+          friction={mu}
+          restitution={rest}
+        />
+      ))}
+      <mesh ref={mesh} geometry={geo} onPointerDown={grab.down} castShadow frustumCulled={false}>
+        <meshStandardMaterial
+          color={color}
+          metalness={kind === "wheel" ? 0.82 : 0.58}
+          roughness={kind === "wheel" ? 0.3 : 0.46}
+          side={THREE.DoubleSide}
+          flatShading
+        />
+      </mesh>
+      {kind === "wheel" ? <WheelBits half={WHEEL.thick / 2} /> : <DrumBits half={DRUM.height / 2} />}
+    </RigidBody>
+  );
+}
+
+function collectHits(world: { contactPairsWith: Function; contactPair: Function }, b: RapierRigidBody, kind: SteelKind) {
+  const hits: { x: number; y: number; z: number; nx: number; ny: number; nz: number; impulse: number }[] = [];
+  const n = b.numColliders();
+  const seen = new Set<number>();
+  const v = b.linvel();
+  for (let i = 0; i < n; i++) {
+    const c = b.collider(i);
+    if (!c) continue;
+    world.contactPairsWith(c, (other: RapierCollider) => {
+      const ob = other.parent();
+      if (!ob || ob.handle === b.handle || ob.isFixed()) return;
+      if (seen.has(ob.handle)) return;
+      seen.add(ob.handle);
+      if (kind === "drum") {
+        const mem = other.collisionGroups() >>> 16;
+        if ((mem & WHEEL_MEMBER) === 0) return;
+      }
+      const ov = ob.linvel();
+      const closing = Math.hypot(v.x - ov.x, v.y - ov.y, v.z - ov.z);
+      let sum = 0;
+      let cx = 0;
+      let cy = 0;
+      let cz = 0;
+      let nx = 0;
+      let ny = 0;
+      let nz = 0;
+      const on = ob.numColliders();
+      for (let a = 0; a < n; a++) {
+        const ca = b.collider(a);
+        if (!ca) continue;
+        for (let bi = 0; bi < on; bi++) {
+          const cb = ob.collider(bi);
+          if (!cb) continue;
+          world.contactPair(
+            ca,
+            cb,
+            (
+              manifold: {
+                numContacts: () => number;
+                contactImpulse: (k: number) => number;
+                localContactPoint1: (k: number) => { x: number; y: number; z: number } | null;
+                localContactPoint2: (k: number) => { x: number; y: number; z: number } | null;
+                localNormal1: () => { x: number; y: number; z: number };
+                localNormal2: () => { x: number; y: number; z: number };
+              },
+              flipped: boolean,
+            ) => {
+              const count = manifold.numContacts();
+              for (let k = 0; k < count; k++) {
+                const impulse = Math.abs(manifold.contactImpulse(k));
+                if (impulse < 0.02) continue;
+                const lp = flipped ? manifold.localContactPoint2(k) : manifold.localContactPoint1(k);
+                const ln = flipped ? manifold.localNormal2() : manifold.localNormal1();
+                if (!lp) continue;
+                sum += impulse;
+                cx += lp.x * impulse;
+                cy += lp.y * impulse;
+                cz += lp.z * impulse;
+                nx += ln.x * impulse;
+                ny += ln.y * impulse;
+                nz += ln.z * impulse;
+              }
+            },
+          );
+        }
+      }
+      if (sum < 0.08) return;
+      if (closing < 0.12 && sum < 0.55) return;
+      const inv = 1 / sum;
+      const nl = Math.hypot(nx, ny, nz) || 1;
+      hits.push({ x: cx * inv, y: cy * inv, z: cz * inv, nx: nx / nl, ny: ny / nl, nz: nz / nl, impulse: sum });
+    });
+  }
+  return hits;
+}
+
+function WheelBits({ radius, half }: { radius: number; half: number }) {
+  return (
+    <group>
+      <mesh rotation={[0, 0, 0]}>
+        <cylinderGeometry args={[radius, radius, half * 2 + 0.02, 12]} />
+        <meshStandardMaterial color={0x3a3a38} metalness={0.7} roughness={0.38} />
+      </mesh>
+      <mesh>
+        <cylinderGeometry args={[radius * 0.35, radius * 0.35, half * 2 + 0.04, 8]} />
+        <meshStandardMaterial color={0x8a8478} metalness={0.45} roughness={0.5} />
+      </mesh>
+    </group>
+  );
+}
+
+
+[Showing lines 1-300 of 304. Use :301 to continue]
