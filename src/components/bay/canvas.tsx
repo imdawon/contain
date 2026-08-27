@@ -37,12 +37,17 @@ function TrackCam({
   const offset = useBay((s) => s.scene?.cam?.offset);
   const look = useBay((s) => s.scene?.cam?.look);
   const eye = useBay((s) => s.scene?.cam?.eye);
+  const fov = useBay((s) => s.scene?.cam?.fov);
   const camera = useThree((s) => s.camera);
   const primed = useRef(false);
   useEffect(() => {
     primed.current = false;
   }, [trackId, stageN]);
   useFrame(() => {
+    if (fov && "fov" in camera && camera.fov !== fov) {
+      camera.fov = fov;
+      camera.updateProjectionMatrix();
+    }
     if (eye && look) {
       camera.position.set(eye[0], eye[1], eye[2]);
       camera.lookAt(look[0], look[1], look[2]);

@@ -132,7 +132,7 @@ if (fn === "tape") {
       });
       const ff = spawnSync(
         "ffmpeg",
-        ["-y", "-framerate", "20", "-i", join(dir, "f%04d.jpg"), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "26", "-movflags", "+faststart", mp4],
+        ["-y", "-framerate", "20", "-i", join(dir, "f%04d.jpg"), "-vf", "crop=ih*9/16:ih,scale=720:1280", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "26", "-movflags", "+faststart", mp4],
         { encoding: "utf8" },
       );
       rmSync(dir, { recursive: true, force: true });

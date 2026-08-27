@@ -27,7 +27,7 @@ export type SceneTrack = { kind?: Kind; part?: string; ref?: string };
 
 export type SceneAirborne = { minY?: number; minZ?: number };
 
-export type SceneCam = { offset?: Vec3; look?: Vec3; eye?: Vec3 };
+export type SceneCam = { offset?: Vec3; look?: Vec3; eye?: Vec3; fov?: number };
 
 export type Scene = {
   id: string;
@@ -172,7 +172,15 @@ export function coerceScene(raw: unknown): Scene | null {
     const off = vec3(c.offset);
     const look = vec3(c.look);
     const eye = vec3(c.eye);
-    if (off || look || eye) cam = { ...(off ? { offset: off } : {}), ...(look ? { look } : {}), ...(eye ? { eye } : {}) };
+    const fov = num(c.fov);
+    if (off || look || eye || (fov != null && fov > 10)) {
+      cam = {
+        ...(off ? { offset: off } : {}),
+        ...(look ? { look } : {}),
+        ...(eye ? { eye } : {}),
+        ...(fov != null && fov > 10 ? { fov } : {}),
+      };
+    }
   }
   return {
     id: o.id.slice(0, 48),
