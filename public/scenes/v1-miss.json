@@ -1,8 +1,8 @@
 {
-  "id": "v1",
-  "name": "Wagon hill",
-  "blurb": "Dummy tied to a wagon. Parabola hill, kick at the end, both leave the lip together.",
-  "file": "scenes/v1.json",
+  "id": "v1-miss",
+  "name": "Wagon miss",
+  "blurb": "Same jump. Bang after the peak. Dummy stays together and lands.",
+  "file": "scenes/v1-miss.json",
   "select": "grenade",
   "inspect": false,
   "track": {
@@ -106,7 +106,7 @@
         19.065
       ],
       "grip": 0.8,
-      "fuse": 1.81
+      "fuse": 2.95
     }
   ],
   "ties": [

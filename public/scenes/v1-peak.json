@@ -1,8 +1,8 @@
 {
-  "id": "v1",
-  "name": "Wagon hill",
-  "blurb": "Dummy tied to a wagon. Parabola hill, kick at the end, both leave the lip together.",
-  "file": "scenes/v1.json",
+  "id": "v1-peak",
+  "name": "Wagon peak",
+  "blurb": "Same jump. Bang at the peak. Dummy comes apart in the air.",
+  "file": "scenes/v1-peak.json",
   "select": "grenade",
   "inspect": false,
   "track": {
@@ -106,7 +106,7 @@
         19.065
       ],
       "grip": 0.8,
-      "fuse": 1.81
+      "fuse": 2.16
     }
   ],
   "ties": [

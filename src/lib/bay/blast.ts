@@ -4,6 +4,7 @@ import { coverAabbHit } from "@/lib/bay/cover";
 import { listSamplers, log, note, probeTime } from "@/lib/bay/probe";
 import { playEvent } from "@/lib/contain/audio";
 import { useBay } from "@/store/bay-store";
+import { carriedHang, onRide, ridePeakY } from "@/lib/bay/ride";
 
 const FUSE_GEN = 4;
 
@@ -33,7 +34,16 @@ function ensureDummyOutcome(x: number, y: number, z: number, power: number) {
   if (recent("dummy-flop") || recent("cover-block")) return;
   const dummy = useBay.getState().entities.find((e) => e.kind === "dummy");
   if (!dummy) return;
-  const p = { x: dummy.pos[0], y: dummy.pos[1] + 0.74, z: dummy.pos[2] };
+  const hips = listSamplers().get(`${dummy.id}-hips`);
+  const body = hips?.getBody?.();
+  const live = body?.translation();
+  const vy = body?.linvel()?.y ?? 0;
+  if (onRide(dummy.id) && live) {
+    if (!carriedHang(live.y, vy, ridePeakY())) return;
+  }
+  const p = live
+    ? { x: live.x, y: live.y, z: live.z }
+    : { x: dummy.pos[0], y: dummy.pos[1] + 0.74, z: dummy.pos[2] };
   const dist = Math.hypot(p.x - x, p.z - z);
   resetLoads(dummy.id);
   armLoadWindow(0.55);

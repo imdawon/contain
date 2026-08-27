@@ -271,7 +271,6 @@ const TAKER_SRC = `const g = globalThis;
 if (!(g.__bayPipeCtl && !g.__bayPipeCtl.signal.aborted)) {
   const ctl = new AbortController();
   g.__bayPipeCtl = ctl;
-  const seen = (g.__baySeen ??= new Set());
   const paintInfo = () => {
     const vis = typeof document !== "undefined" ? document.visibilityState : "hidden";
     let nobj = 0;
@@ -306,25 +305,21 @@ if (!(g.__bayPipeCtl && !g.__bayPipeCtl.signal.aborted)) {
         }
         const msg = await r.json();
         if (!msg?.id) continue;
-        const p = paintInfo();
-        if (seen.has(msg.id)) {
-          await fetch("/__bay/done", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ id: msg.id, skipped: true, paint: p.paint, nobj: p.nobj }),
-          });
-          continue;
+        const jobs = (g.__bayJobs ??= new Map());
+        let pending = jobs.get(msg.id);
+        if (!pending) {
+          const cap = Math.min(20000, Number(msg.waitMs) || 16000);
+          pending = Promise.race([
+            run(String(msg.fn ?? ""), Array.isArray(msg.args) ? msg.args : []),
+            new Promise((res) => setTimeout(() => res({ error: "run-timeout" }), cap)),
+          ]);
+          jobs.set(msg.id, pending);
+          if (jobs.size > 80) {
+            const first = jobs.keys().next().value;
+            if (first && first !== msg.id) jobs.delete(first);
+          }
         }
-        seen.add(msg.id);
-        if (seen.size > 80) {
-          const first = seen.values().next().value;
-          if (first) seen.delete(first);
-        }
-        const cap = Math.min(20000, Number(msg.waitMs) || 16000);
-        const out = await Promise.race([
-          run(String(msg.fn ?? ""), Array.isArray(msg.args) ? msg.args : []),
-          new Promise((res) => setTimeout(() => res({ error: "run-timeout" }), cap)),
-        ]);
+        const out = await pending;
         const after = paintInfo();
         await fetch("/__bay/done", {
           method: "POST",

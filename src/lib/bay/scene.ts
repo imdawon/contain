@@ -41,7 +41,16 @@ export type Scene = {
   ties: SceneTie[];
 };
 
-export const SCENE_INDEX = [{ id: "v1", file: "scenes/v1.json", name: "Wagon hill" }] as const;
+export const SCENE_INDEX = [
+  { id: "v1", file: "scenes/v1.json", name: "Wagon hill" },
+  { id: "v1-miss", file: "scenes/v1-miss.json", name: "Wagon miss" },
+  { id: "v1-tight", file: "scenes/v1-tight.json", name: "Wagon tight" },
+  { id: "v1-peak", file: "scenes/v1-peak.json", name: "Wagon peak" },
+  { id: "v1-two", file: "scenes/v1-two.json", name: "Wagon two" },
+  { id: "wheel-100", file: "scenes/wheel-100.json", name: "Wheel 100" },
+  { id: "wheel-200", file: "scenes/wheel-200.json", name: "Wheel 200" },
+  { id: "wheel-300", file: "scenes/wheel-300.json", name: "Wheel 300" },
+] as const;
 
 const KINDS = new Set<string>([
   "pack",
@@ -65,6 +74,8 @@ const KINDS = new Set<string>([
   "wagon",
   "hill",
   "ramp",
+  "wheel",
+  "drum",
 ]);
 
 function round(n: number) {
@@ -185,7 +196,7 @@ export function sceneCard(scene: Scene) {
   };
 }
 
-export function materializeScene(scene: Scene): {
+export function materializeScene(scene: Scene, nextId: () => string): {
   entities: Entity[];
   selected: string | null;
   trackId: string | null;
@@ -196,9 +207,13 @@ export function materializeScene(scene: Scene): {
   runId: null;
   trial: 0;
 } {
+  const byName = new Map<string, string>();
   const entities: Entity[] = scene.entities.map((a) => {
+    const id = nextId();
+    byName.set(a.name, id);
     const e: Entity = {
-      id: a.name,
+      id,
+      name: a.name,
       kind: a.kind === "charge" ? "grenade" : a.kind,
       pos: [a.pos[0], a.pos[1], a.pos[2]],
     };
@@ -215,13 +230,17 @@ export function materializeScene(scene: Scene): {
   });
   const selectName = scene.select;
   const selected =
-    entities.find((e) => e.id === selectName || e.kind === selectName)?.id ??
+    (selectName ? byName.get(selectName) : undefined) ??
+    entities.find((e) => e.kind === selectName)?.id ??
     entities.find((e) => e.kind === "grenade")?.id ??
     entities[0]?.id ??
     null;
   let trackId: string | null = selected;
   if (scene.track?.ref) {
-    trackId = scene.track.ref;
+    const ref = scene.track.ref;
+    const hit = byName.get(ref) ?? entities.find((e) => e.kind === ref)?.id;
+    trackId = hit ?? selected;
+    if (hit && scene.track.part) trackId = `${hit}-${scene.track.part}`;
   } else if (scene.track?.kind) {
     const e = entities.find((x) => x.kind === scene.track!.kind);
     if (e) trackId = scene.track.part ? `${e.id}-${scene.track.part}` : e.id;

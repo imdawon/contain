@@ -154,6 +154,11 @@ const KINDS = new Set<string>([
   "dodeca",
   "ico",
   "plank",
+  "wagon",
+  "hill",
+  "ramp",
+  "wheel",
+  "drum",
 ]);
 
 function round(n: number) {

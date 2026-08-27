@@ -1,8 +1,8 @@
 {
-  "id": "v1",
-  "name": "Wagon hill",
-  "blurb": "Dummy tied to a wagon. Parabola hill, kick at the end, both leave the lip together.",
-  "file": "scenes/v1.json",
+  "id": "v1-two",
+  "name": "Wagon two",
+  "blurb": "Same jump. Two bangs at the peak. Cut on the wreck.",
+  "file": "scenes/v1-two.json",
   "select": "grenade",
   "inspect": false,
   "track": {
@@ -106,7 +106,28 @@
         19.065
       ],
       "grip": 0.8,
-      "fuse": 1.81
+      "fuse": 2.16
+    },
+    {
+      "name": "nade2",
+      "kind": "grenade",
+      "pos": [
+        -0.24,
+        7.03,
+        -8.48
+      ],
+      "rot": [
+        0.748,
+        0,
+        0
+      ],
+      "vel": [
+        0.0,
+        -17.678,
+        19.065
+      ],
+      "grip": 0.8,
+      "fuse": 2.16
     }
   ],
   "ties": [
@@ -128,6 +149,10 @@
     },
     {
       "a": "nade",
+      "b": "wagon"
+    },
+    {
+      "a": "nade2",
       "b": "wagon"
     }
   ]

@@ -26,10 +26,14 @@ export type Kind =
   | "wagon"
   | "hill"
   | "ramp"
+  | "wheel"
+  | "drum"
   | SolidShape;
 
 export interface Entity {
   id: string;
+  /** JSON actor name. Label only — not the React/Rapier id. */
+  name?: string;
   kind: Kind;
   pos: [number, number, number];
   rot?: [number, number, number];
@@ -125,7 +129,9 @@ export const useBay = create<BayState>((set, get) => ({
       kind === "doorway" ||
       kind === "wagon" ||
       kind === "hill" ||
-      kind === "ramp"
+      kind === "ramp" ||
+      kind === "wheel" ||
+      kind === "drum"
         ? [r(), 0, r()]
         : kind === "pack" || kind === "grenade"
           ? [r() * 0.6, 1.15, r() * 0.6]
@@ -145,7 +151,7 @@ export const useBay = create<BayState>((set, get) => ({
   reset: () => {
     const s = get();
     if (s.scene) {
-      set({ ...materializeScene(s.scene), dragging: false, latch: "sealed", stageN: s.stageN + 1 });
+      set({ ...materializeScene(s.scene, nid), dragging: false, latch: "sealed", stageN: s.stageN + 1 });
       return;
     }
     const run = getRun(s.runId);
@@ -162,7 +168,7 @@ export const useBay = create<BayState>((set, get) => ({
     return { ok: true, id: staged.levelId, n: staged.entities.length, name: level.name };
   },
   loadScene: (scene) => {
-    const staged = materializeScene(scene);
+    const staged = materializeScene(scene, nid);
     set({ ...staged, dragging: false, latch: "sealed", inspect: false, tool: "grab", stageN: get().stageN + 1 });
     return {
       ok: true,

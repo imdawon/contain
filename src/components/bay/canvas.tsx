@@ -13,6 +13,7 @@ import { Ramp } from "@/components/bay/ramp";
 import { Pack } from "@/components/bay/pack";
 import { SceneRig } from "@/components/bay/scene-rig";
 import { Solid } from "@/components/bay/solid";
+import { Drum, Wheel } from "@/components/bay/steel";
 import { Wagon } from "@/components/bay/wagon";
 import { Wall } from "@/components/bay/wall";
 import { isSolid } from "@/store/bay-store";
@@ -228,6 +229,10 @@ function World() {
           <Doorway key={e.id} id={e.id} pos={e.pos} />
         ) : e.kind === "grass" ? (
           <Grass key={e.id} id={e.id} pos={e.pos} />
+        ) : e.kind === "wheel" ? (
+          <Wheel key={e.id} id={e.id} pos={e.pos} rot={e.rot} grip={e.grip} bounce={e.bounce} mass={e.mass} />
+        ) : e.kind === "drum" ? (
+          <Drum key={e.id} id={e.id} pos={e.pos} rot={e.rot} grip={e.grip} bounce={e.bounce} mass={e.mass} />
         ) : isSolid(e.kind) ? (
           <Solid key={e.id} id={e.id} shape={e.kind} pos={e.pos} />
         ) : null,

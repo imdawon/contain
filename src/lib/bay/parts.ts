@@ -88,5 +88,33 @@ export const WAGON = {
   mass: 18,
 };
 
+/** Machined steel wheel. Yields locally; Rapier still owns rigid motion. */
+export const WHEEL = {
+  radius: 0.4,
+  /** Wide enough to face a 3-drum wall. Not a coin on the rail. */
+  thick: 0.96,
+  hub: 0.1,
+  segs: 16,
+  mass: 100,
+  /** Contact impulse (N·s) before the rim takes a plastic dent. */
+  yieldJ: 0.016,
+  stiff: 1.35,
+  maxDent: 0.36,
+  color: 0x6e7278,
+};
+
+/** Thin-wall oil drum. Side panels cave in; lids ride the dented ring. */
+export const DRUM = {
+  radius: 0.255,
+  height: 0.64,
+  wall: 0.042,
+  segs: 16,
+  mass: 18,
+  yieldJ: 0.006,
+  stiff: 0.5,
+  maxDent: 0.22,
+  color: 0x4a5240,
+};
+
 /** Half-extents of the physical floor, meters. Visual grid is infinite. */
 export const FLOOR = { half: 200 };
