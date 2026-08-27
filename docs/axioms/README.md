@@ -9,7 +9,6 @@ Who wrote what:
 - `creative-content-watch.md` — what makes a CONTAIN video fun to watch. Distilled from high-retention shorts. This is the taste doc. Creative Content owned it.
 - `creative-content-shorts.md` — the short-form version of the same loop (hook, unskippable middle, cut). Same bot, same day.
 - `code-expert.md` — how to implement and prove a scene. JSON files, omp, bay harness, no browser. Code Expert owned it.
-- `chief-of-staff.md` — how work was routed and gated. Chief of Staff owned it.
 
 Parked picture notes (historical, do not revive as the current video):
 
