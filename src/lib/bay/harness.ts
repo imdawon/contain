@@ -60,7 +60,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 10;
+const PIPE_GEN = 11;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -596,7 +596,7 @@ async function tape(scene?: unknown, ms = 0) {
     const dt = now - last;
     last = now;
     const w = peek().objects.find((o) => o.kind === "wheel");
-    const parked = Boolean(w && w.speed < 0.3 && (w.z > 6 || w.y < 0.6));
+    const parked = Boolean(w && w.speed < 0.3 && (w.x > 6 || w.z > 6 || w.y < 0.6));
     if (parked) {
       quiet += dt;
       if (quiet > 1600) break;

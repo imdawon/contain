@@ -34,9 +34,6 @@ import {
 const WHEEL_GROUPS = interactionGroups([WHEEL_G], [WORLD_G, DRUM_G, CRATE_G]);
 const DRUM_GROUPS = interactionGroups([DRUM_G], [WORLD_G, DRUM_G, WHEEL_G]);
 const WHEEL_MEMBER = 1 << WHEEL_G;
-const _q = new THREE.Quaternion();
-const _e = new THREE.Euler();
-
 function SteelBody({
   id,
   kind,
@@ -125,19 +122,6 @@ function SteelBody({
   useAfterPhysicsStep(() => {
     const b = body.current;
     if (!b || b.numColliders() === 0) return;
-    if (kind === "wheel") {
-      const p = b.translation();
-      const v = b.linvel();
-      const r = b.rotation();
-      _q.set(r.x, r.y, r.z, r.w);
-      _e.setFromQuaternion(_q, "XYZ");
-      _e.set(_e.x, 0, Math.PI / 2);
-      _q.setFromEuler(_e);
-      b.setTranslation({ x: 0, y: p.y, z: p.z }, true);
-      b.setRotation({ x: _q.x, y: _q.y, z: _q.z, w: _q.w }, true);
-      b.setLinvel({ x: 0, y: v.y, z: v.z }, true);
-      b.setAngvel({ x: -v.z / Math.max(0.08, WHEEL.radius), y: 0, z: 0 }, true);
-    }
     let raw: ReturnType<typeof collectHits> = [];
     try {
       raw = collectHits(world, b, kind);

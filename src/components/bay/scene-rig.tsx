@@ -254,7 +254,11 @@ export function SceneRig({ scene }: { scene: Scene }) {
         leadBody.setLinvel({ x: kick[0], y: kick[1], z: kick[2] }, true);
         if (leadEnt.kind === "wheel") {
           const r = WHEEL.radius;
-          leadBody.setAngvel({ x: -(kick[2] || 0) / Math.max(0.08, r), y: 0, z: 0 }, true);
+          leadBody.setAngvel({
+            x: -(kick[2] || 0) / Math.max(0.08, r),
+            y: 0,
+            z: -(kick[0] || 0) / Math.max(0.08, r),
+          }, true);
         }
         leadBody.wakeUp();
         applyActor(leadEnt.id, { vx: kick[0], vy: kick[1], vz: kick[2] });
