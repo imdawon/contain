@@ -1,4 +1,6 @@
+import "@/lib/bay/raf";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
+
 import { ContactShadows, Grid, OrbitControls } from "@react-three/drei";
 import { CuboidCollider, Physics, RigidBody, useRapier } from "@react-three/rapier";
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
@@ -259,29 +261,33 @@ function World() {
 
 export function BayCanvas() {
   const wrap = useRef<HTMLDivElement>(null);
-  const [ready, setReady] = useState(false);
+  const [box, setBox] = useState({ w: 0, h: 0 });
   useLayoutEffect(() => {
     const el = wrap.current;
     if (!el) return;
     const mark = () => {
-      if (el.clientWidth > 8 && el.clientHeight > 8) setReady(true);
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (w > 8 && h > 8) setBox((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
     };
     mark();
     const ro = new ResizeObserver(mark);
     ro.observe(el);
-    const fallback = window.setTimeout(() => setReady(true), 400);
+    const iv = window.setInterval(mark, 250);
     return () => {
       ro.disconnect();
-      window.clearTimeout(fallback);
+      window.clearInterval(iv);
     };
   }, []);
+  const ready = box.w > 8 && box.h > 8;
 
   return (
     <div ref={wrap} className="lab-stage absolute inset-0 h-full w-full">
       {ready ? (
         <Canvas
+          key={`${box.w}x${box.h}`}
           className="block h-full w-full touch-none"
-          style={{ position: "absolute", inset: 0 }}
+          style={{ position: "absolute", inset: 0, width: box.w, height: box.h }}
           dpr={[1, 1.5]}
           frameloop="always"
           camera={{ position: [3.4, 1.7, 3.6], fov: 42, near: 0.08, far: 280 }}
@@ -292,12 +298,13 @@ export function BayCanvas() {
             powerPreference: "default",
             failIfMajorPerformanceCaveat: false,
           }}
-          onCreated={({ gl, size }) => {
+          onCreated={(state) => {
+            const { gl } = state;
             gl.toneMapping = THREE.ACESFilmicToneMapping;
             gl.toneMappingExposure = 1.38;
             gl.outputColorSpace = THREE.SRGBColorSpace;
             gl.setClearColor("#2c261e", 1);
-            if (size.width > 0 && size.height > 0) gl.setSize(size.width, size.height, false);
+            state.setSize(box.w, box.h);
           }}
         >
           <FitGl />

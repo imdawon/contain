@@ -1,5 +1,6 @@
 import {
   ConvexHullCollider,
+  CylinderCollider,
   RigidBody,
   interactionGroups,
   useAfterPhysicsStep,
@@ -26,6 +27,7 @@ import {
   steelGeometry,
   steelMeshRim,
   steelRim,
+  worldHitsToLocal,
   type SteelKind,
 } from "@/lib/bay/yield";
 
@@ -113,6 +115,11 @@ function SteelBody({
       }
       armed.current = true;
     }
+    if (shell.maxTaken > 0) {
+      refreshSteelMesh(geo, shell.live);
+      const drawn = mesh.current;
+      if (drawn && drawn.geometry !== geo) drawn.geometry = geo;
+    }
   });
 
   useAfterPhysicsStep(() => {
@@ -131,13 +138,15 @@ function SteelBody({
       b.setLinvel({ x: 0, y: v.y, z: v.z }, true);
       b.setAngvel({ x: -v.z / Math.max(0.08, WHEEL.radius), y: 0, z: 0 }, true);
     }
-    let local: ReturnType<typeof collectHits> = [];
+    let raw: ReturnType<typeof collectHits> = [];
     try {
-      local = collectHits(world, b, kind);
+      raw = collectHits(world, b, kind);
     } catch {
       return;
     }
-    if (local.length === 0) return;
+    if (raw.length === 0) return;
+    const reach = kind === "wheel" ? WHEEL.radius * 1.7 + WHEEL.thick : DRUM.radius * 1.7 + DRUM.height;
+    const local = raw.some((h) => Math.hypot(h.x, h.y, h.z) > reach) ? worldHitsToLocal(b, raw) : raw;
     const added = applySteelHits(shell, local);
     if (added <= 0) return;
     refreshSteelMesh(geo, shell.live);
@@ -146,8 +155,10 @@ function SteelBody({
       drawn.geometry = geo;
       drawn.frustumCulled = false;
     }
-    pushSteelHulls(shell, hulls.current, rapier.ConvexPolyhedron, hullArgs);
-    setBodyMass(b, kg);
+    if (kind === "wheel") {
+      pushSteelHulls(shell, hulls.current, rapier.ConvexPolyhedron, hullArgs);
+      setBodyMass(b, kg);
+    }
     b.wakeUp();
     const mark = shell.kind === "wheel" ? 0.012 : 0.02;
     if (shell.maxTaken >= mark && shell.noted < Math.floor(shell.maxTaken / mark)) {
@@ -175,30 +186,41 @@ function SteelBody({
       mass={kg}
       friction={mu}
       restitution={rest}
-      linearDamping={kind === "wheel" ? 0.02 : 0.07}
-      angularDamping={kind === "wheel" ? 0.04 : 0.12}
+      linearDamping={kind === "wheel" ? 0.02 : 0.04}
+      angularDamping={kind === "wheel" ? 0.04 : 0.06}
       collisionGroups={groups}
-      canSleep={false}
-      ccd
+      canSleep={kind !== "wheel"}
+      ccd={kind === "wheel"}
       enabledRotations={[true, true, true]}
     >
-      {hullArgs.map((args, i) => (
-        <ConvexHullCollider
-          key={i}
-          ref={(c) => {
-            hulls.current[i] = c;
-          }}
-          args={[args]}
-          collisionGroups={groups}
-          friction={mu}
-          restitution={rest}
-        />
-      ))}
+      {kind === "wheel"
+        ? hullArgs.map((args, i) => (
+            <ConvexHullCollider
+              key={i}
+              ref={(c) => {
+                hulls.current[i] = c;
+              }}
+              args={[args]}
+              collisionGroups={groups}
+              friction={mu}
+              restitution={rest}
+            />
+          ))
+        : (
+            <CylinderCollider
+              args={[DRUM.height / 2, DRUM.radius]}
+              collisionGroups={groups}
+              friction={mu}
+              restitution={rest}
+            />
+          )}
       <mesh ref={mesh} geometry={geo} onPointerDown={grab.down} castShadow frustumCulled={false}>
         <meshStandardMaterial
           color={color}
-          metalness={kind === "wheel" ? 0.82 : 0.58}
-          roughness={kind === "wheel" ? 0.3 : 0.46}
+          vertexColors
+          flatShading
+          metalness={kind === "wheel" ? 0.34 : 0.28}
+          roughness={kind === "wheel" ? 0.58 : 0.64}
           side={THREE.DoubleSide}
         />
       </mesh>

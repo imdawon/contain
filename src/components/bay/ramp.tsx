@@ -182,6 +182,8 @@ export function Ramp({
           side={THREE.DoubleSide}
         />
       </mesh>
+      {/* R3F <line> vs SVG line types */}
+      {/* @ts-expect-error three line, not svg */}
       <line geometry={hill.edge}>
         <lineBasicMaterial color={dirtEdge} />
       </line>

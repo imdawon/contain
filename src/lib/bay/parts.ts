@@ -95,11 +95,12 @@ export const WHEEL = {
   thick: 0.96,
   hub: 0.1,
   segs: 16,
-  mass: 100,
-  /** Contact impulse (N·s) before the rim takes a plastic dent. */
-  yieldJ: 0.016,
-  stiff: 1.35,
-  maxDent: 0.36,
+  /** Default 100 t. Rapier is kg. */
+  mass: 100_000,
+  /** Contact impulse (N·s) before the rim takes a plastic bruise. */
+  yieldJ: 18,
+  stiff: 55,
+  maxDent: 0.048,
   color: 0x6e7278,
 };
 
@@ -110,9 +111,9 @@ export const DRUM = {
   wall: 0.042,
   segs: 16,
   mass: 18,
-  yieldJ: 0.006,
-  stiff: 0.5,
-  maxDent: 0.22,
+  yieldJ: 0.35,
+  stiff: 5.5,
+  maxDent: 0.12,
   color: 0x4a5240,
 };
 

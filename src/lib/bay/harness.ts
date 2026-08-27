@@ -60,7 +60,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 6;
+const PIPE_GEN = 7;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -397,6 +397,8 @@ export function peek() {
     rim: string | number | boolean | null;
     kin: boolean | null;
     spin: number;
+    meshRim: string | number | boolean | null;
+    dish: string | number | boolean | null;
   }[] = [];
   for (const [id, rec] of listSamplers()) {
     const p = rec.sample();
@@ -563,6 +565,59 @@ function loadClip(id: string) {
   return loadBay(id);
 }
 
+
+async function tape(scene?: unknown, ms = 0) {
+  const grabCanvas = () => {
+    const el = document.querySelector("canvas");
+    return el instanceof HTMLCanvasElement && el.width >= 8 && el.height >= 8 ? el : null;
+  };
+  if (!grabCanvas()) return { ok: false as const, reason: "no-canvas" as const };
+  const frames: string[] = [];
+  const grab = () => {
+    const c = grabCanvas();
+    if (!c) return;
+    try {
+      frames.push(c.toDataURL("image/jpeg", 0.48));
+    } catch {
+      /* context lost */
+    }
+  };
+  grab();
+  const iv = window.setInterval(grab, 66);
+  clearHist();
+  const staged = scene != null && scene !== "" ? await restageScene(scene) : { ok: true, id: null };
+  const hard = Number(ms) > 400 ? Number(ms) : 10000;
+  const t0 = performance.now();
+  let quiet = 0;
+  let last = t0;
+  while (performance.now() - t0 < hard) {
+    await waitFrames(180);
+    const now = performance.now();
+    const dt = now - last;
+    last = now;
+    const w = peek().objects.find((o) => o.kind === "wheel");
+    const parked = Boolean(w && w.speed < 0.3 && (w.z > 6 || w.y < 0.6));
+    if (parked) {
+      quiet += dt;
+      if (quiet > 1600) break;
+    } else {
+      quiet = 0;
+    }
+  }
+  window.clearInterval(iv);
+  grab();
+  const c = grabCanvas();
+  return {
+    ok: frames.length > 2,
+    w: c?.width ?? 0,
+    h: c?.height ?? 0,
+    mime: "image/jpeg",
+    n: frames.length,
+    restage: staged,
+    frames,
+  };
+}
+
 export function help() {
   return {
     peek: "compact stage: objects xyz/speed + recent events + toy hinge loads",
@@ -598,6 +653,8 @@ export function help() {
     drop: "(id) dynamic",
     until: "(eventType, timeoutMs) promise",
     wait: "(ms) rAF-wait so physics keeps ticking",
+    shot: "jpeg of the live canvas (bay.mjs writes it to a file)",
+    tape: "(scene, ms?) recorder rolling, restage, run until the wheel stops; jpeg frames",
     audio: "hiss/roar loop levels",
     reload: "location.reload — last-ditch if the pipe died",
   };
@@ -661,6 +718,20 @@ export function harnessApi() {
     until,
     wait: waitFrames,
     note,
+    shot: () => {
+      const canvas = document.querySelector("canvas");
+      if (!(canvas instanceof HTMLCanvasElement) || canvas.width < 8 || canvas.height < 8) {
+        return { ok: false, reason: "no-canvas" };
+      }
+      return {
+        ok: true,
+        w: canvas.width,
+        h: canvas.height,
+        mime: "image/jpeg",
+        data: canvas.toDataURL("image/jpeg", 0.62),
+      };
+    },
+    tape,
     audio: loopLevels,
     reload: () => {
       location.reload();
@@ -765,7 +836,7 @@ function startHarnessPipe() {
         }
         const msg = (await r.json()) as { id?: string; fn?: string; args?: unknown[]; waitMs?: number };
         if (!msg?.id) continue;
-        const cap = Math.min(20000, Number(msg.waitMs) || 16000);
+        const cap = Math.min(60000, Number(msg.waitMs) || 16000);
         const out = await handle(String(msg.id), String(msg.fn ?? ""), Array.isArray(msg.args) ? msg.args : [], cap);
         beat();
         await fetch("/__bay/done", {
