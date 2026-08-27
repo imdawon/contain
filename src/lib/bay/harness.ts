@@ -60,7 +60,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 11;
+const PIPE_GEN = 13;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -572,45 +572,58 @@ async function tape(scene?: unknown, ms = 0) {
     return el instanceof HTMLCanvasElement && el.width >= 8 && el.height >= 8 ? el : null;
   };
   if (!grabCanvas()) return { ok: false as const, reason: "no-canvas" as const };
+  const W = 720;
+  const H = 1280;
+  const DT = 1000 / 30;
+  const scratch = document.createElement("canvas");
+  scratch.width = W;
+  scratch.height = H;
+  const ctx = scratch.getContext("2d", { alpha: false });
+  if (!ctx) return { ok: false as const, reason: "no-canvas" as const };
   const frames: string[] = [];
   const grab = () => {
     const c = grabCanvas();
     if (!c) return;
+    const cropW = Math.min(c.width, Math.round((c.height * 9) / 16));
+    const sx = Math.max(0, Math.round((c.width - cropW) / 2));
+    ctx.drawImage(c, sx, 0, cropW, c.height, 0, 0, W, H);
+    frames.push(scratch.toDataURL("image/jpeg", 0.55));
+  };
+  let lastGrab = -DT;
+  let raf = 0;
+  const tick = (now: number) => {
+    raf = window.requestAnimationFrame(tick);
+    if (now - lastGrab < DT) return;
+    lastGrab = now;
     try {
-      frames.push(c.toDataURL("image/jpeg", 0.42));
+      grab();
     } catch {
       /* context lost */
     }
   };
-  grab();
-  const iv = window.setInterval(grab, 33);
+  raf = window.requestAnimationFrame(tick);
   clearHist();
   const staged = scene != null && scene !== "" ? await restageScene(scene) : { ok: true, id: null };
-  const hard = Number(ms) > 400 ? Number(ms) : 20000;
+  const hard = Number(ms) > 400 ? Number(ms) : 28000;
   const t0 = performance.now();
-  let quiet = 0;
-  let last = t0;
+  let floorAt = 0;
   while (performance.now() - t0 < hard) {
     await waitFrames(180);
-    const now = performance.now();
-    const dt = now - last;
-    last = now;
     const w = peek().objects.find((o) => o.kind === "wheel");
-    const parked = Boolean(w && w.speed < 0.3 && (w.x > 6 || w.z > 6 || w.y < 0.6));
-    if (parked) {
-      quiet += dt;
-      if (quiet > 1600) break;
-    } else {
-      quiet = 0;
-    }
+    const onFloor = Boolean(w && w.z > 96 && w.y < 3.2);
+    if (onFloor && floorAt === 0) floorAt = performance.now();
+    if (floorAt > 0 && performance.now() - floorAt >= 7000) break;
   }
-  window.clearInterval(iv);
-  grab();
-  const c = grabCanvas();
+  window.cancelAnimationFrame(raf);
+  try {
+    grab();
+  } catch {
+    /* context lost */
+  }
   return {
     ok: frames.length > 2,
-    w: c?.width ?? 0,
-    h: c?.height ?? 0,
+    w: W,
+    h: H,
     mime: "image/jpeg",
     n: frames.length,
     restage: staged,
@@ -654,7 +667,7 @@ export function help() {
     until: "(eventType, timeoutMs) promise",
     wait: "(ms) rAF-wait so physics keeps ticking",
     shot: "jpeg of the live canvas (bay.mjs writes it to a file)",
-    tape: "(scene, ms?) recorder rolling, restage, run until the wheel stops; ~30fps jpeg frames",
+    tape: "(scene, ms?) recorder rolling, restage, 30fps jpeg, keep 7s after floor contact",
     audio: "hiss/roar loop levels",
     reload: "location.reload — last-ditch if the pipe died",
   };
