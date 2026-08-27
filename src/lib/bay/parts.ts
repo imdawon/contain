@@ -95,29 +95,49 @@ export const WHEEL = {
   thick: 1.8,
   hub: 0.22,
   segs: 24,
-  /** Default 100 t. Rapier is kg. */
+  /** Default 100 t. Rapier is kg. Scene files may 10x this. */
   mass: 100_000,
-  /** Contact impulse (N·s) before a plastic bruise. Rolling ~ m g / 60 ≈ 1.6e4 at 100 t; a 55-gal slam is ~2e3. */
-  yieldJ: 24_000,
-  stiff: 2.4e6,
-  maxDent: 0.22,
+  /** Slam bruise. Rolling contact is gated by closing speed, not this. */
+  yieldJ: 400_000,
+  stiff: 6e5,
+  maxDent: 0.42,
   color: 0x6e7278,
 };
 
 /** Thin-wall oil drum. Side panels cave in; lids ride the dented ring. */
 export const DRUM = {
-  /** 4x a 55-gal so the chase shot can read lids, not open washers. */
-  radius: 1.02,
-  height: 2.56,
-  wall: 0.08,
+  /** Half the 4x barrels (2x a 55-gal) so the 2 m coil still dwarfs them. */
+  radius: 0.51,
+  height: 1.28,
+  wall: 0.06,
   segs: 24,
-  /** Thin-wall tank, part-filled. Surface ~16x a 55-gal. */
-  mass: 3200,
-  yieldJ: 0.22,
-  stiff: 3.2,
-  maxDent: 0.55,
+  /** Empty 2x 55-gal steel. Full drums would not pancake. */
+  mass: 80,
+  yieldJ: 0.02,
+  stiff: 0.35,
+  maxDent: 0.62,
   color: 0x4a5240,
 };
 
 /** Half-extents of the physical floor, meters. Visual grid is infinite. */
 export const FLOOR = { half: 2000 };
+
+/** Principal inertia of a thick-walled coil. Local Y is the bore. */
+export function coilInertia(kg: number) {
+  const ro = WHEEL.radius;
+  const ri = WHEEL.hub;
+  const h = WHEEL.thick;
+  const ring = 0.5 * kg * (ro * ro + ri * ri);
+  /** Tumble I must beat roll I or a squat coil flips like a glued toilet-paper roll. */
+  const trans = (0.25 * kg * (ro * ro + ri * ri) + (kg * h * h) / 12) * 8;
+  return { x: trans, y: ring, z: trans };
+}
+
+/** Principal inertia of a closed drum. Local Y is the axis. */
+export function drumInertia(kg: number) {
+  const r = DRUM.radius;
+  const h = DRUM.height;
+  const ring = 0.5 * kg * r * r;
+  const trans = 0.25 * kg * r * r + (kg * h * h) / 12;
+  return { x: trans, y: ring, z: trans };
+}

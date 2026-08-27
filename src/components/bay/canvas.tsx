@@ -41,8 +41,10 @@ function TrackCam({
   const fov = useBay((s) => s.scene?.cam?.fov);
   const camera = useThree((s) => s.camera);
   const primed = useRef(false);
+  const shake = useRef(0);
   useEffect(() => {
     primed.current = false;
+    shake.current = 0;
   }, [trackId, stageN]);
   useFrame(() => {
     if (fov && "fov" in camera && camera.fov !== fov) {
@@ -74,6 +76,16 @@ function TrackCam({
         primed.current = true;
       } else {
         camera.position.lerp(_chase, 0.22);
+      }
+      const body = rec.getBody?.();
+      if (body) {
+        const vy = body.linvel().y;
+        if (vy < -12) shake.current = Math.min(0.55, shake.current + (-vy - 12) * 0.014);
+      }
+      shake.current *= 0.84;
+      if (shake.current > 0.004) {
+        camera.position.x += (Math.random() - 0.5) * shake.current;
+        camera.position.y += (Math.random() - 0.5) * shake.current * 0.55;
       }
       const lx = look?.[0] ?? 0;
       const ly = look?.[1] ?? 0.2;
@@ -202,7 +214,7 @@ function World() {
   const fire = useFireMap();
 
   return (
-    <Physics key={stageN} gravity={[0, -9.81, 0]} timeStep={1 / 60} interpolate numSolverIterations={16} numInternalPgsIterations={10}>
+    <Physics key={stageN} gravity={[0, -9.81, 0]} timeStep={1 / 60} interpolate numSolverIterations={24} numInternalPgsIterations={12}>
       <TrackCam orbit={orbit} />
       <ProbeTick />
       <BlastBus />

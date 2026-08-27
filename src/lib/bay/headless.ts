@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { CRATE_G, DUMMY_G, WAGON_G, WORLD_G } from "./groups.ts";
 import { hillHulls } from "./hill-hulls.ts";
 import { DRUM, FLOOR, WHEEL } from "./parts.ts";
-import { applySteelHits, makeSteelShell, steelRim, worldHitsToLocal, type SteelHit, type SteelKind, type SteelShell } from "./yield.ts";
+import { applySteelHits, makeSteelShell, steelExtents, steelRim, worldHitsToLocal, type SteelHit, type SteelKind, type SteelShell } from "./yield.ts";
 
 export type Actor = {
   name?: string;
@@ -281,7 +281,7 @@ export function buildWorld(R: RapierMod, actors: Actor[], opts?: BuildOpts): Sim
           .setCcdEnabled(true)
           .setCanSleep(false)
           .setLinearDamping(0.004)
-          .setAngularDamping(0.008),
+          .setAngularDamping(0.08),
       );
       world.createCollider(
         R.ColliderDesc.cylinder(WHEEL.thick / 2, WHEEL.radius)
@@ -297,7 +297,7 @@ export function buildWorld(R: RapierMod, actors: Actor[], opts?: BuildOpts): Sim
       if (drumMode === "off") continue;
       const kg = e.mass ?? DRUM.mass;
       const mu = e.grip ?? 0.48;
-      const bounce = e.bounce ?? 0.03;
+      const bounce = e.bounce ?? 0;
       const desc = R.RigidBodyDesc.dynamic()
         .setTranslation(e.pos[0], e.pos[1], e.pos[2])
         .setRotation(q)
@@ -421,7 +421,15 @@ function yieldBody(world: RapierWorld, b: RapierBody, shell: SteelShell, kind: S
   if (raw.length === 0) return;
   const reach = kind === "wheel" ? WHEEL.radius * 1.7 + WHEEL.thick : DRUM.radius * 1.7 + DRUM.height;
   const local = raw.some((h) => Math.hypot(h.x, h.y, h.z) > reach) ? worldHitsToLocal(b, raw) : raw;
-  applySteelHits(shell, local);
+  const added = applySteelHits(shell, local);
+  if (kind === "drum" && added > 0) {
+    const col = b.collider(0) as { setHalfHeight?: (h: number) => void; setRadius?: (r: number) => void; setRestitution?: (v: number) => void; setCollisionGroups?: (g: number) => void };
+    const ext = steelExtents(shell);
+    col.setHalfHeight?.(Math.max(0.03, ext.halfH));
+    col.setRadius?.(Math.max(0.08, ext.radius));
+    col.setRestitution?.(0);
+    if (ext.halfH < 0.09) col.setCollisionGroups?.(interactionGroups([CRATE_G], [WORLD_G, CRATE_G]));
+  }
 }
 
 function mulberry32(seed: number) {

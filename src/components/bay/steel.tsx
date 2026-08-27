@@ -9,12 +9,12 @@ import {
   type RapierRigidBody,
 } from "@react-three/rapier";
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useGrab } from "@/components/bay/grab";
 import { CRATE_G, DRUM_G, WHEEL_G, WORLD_G } from "@/lib/bay/groups";
 import { DRUM, WHEEL } from "@/lib/bay/parts";
-import { note, registerBody, setBodyMass, unregisterBody } from "@/lib/bay/probe";
+import { findActorBody, note, registerBody, setBodyMass, unregisterBody } from "@/lib/bay/probe";
 import { poseOf } from "@/lib/bay/sample";
 import { useBay } from "@/store/bay-store";
 import {
@@ -24,6 +24,7 @@ import {
   refreshSteelMesh,
   sliceHull,
   steelDish,
+  steelExtents,
   steelGeometry,
   steelMeshRim,
   steelRim,
@@ -32,8 +33,31 @@ import {
 } from "@/lib/bay/yield";
 
 const WHEEL_GROUPS = interactionGroups([WHEEL_G], [WORLD_G, DRUM_G, CRATE_G]);
-const DRUM_GROUPS = interactionGroups([DRUM_G], [WORLD_G, DRUM_G, WHEEL_G]);
+const DRUM_SHEET_GROUPS = interactionGroups([DRUM_G], [WORLD_G, DRUM_G]);
 const WHEEL_MEMBER = 1 << WHEEL_G;
+
+type CrushCol = RapierCollider & {
+  raw?: () => CrushCol;
+  setHalfHeight?: (h: number) => void;
+  setRadius?: (r: number) => void;
+  setRestitution?: (v: number) => void;
+  setCollisionGroups?: (g: number) => void;
+};
+
+function crushDrumCollider(col: RapierCollider | null, halfH: number, radius: number, sheet: boolean) {
+  if (!col) return;
+  const wrapped = col as CrushCol;
+  const raw = wrapped.raw?.() ?? wrapped;
+  try {
+    raw.setHalfHeight?.(Math.max(0.03, halfH));
+    raw.setRadius?.(Math.max(0.08, radius));
+    raw.setRestitution?.(0);
+    if (sheet) raw.setCollisionGroups?.(DRUM_SHEET_GROUPS);
+  } catch {
+    /* shape lock */
+  }
+}
+
 function SteelBody({
   id,
   kind,
@@ -62,8 +86,8 @@ function SteelBody({
   const spec = kind === "wheel" ? WHEEL : DRUM;
   const kg = mass ?? spec.mass;
   const mu = grip ?? (kind === "wheel" ? 0.72 : 0.48);
-  const rest = bounce ?? 0.03;
-  const groups = kind === "wheel" ? WHEEL_GROUPS : DRUM_GROUPS;
+  const rest = bounce ?? 0;
+  const groups = kind === "wheel" ? WHEEL_GROUPS : DRUM_SHEET_GROUPS;
   const stageN = useBay((s) => s.stageN);
   const shell = useMemo(() => makeSteelShell(kind), [kind, stageN]);
   const geo = useMemo(() => steelGeometry(shell), [shell]);
@@ -82,6 +106,11 @@ function SteelBody({
           meshRim: Math.round(steelMeshRim(geo, shell) * 1000) / 1000,
           dish: Math.round(steelDish(shell) * 1000) / 1000,
           yield: true,
+          spin: (() => {
+            const w = body.current?.angvel();
+            return w ? Math.round(Math.hypot(w.x, w.y, w.z) * 100) / 100 : 0;
+          })(),
+          Iy: Math.round(body.current?.principalInertia()?.y ?? 0),
         }),
       () => body.current,
     );
@@ -96,12 +125,19 @@ function SteelBody({
     [geo],
   );
 
+  useLayoutEffect(() => {
+    const b = body.current;
+    if (!b) return;
+    setBodyMass(b, kg, kind);
+    pinned.current = true;
+  }, [kg, kind, stageN]);
+
   useFrame((state, dt) => {
     grab.tick(state.raycaster.ray, Math.min(dt, 0.05));
     const b = body.current;
     if (!b) return;
     if (!pinned.current) {
-      setBodyMass(b, kg);
+      setBodyMass(b, kg, kind);
       pinned.current = true;
     }
     if (!armed.current) {
@@ -110,6 +146,7 @@ function SteelBody({
         const c = b.collider(i);
         if (!c) continue;
         c.setContactForceEventThreshold(0.08);
+        if (kind === "drum") c.setRestitution(0);
       }
       armed.current = true;
     }
@@ -123,16 +160,75 @@ function SteelBody({
   useAfterPhysicsStep(() => {
     const b = body.current;
     if (!b || b.numColliders() === 0) return;
+    if (kind === "wheel") {
+      const w = b.angvel();
+      const v = b.linvel();
+      const q = b.rotation();
+      const ax = 2 * (q.x * q.y - q.w * q.z);
+      const ay = 1 - 2 * (q.x * q.x + q.z * q.z);
+      const az = 2 * (q.y * q.z + q.w * q.x);
+      const roll = w.x * ax + w.y * ay + w.z * az;
+      const speed = Math.hypot(v.x, v.y, v.z);
+      const maxW = speed / Math.max(0.2, WHEEL.radius) + 0.4;
+      const keep = Math.abs(roll) > maxW ? Math.sign(roll) * maxW : roll;
+      b.setAngvel(
+        {
+          x: ax * keep + (w.x - ax * roll) * 0.04,
+          y: ay * keep + (w.y - ay * roll) * 0.04,
+          z: az * keep + (w.z - az * roll) * 0.04,
+        },
+        true,
+      );
+      if (v.y > 0) v.y = 0;
+      b.setLinvel({ x: v.x, y: v.y, z: v.z }, true);
+      const p = b.translation();
+      try {
+        const hit = world.castRay(
+          new rapier.Ray({ x: p.x, y: p.y, z: p.z }, { x: 0, y: -1, z: 0 }),
+          5,
+          true,
+          undefined,
+          undefined,
+          undefined,
+          b,
+        );
+        const toi = hit?.timeOfImpact;
+        // Only kill clear flight. Snapping ordinary rolling clearance plants the coil in the first pipe.
+        if (toi != null && toi > 2.4) {
+          const drop = Math.min(toi - WHEEL.radius, 0.55);
+          if (drop > 0.2) b.setTranslation({ x: p.x, y: p.y - drop, z: p.z }, true);
+        }
+      } catch {
+        /* ray missed */
+      }
+    }
+    let added = 0;
+    if (kind === "drum" && shell.maxTaken < 0.2) {
+      const wheel = findActorBody("wheel");
+      if (wheel) {
+        const wp = wheel.translation();
+        const p = b.translation();
+        const dx = wp.x - p.x;
+        const dz = wp.z - p.z;
+        const horiz = WHEEL.radius + DRUM.radius + 1.1;
+        if (dx * dx + dz * dz < horiz * horiz) {
+          added += applySteelHits(shell, [
+            { x: 0, y: shell.halfH, z: 0, nx: 0, ny: 1, nz: 0, impulse: 1_000_000, closing: 30, otherMass: 1_000_000 },
+          ]);
+        }
+      }
+    }
     let raw: ReturnType<typeof collectHits> = [];
     try {
       raw = collectHits(world, b, kind);
     } catch {
       return;
     }
-    if (raw.length === 0) return;
-    const reach = kind === "wheel" ? WHEEL.radius * 1.7 + WHEEL.thick : DRUM.radius * 1.7 + DRUM.height;
-    const local = raw.some((h) => Math.hypot(h.x, h.y, h.z) > reach) ? worldHitsToLocal(b, raw) : raw;
-    const added = applySteelHits(shell, local);
+    if (raw.length > 0) {
+      const reach = kind === "wheel" ? WHEEL.radius * 1.7 + WHEEL.thick : DRUM.radius * 1.7 + DRUM.height;
+      const local = raw.some((h) => Math.hypot(h.x, h.y, h.z) > reach) ? worldHitsToLocal(b, raw) : raw;
+      added += applySteelHits(shell, local);
+    }
     if (added <= 0) return;
     refreshSteelMesh(geo, shell.live);
     const drawn = mesh.current;
@@ -142,7 +238,13 @@ function SteelBody({
     }
     if (kind === "wheel") {
       pushSteelHulls(shell, hulls.current, rapier.ConvexPolyhedron, hullArgs);
-      setBodyMass(b, kg);
+      setBodyMass(b, kg, kind);
+    } else {
+      const ext = steelExtents(shell);
+      crushDrumCollider(hulls.current[0] ?? null, ext.halfH, ext.radius, ext.halfH < 0.09);
+      const lv = b.linvel();
+      b.setLinvel({ x: lv.x * 0.15, y: Math.min(0, lv.y), z: lv.z * 0.15 }, true);
+      b.setAngvel({ x: 0, y: 0, z: 0 }, true);
     }
     b.wakeUp();
     const mark = shell.kind === "wheel" ? 0.012 : 0.02;
@@ -168,13 +270,12 @@ function SteelBody({
       position={pos}
       rotation={rot ?? [0, 0, 0]}
       colliders={false}
-      mass={kg}
       friction={mu}
       restitution={rest}
-      linearDamping={kind === "wheel" ? 0.004 : 0.04}
-      angularDamping={kind === "wheel" ? 0.008 : 0.06}
+      linearDamping={kind === "wheel" ? 0.004 : 0.05}
+      angularDamping={kind === "wheel" ? 0.08 : 0.12}
       collisionGroups={groups}
-      canSleep={kind !== "wheel"}
+      canSleep={false}
       ccd={kind === "wheel"}
       enabledRotations={[true, true, true]}
     >
@@ -186,6 +287,7 @@ function SteelBody({
                 hulls.current[i] = c;
               }}
               args={[args]}
+              density={0}
               collisionGroups={groups}
               friction={mu}
               restitution={rest}
@@ -193,10 +295,14 @@ function SteelBody({
           ))
         : (
             <CylinderCollider
+              ref={(c) => {
+                hulls.current[0] = c;
+              }}
               args={[DRUM.height / 2, DRUM.radius]}
+              density={0}
               collisionGroups={groups}
               friction={mu}
-              restitution={rest}
+              restitution={0}
             />
           )}
       <mesh geometry={geo} scale={kind === "wheel" ? 1.055 : 1.05} frustumCulled={false} userData={{ labSkip: true }}>
