@@ -170,8 +170,8 @@ function SteelBody({
       mass={kg}
       friction={mu}
       restitution={rest}
-      linearDamping={kind === "wheel" ? 0.02 : 0.04}
-      angularDamping={kind === "wheel" ? 0.04 : 0.06}
+      linearDamping={kind === "wheel" ? 0.004 : 0.04}
+      angularDamping={kind === "wheel" ? 0.008 : 0.06}
       collisionGroups={groups}
       canSleep={kind !== "wheel"}
       ccd={kind === "wheel"}

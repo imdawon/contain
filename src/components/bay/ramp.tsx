@@ -174,11 +174,11 @@ export function Ramp({
       rotation={rot ?? [0, 0, 0]}
       colliders={false}
       friction={mu}
-      restitution={0.02}
+      restitution={0}
       collisionGroups={GROUPS}
     >
       {hill.hulls.map((hull, i) => (
-        <ConvexHullCollider key={i} args={[hull]} collisionGroups={GROUPS} friction={mu} restitution={0.02} />
+        <ConvexHullCollider key={i} args={[hull]} collisionGroups={GROUPS} friction={mu} restitution={0} />
       ))}
       <mesh geometry={hill.geo}>
         <meshStandardMaterial

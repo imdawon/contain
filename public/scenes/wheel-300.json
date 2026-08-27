@@ -1,7 +1,7 @@
 {
   "id": "wheel-300",
   "name": "Wheel 300 t",
-  "blurb": "Copied 16m U-channels, 20deg downhill, 1.8m gaps. 300-ton steel into drums.",
+  "blurb": "Copied 16m U-channels, 20deg downhill, 1m extra drop. 300-ton steel into drums.",
   "file": "scenes/wheel-300.json",
   "select": "wheel",
   "inspect": false,
@@ -27,7 +27,7 @@
       "kind": "ramp",
       "pos": [
         0.0,
-        35.73,
+        39.02,
         8.81
       ],
       "rot": [
@@ -42,15 +42,15 @@
       ],
       "cut": 1.0,
       "fixed": true,
-      "grip": 0.22
+      "grip": 0.7
     },
     {
       "name": "track-2",
       "kind": "ramp",
       "pos": [
         0.0,
-        29.642,
-        25.537
+        32.274,
+        24.597
       ],
       "rot": [
         0.349,
@@ -64,15 +64,15 @@
       ],
       "cut": 1.0,
       "fixed": true,
-      "grip": 0.22
+      "grip": 0.7
     },
     {
       "name": "track-3",
       "kind": "ramp",
       "pos": [
         0.0,
-        23.554,
-        42.263
+        25.528,
+        40.384
       ],
       "rot": [
         0.349,
@@ -86,15 +86,15 @@
       ],
       "cut": 1.0,
       "fixed": true,
-      "grip": 0.22
+      "grip": 0.7
     },
     {
       "name": "track-4",
       "kind": "ramp",
       "pos": [
         0.0,
-        17.466,
-        58.99
+        18.782,
+        56.171
       ],
       "rot": [
         0.349,
@@ -108,15 +108,15 @@
       ],
       "cut": 1.0,
       "fixed": true,
-      "grip": 0.22
+      "grip": 0.7
     },
     {
       "name": "track-5",
       "kind": "ramp",
       "pos": [
         0.0,
-        11.378,
-        75.716
+        12.036,
+        71.957
       ],
       "rot": [
         0.349,
@@ -130,7 +130,7 @@
       ],
       "cut": 1.0,
       "fixed": true,
-      "grip": 0.22
+      "grip": 0.7
     },
     {
       "name": "track-6",
@@ -138,7 +138,7 @@
       "pos": [
         0.0,
         5.29,
-        92.443
+        87.744
       ],
       "rot": [
         0.349,
@@ -152,14 +152,14 @@
       ],
       "cut": 1.0,
       "fixed": true,
-      "grip": 0.22
+      "grip": 0.7
     },
     {
       "name": "wheel",
       "kind": "wheel",
       "pos": [
         0.0,
-        38.69,
+        41.98,
         4.566
       ],
       "rot": [
@@ -173,16 +173,16 @@
         3.007
       ],
       "mass": 300000,
-      "grip": 0.08,
+      "grip": 0.72,
       "bounce": 0
     },
     {
       "name": "drum-1",
       "kind": "drum",
       "pos": [
-        -0.58,
+        -1.4,
         0.32,
-        104.967
+        98.576
       ],
       "rot": [
         0,
@@ -190,16 +190,16 @@
         0
       ],
       "mass": 280,
-      "grip": 0.32,
-      "bounce": 0.04
+      "grip": 0.4,
+      "bounce": 0.02
     },
     {
       "name": "drum-2",
       "kind": "drum",
       "pos": [
-        0.0,
+        -0.7,
         0.32,
-        104.967
+        98.576
       ],
       "rot": [
         0,
@@ -207,16 +207,16 @@
         0
       ],
       "mass": 280,
-      "grip": 0.32,
-      "bounce": 0.04
+      "grip": 0.4,
+      "bounce": 0.02
     },
     {
       "name": "drum-3",
       "kind": "drum",
       "pos": [
-        0.58,
+        0.0,
         0.32,
-        104.967
+        98.576
       ],
       "rot": [
         0,
@@ -224,16 +224,16 @@
         0
       ],
       "mass": 280,
-      "grip": 0.32,
-      "bounce": 0.04
+      "grip": 0.4,
+      "bounce": 0.02
     },
     {
       "name": "drum-4",
       "kind": "drum",
       "pos": [
-        -0.58,
-        0.96,
-        104.967
+        0.7,
+        0.32,
+        98.576
       ],
       "rot": [
         0,
@@ -241,16 +241,16 @@
         0
       ],
       "mass": 280,
-      "grip": 0.32,
-      "bounce": 0.04
+      "grip": 0.4,
+      "bounce": 0.02
     },
     {
       "name": "drum-5",
       "kind": "drum",
       "pos": [
-        0.0,
-        0.96,
-        104.967
+        1.4,
+        0.32,
+        98.576
       ],
       "rot": [
         0,
@@ -258,16 +258,16 @@
         0
       ],
       "mass": 280,
-      "grip": 0.32,
-      "bounce": 0.04
+      "grip": 0.4,
+      "bounce": 0.02
     },
     {
       "name": "drum-6",
       "kind": "drum",
       "pos": [
-        0.58,
+        -0.7,
         0.96,
-        104.967
+        98.576
       ],
       "rot": [
         0,
@@ -275,16 +275,16 @@
         0
       ],
       "mass": 280,
-      "grip": 0.32,
-      "bounce": 0.04
+      "grip": 0.4,
+      "bounce": 0.02
     },
     {
       "name": "drum-7",
       "kind": "drum",
       "pos": [
-        -0.29,
-        0.32,
-        105.587
+        0.0,
+        0.96,
+        98.576
       ],
       "rot": [
         0,
@@ -292,16 +292,16 @@
         0
       ],
       "mass": 280,
-      "grip": 0.32,
-      "bounce": 0.04
+      "grip": 0.4,
+      "bounce": 0.02
     },
     {
       "name": "drum-8",
       "kind": "drum",
       "pos": [
-        0.29,
-        0.32,
-        105.587
+        0.7,
+        0.96,
+        98.576
       ],
       "rot": [
         0,
@@ -309,16 +309,16 @@
         0
       ],
       "mass": 280,
-      "grip": 0.32,
-      "bounce": 0.04
+      "grip": 0.4,
+      "bounce": 0.02
     },
     {
       "name": "drum-9",
       "kind": "drum",
       "pos": [
-        -0.52,
+        -0.85,
         0.32,
-        110.367
+        103.376
       ],
       "rot": [
         0,
@@ -326,16 +326,16 @@
         0
       ],
       "mass": 120,
-      "grip": 0.18,
-      "bounce": 0.04
+      "grip": 0.22,
+      "bounce": 0.02
     },
     {
       "name": "drum-10",
       "kind": "drum",
       "pos": [
-        0.52,
+        0.85,
         0.32,
-        110.367
+        103.376
       ],
       "rot": [
         0,
@@ -343,8 +343,8 @@
         0
       ],
       "mass": 120,
-      "grip": 0.18,
-      "bounce": 0.04
+      "grip": 0.22,
+      "bounce": 0.02
     }
   ],
   "ties": []
