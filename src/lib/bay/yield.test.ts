@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { coilInertia } from "./parts.ts";
-import { applySteelHits, makeSteelShell, steelExtents, steelGeometry, steelMeshRim, steelRim } from "./yield.ts";
+import { applySteelHits, crumpleDrum, makeSteelShell, steelExtents, steelGeometry, steelMeshRim, steelRim } from "./yield.ts";
 
 test("a hard slam caves the live rim, including inverted Rapier normals", () => {
   for (const nz of [1, -1]) {
@@ -110,11 +110,30 @@ test("coilInertia is tonne-scale, not a 6 kg hull", () => {
   assert.ok(I.x > I.y * 4, `tumble Ix ${I.x} vs roll Iy ${I.y}`);
 });
 
-test("a tonne-scale hit pancakes an empty drum into a sheet", () => {
+test("a tonne-scale hit crumples an empty drum into a crushed can, not a sheet", () => {
   const shell = makeSteelShell("drum");
-  applySteelHits(shell, [
-    { x: 0, y: shell.halfH, z: 0, nx: 0, ny: 1, nz: 0, impulse: 8_000, closing: 12, otherMass: 1_000_000 },
-  ]);
-  const { halfH } = steelExtents(shell);
-  assert.ok(halfH < 0.09, `drum half-height ${halfH}`);
+  const h0 = shell.halfH;
+  crumpleDrum(shell, {
+    x: 0,
+    y: 0,
+    z: shell.radius,
+    nx: 0,
+    ny: 0,
+    nz: 1,
+    impulse: 8_000,
+    closing: 12,
+    otherMass: 1_000_000,
+  });
+  const ext = steelExtents(shell);
+  assert.ok(ext.halfH > 0.18, `still 3D ${ext.halfH}`);
+  assert.ok(ext.halfH < h0 * 0.75, `shorter ${ext.halfH} vs ${h0}`);
+  let minR = 99;
+  let maxR = 0;
+  for (let i = 0; i < shell.dent.length; i++) {
+    const o = i * 3;
+    const r = Math.hypot(shell.live[o]!, shell.live[o + 2]!);
+    if (r < minR) minR = r;
+    if (r > maxR) maxR = r;
+  }
+  assert.ok(maxR - minR > 0.08, `wrinkle ${minR.toFixed(3)}..${maxR.toFixed(3)}`);
 });

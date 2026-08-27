@@ -19,6 +19,7 @@ import { poseOf } from "@/lib/bay/sample";
 import { useBay } from "@/store/bay-store";
 import {
   applySteelHits,
+  crumpleDrum,
   makeSteelShell,
   pushSteelHulls,
   refreshSteelMesh,
@@ -44,15 +45,14 @@ type CrushCol = RapierCollider & {
   setCollisionGroups?: (g: number) => void;
 };
 
-function crushDrumCollider(col: RapierCollider | null, halfH: number, radius: number, sheet: boolean) {
+function crushDrumCollider(col: RapierCollider | null, halfH: number, radius: number) {
   if (!col) return;
   const wrapped = col as CrushCol;
   const raw = wrapped.raw?.() ?? wrapped;
   try {
-    raw.setHalfHeight?.(Math.max(0.03, halfH));
-    raw.setRadius?.(Math.max(0.08, radius));
+    raw.setHalfHeight?.(Math.max(0.22, halfH));
+    raw.setRadius?.(Math.max(0.22, radius));
     raw.setRestitution?.(0);
-    if (sheet) raw.setCollisionGroups?.(DRUM_SHEET_GROUPS);
   } catch {
     /* shape lock */
   }
@@ -78,6 +78,7 @@ function SteelBody({
   const body = useRef<RapierRigidBody>(null);
   const hulls = useRef<Array<RapierCollider | null>>([]);
   const mesh = useRef<THREE.Mesh>(null);
+  const bits = useRef<THREE.Group>(null);
   const grab = useGrab(body, id);
   const pinned = useRef(false);
   const armed = useRef(false);
@@ -203,7 +204,7 @@ function SteelBody({
       }
     }
     let added = 0;
-    if (kind === "drum" && shell.maxTaken < 0.2) {
+    if (kind === "drum" && shell.maxTaken < 0.25) {
       const wheel = findActorBody("wheel");
       if (wheel) {
         const wp = wheel.translation();
@@ -211,10 +212,18 @@ function SteelBody({
         const dx = wp.x - p.x;
         const dz = wp.z - p.z;
         const horiz = WHEEL.radius + DRUM.radius + 1.1;
-        if (dx * dx + dz * dz < horiz * horiz) {
-          added += applySteelHits(shell, [
-            { x: 0, y: shell.halfH, z: 0, nx: 0, ny: 1, nz: 0, impulse: 1_000_000, closing: 30, otherMass: 1_000_000 },
-          ]);
+        if (dx * dx + dz * dz < horiz * horiz && p.z < wp.z + 1.2) {
+          added += crumpleDrum(shell, {
+            x: dx,
+            y: 0,
+            z: dz,
+            nx: dx,
+            ny: 0,
+            nz: dz || 1,
+            impulse: 1_000_000,
+            closing: 30,
+            otherMass: 1_000_000,
+          });
         }
       }
     }
@@ -236,12 +245,13 @@ function SteelBody({
       drawn.geometry = geo;
       drawn.frustumCulled = false;
     }
+    if (bits.current) bits.current.visible = shell.maxTaken < 0.12;
     if (kind === "wheel") {
       pushSteelHulls(shell, hulls.current, rapier.ConvexPolyhedron, hullArgs);
       setBodyMass(b, kg, kind);
     } else {
       const ext = steelExtents(shell);
-      crushDrumCollider(hulls.current[0] ?? null, ext.halfH, ext.radius, ext.halfH < 0.09);
+      crushDrumCollider(hulls.current[0] ?? null, ext.halfH, ext.radius);
       const lv = b.linvel();
       b.setLinvel({ x: lv.x * 0.15, y: Math.min(0, lv.y), z: lv.z * 0.15 }, true);
       b.setAngvel({ x: 0, y: 0, z: 0 }, true);
@@ -318,7 +328,7 @@ function SteelBody({
           side={THREE.DoubleSide}
         />
       </mesh>
-      {kind === "wheel" ? <WheelBits half={WHEEL.thick / 2} /> : <DrumBits half={DRUM.height / 2} />}
+      {kind === "wheel" ? <WheelBits half={WHEEL.thick / 2} /> : <group ref={bits}><DrumBits half={DRUM.height / 2} /></group>}
     </RigidBody>
   );
 }
