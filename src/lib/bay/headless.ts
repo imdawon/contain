@@ -423,12 +423,11 @@ function yieldBody(world: RapierWorld, b: RapierBody, shell: SteelShell, kind: S
   const local = raw.some((h) => Math.hypot(h.x, h.y, h.z) > reach) ? worldHitsToLocal(b, raw) : raw;
   const added = applySteelHits(shell, local);
   if (kind === "drum" && added > 0) {
-    const col = b.collider(0) as { setHalfHeight?: (h: number) => void; setRadius?: (r: number) => void; setRestitution?: (v: number) => void; setCollisionGroups?: (g: number) => void };
+    const col = b.collider(0) as { setHalfHeight?: (h: number) => void; setRadius?: (r: number) => void; setRestitution?: (v: number) => void };
     const ext = steelExtents(shell);
-    col.setHalfHeight?.(Math.max(0.03, ext.halfH));
-    col.setRadius?.(Math.max(0.08, ext.radius));
+    col.setHalfHeight?.(Math.max(0.18, ext.halfH));
+    col.setRadius?.(Math.max(0.16, ext.radius));
     col.setRestitution?.(0);
-    if (ext.halfH < 0.09) col.setCollisionGroups?.(interactionGroups([CRATE_G], [WORLD_G, CRATE_G]));
   }
 }
 

@@ -1,7 +1,7 @@
 {
   "id": "wheel-200",
   "name": "Wheel 200 t",
-  "blurb": "4x U-pipe hangar. 2000 t coil (10x the 200 t label). Empty drums pancake; no bounce.",
+  "blurb": "4x U-pipe hangar. 2000 t coil (10x the 200 t label). Empty drums crumple as crushed cans.",
   "file": "scenes/wheel-200.json",
   "select": "wheel",
   "inspect": false,

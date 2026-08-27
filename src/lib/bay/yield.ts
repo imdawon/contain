@@ -270,6 +270,56 @@ export function steelExtents(shell: SteelShell) {
   return { halfH, radius };
 }
 
+
+/** Cheap crushed-can morph. Keeps a 3D barrel — not a deleted body, not a sheet. */
+export function crumpleDrum(shell: SteelShell, hit?: SteelHit) {
+  if (shell.kind !== "drum") return 0;
+  if (shell.maxTaken >= 0.28) return 0;
+  const { rest, live, dent, halfH, radius } = shell;
+  const n = dent.length;
+  let hx = hit?.nx ?? 0;
+  let hz = hit?.nz ?? 0;
+  if (Math.hypot(hx, hz) < 0.08) {
+    hx = hit?.x ?? 0;
+    hz = hit?.z ?? radius;
+  }
+  const hl = Math.hypot(hx, hz) || 1;
+  hx /= hl;
+  hz /= hl;
+  let added = 0;
+  for (let i = 0; i < n; i++) {
+    const o = i * 3;
+    const rx = rest[o]!;
+    const ry = rest[o + 1]!;
+    const rz = rest[o + 2]!;
+    const theta = Math.atan2(rz, rx);
+    const yk = ry / Math.max(1e-4, halfH);
+    const facing = (rx * hx + rz * hz) / Math.max(1e-4, radius);
+    const lobe = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(theta * 5 + yk * 2.1));
+    const hitSide = 0.5 + 0.5 * Math.max(0, facing);
+    const radial = (0.58 + 0.38 * lobe) * (1 - 0.16 * hitSide);
+    const hFold = 0.62 + 0.1 * Math.cos(theta * 3) - 0.08 * hitSide;
+    const lid = Math.abs(yk) > 0.78 ? 0.84 : 1;
+    const px = rx * radial * lid;
+    const py = ry * hFold;
+    const pz = rz * radial * lid;
+    const push = Math.hypot(live[o]! - px, live[o + 1]! - py, live[o + 2]! - pz);
+    if (push <= 1e-5) continue;
+    live[o] = px;
+    live[o + 1] = py;
+    live[o + 2] = pz;
+    dent[i] = Math.min(1.2, dent[i]! + push);
+    bruise(shell, i);
+    added += push;
+  }
+  if (added > 0) {
+    shell.strain += added;
+    shell.maxTaken = 0;
+    for (let i = 0; i < n; i++) if (dent[i]! > shell.maxTaken) shell.maxTaken = dent[i]!;
+  }
+  return added;
+}
+
 export function applySteelHits(shell: SteelShell, hits: SteelHit[]) {
   if (hits.length === 0) return 0;
   const { rest, live, dent, yieldJ, stiff, maxDent, inner, kind, halfH } = shell;
@@ -302,39 +352,29 @@ export function applySteelHits(shell: SteelShell, hits: SteelHit[]) {
     if (kind !== "drum" && depth < 0.002) continue;
 
     if (kind === "drum") {
-      // Empty drum under a tonne-scale coil: one hit is a sheet of paper.
-      const squash = halfH - floorH;
+      const runOver = (hit.otherMass != null && Number.isFinite(hit.otherMass) && hit.otherMass >= 50_000) || hit.impulse >= 400;
+      if (runOver) {
+        added += crumpleDrum(shell, hit);
+        continue;
+      }
       for (let i = 0; i < n; i++) {
         const o = i * 3;
         const px = live[o]!;
-        const py = live[o + 1]!;
         const pz = live[o + 2]!;
-        const ay = Math.abs(py);
-        const nextH = Math.max(floorH, ay - squash);
-        let push = 0;
-        if (nextH < ay - 1e-5) {
-          live[o + 1] = Math.sign(py || rest[o + 1] || 1) * nextH;
-          push += ay - nextH;
-        }
         const along = px * crater.nx + pz * crater.nz;
-        if (along > floorR) {
-          const dx = px - crater.x;
-          const dy = rest[o + 1]! - crater.y;
-          const dz = pz - crater.z;
-          const w = Math.exp(-(dx * dx + dz * dz) / twoR - (dy * dy) / twoY);
-          if (w > 0.04) {
-            const take = Math.min(along - floorR, Math.max(depth, squash * 0.12) * w);
-            if (take > 1e-5) {
-              live[o] = px - crater.nx * take;
-              live[o + 2] = pz - crater.nz * take;
-              push += take;
-            }
-          }
-        }
-        if (push <= 1e-5) continue;
-        dent[i] = Math.min(1.2, dent[i]! + push);
+        if (along <= floorR) continue;
+        const dx = px - crater.x;
+        const dy = rest[o + 1]! - crater.y;
+        const dz = pz - crater.z;
+        const w = Math.exp(-(dx * dx + dz * dz) / twoR - (dy * dy) / twoY);
+        if (w < 0.04) continue;
+        const take = Math.min(along - floorR, Math.max(depth, 0.04) * w);
+        if (take <= 1e-5) continue;
+        live[o] = px - crater.nx * take;
+        live[o + 2] = pz - crater.nz * take;
+        dent[i] = Math.min(1.2, dent[i]! + take);
         bruise(shell, i);
-        added += push;
+        added += take;
       }
       continue;
     }
