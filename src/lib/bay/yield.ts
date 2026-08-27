@@ -21,6 +21,7 @@ export type SteelShell = {
   rest: Float32Array;
   live: Float32Array;
   dent: Float32Array;
+  paint: Float32Array;
   slices: Slice[];
   lids: Slice[];
   outer: number[];
@@ -43,6 +44,10 @@ const _q = new THREE.Quaternion();
 const _inv = new THREE.Quaternion();
 const _n = new THREE.Vector3();
 
+const WHEEL_PAINT: [number, number, number] = [0.62, 0.64, 0.68];
+const DRUM_PAINT: [number, number, number] = [0.38, 0.42, 0.32];
+const BRUISE: [number, number, number] = [0.18, 0.14, 0.11];
+
 function spec(kind: SteelKind) {
   return kind === "wheel" ? WHEEL : DRUM;
 }
@@ -53,30 +58,35 @@ function vid(s: number, y: number, r: number, ringsY: number, ringsR: number) {
 
 export function makeSteelShell(kind: SteelKind): SteelShell {
   const s = spec(kind);
-  const segs = kind === "wheel" ? 32 : 28;
-  const ringsY = kind === "wheel" ? 5 : 8;
+  const segs = kind === "wheel" ? 40 : 32;
+  const ringsY = kind === "wheel" ? 7 : 10;
   const ringsR = kind === "wheel" ? 5 : 4;
   const radius = s.radius;
   const inner = kind === "wheel" ? WHEEL.hub : Math.max(0.04, DRUM.radius - DRUM.wall);
   const halfH = kind === "wheel" ? WHEEL.thick / 2 : DRUM.height / 2;
   const n = segs * ringsY * ringsR;
   const rest = new Float32Array(n * 3);
+  const paint = new Float32Array(n * 3);
+  const base = kind === "wheel" ? WHEEL_PAINT : DRUM_PAINT;
   const outer: number[] = [];
   for (let i = 0; i < segs; i++) {
     const a = (i / segs) * Math.PI * 2;
     const c = Math.cos(a);
     const sn = Math.sin(a);
     for (let y = 0; y < ringsY; y++) {
-      const yt = ringsY === 1 ? 0.5 : y / (ringsY - 1);
+      const yt = y / (ringsY - 1);
       const py = -halfH + yt * 2 * halfH;
       for (let r = 0; r < ringsR; r++) {
-        const rt = ringsR === 1 ? 0 : r / (ringsR - 1);
+        const rt = r / (ringsR - 1);
         const rad = radius * (1 - rt) + inner * rt;
         const id = vid(i, y, r, ringsY, ringsR);
         const o = id * 3;
         rest[o] = rad * c;
         rest[o + 1] = py;
         rest[o + 2] = rad * sn;
+        paint[o] = base[0];
+        paint[o + 1] = base[1];
+        paint[o + 2] = base[2];
         if (r === 0) outer.push(id);
       }
     }
@@ -115,6 +125,7 @@ export function makeSteelShell(kind: SteelKind): SteelShell {
     rest,
     live: rest.slice(),
     dent: new Float32Array(n),
+    paint,
     slices,
     lids: [
       { idx: bot, lid: -1 },
@@ -128,12 +139,14 @@ export function makeSteelShell(kind: SteelKind): SteelShell {
 }
 
 export function steelGeometry(shell: SteelShell) {
-  const { segs, ringsY, ringsR, live } = shell;
+  const { segs, ringsY, ringsR, live, paint } = shell;
   const geo = new THREE.BufferGeometry();
-  const display = live.slice();
-  const pos = new THREE.BufferAttribute(display, 3);
+  const pos = new THREE.BufferAttribute(live, 3);
   pos.setUsage(THREE.DynamicDrawUsage);
   geo.setAttribute("position", pos);
+  const col = new THREE.BufferAttribute(paint, 3);
+  col.setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute("color", col);
   const idx: number[] = [];
   const quad = (a: number, b: number, c: number, d: number) => {
     idx.push(a, b, c, a, c, d);
@@ -186,67 +199,97 @@ export function sliceHull(shell: SteelShell, slice: Slice) {
   return out;
 }
 
+function bruise(shell: SteelShell, i: number) {
+  const base = shell.kind === "wheel" ? WHEEL_PAINT : DRUM_PAINT;
+  const t = Math.min(1, shell.dent[i]! / Math.max(0.04, shell.maxDent * 0.55));
+  const o = i * 3;
+  shell.paint[o] = base[0] * (1 - t) + BRUISE[0] * t;
+  shell.paint[o + 1] = base[1] * (1 - t) + BRUISE[1] * t;
+  shell.paint[o + 2] = base[2] * (1 - t) + BRUISE[2] * t;
+}
+
+/** Project a contact onto the rest cylinder. Ignores Rapier normal sign. */
+function craterOnShell(shell: SteelShell, hit: SteelHit) {
+  const { radius, halfH } = shell;
+  let hx = hit.x;
+  let hy = hit.y;
+  let hz = hit.z;
+  let r = Math.hypot(hx, hz);
+  if (r < 0.05 || r > radius * 1.45 || Math.abs(hy) > halfH * 1.45) {
+    let ox = hit.nx;
+    let oz = hit.nz;
+    if (Math.hypot(ox, oz) < 0.12) {
+      ox = hx;
+      oz = hz;
+    }
+    const nl = Math.hypot(ox, oz);
+    if (nl < 1e-4) return null;
+    hx = (ox / nl) * radius;
+    hz = (oz / nl) * radius;
+    hy = Math.max(-halfH, Math.min(halfH, hy));
+    r = radius;
+  }
+  const nx = hx / r;
+  const nz = hz / r;
+  return { x: nx * radius, y: Math.max(-halfH, Math.min(halfH, hy)), z: nz * radius, nx, nz };
+}
+
 export function applySteelHits(shell: SteelShell, hits: SteelHit[]) {
   if (hits.length === 0) return 0;
-  const { rest, live, dent, yieldJ, stiff, maxDent, inner, halfH, kind } = shell;
+  const { rest, live, dent, yieldJ, stiff, maxDent, inner, kind } = shell;
   const n = dent.length;
+  const sigma = kind === "wheel" ? 0.07 : 0.09;
+  const twoSig = 2 * sigma * sigma;
+  const floor =
+    kind === "wheel"
+      ? Math.max(shell.radius - maxDent, inner + 0.05)
+      : Math.max(shell.radius - maxDent, inner + 0.02);
+  const cap = kind === "wheel" ? 0.016 : 0.05;
   let added = 0;
   for (const hit of hits) {
     const excess = hit.impulse - yieldJ;
     if (excess <= 0) continue;
-    const step = Math.min(kind === "wheel" ? 0.2 : 0.16, excess / Math.max(0.2, stiff));
-    const nlen = Math.hypot(hit.nx, hit.nz);
-    const radial = nlen > 0.18;
-    const nx = radial ? hit.nx / nlen : 0;
-    const nz = radial ? hit.nz / nlen : 0;
-    const hitAz = Math.atan2(hit.z, hit.x);
-    const azScale = kind === "wheel" ? 0.52 : 0.62;
+    const crater = craterOnShell(shell, hit);
+    if (!crater) continue;
+    const depth = Math.min(cap, maxDent, excess / Math.max(0.5, stiff));
+    if (depth < 0.002) continue;
+    const { nx, nz } = crater;
     for (let i = 0; i < n; i++) {
       const o = i * 3;
       const rx = rest[o]!;
       const ry = rest[o + 1]!;
       const rz = rest[o + 2]!;
-      const rad0 = Math.hypot(rx, rz);
-      if (rad0 < 0.02) continue;
-      let dAz = Math.atan2(rz, rx) - hitAz;
-      while (dAz > Math.PI) dAz -= Math.PI * 2;
-      while (dAz < -Math.PI) dAz += Math.PI * 2;
-      const azFall = Math.max(0, Math.cos(dAz / azScale));
-      if (azFall <= 0.04) continue;
-      const dy = live[o + 1]! - hit.y;
-      const yInf = kind === "wheel" ? halfH * 1.4 : 0.28;
-      const yFall = Math.max(0, 1 - (dy * dy) / (yInf * yInf));
-      if (yFall <= 0.04) continue;
+      const dx = rx - crater.x;
+      const dy = ry - crater.y;
+      const dz = rz - crater.z;
+      const w = Math.exp(-(dx * dx + dy * dy + dz * dz) / twoSig);
+      if (w < 0.04) continue;
       const room = maxDent - dent[i]!;
       if (room <= 0.0004) continue;
-      const take = Math.min(room, step * azFall * azFall * yFall);
-      if (take < 0.00012) continue;
-      dent[i]! += take;
-      added += take;
-      if (radial) {
-        const px = live[o]!;
-        const pz = live[o + 2]!;
-        const along = px * nx + pz * nz;
-        const restAlong = rx * nx + rz * nz;
-        if (restAlong > 0.02 && along > inner * 0.4) {
-          const floor = kind === "wheel" ? 0.05 : Math.max(0.055, inner * 0.5);
-          const nextAlong = Math.max(floor, along - take);
-          const push = along - nextAlong;
-          live[o]! = px - nx * push;
-          live[o + 2]! = pz - nz * push;
+      const take = Math.min(room, depth * w);
+      if (take < 0.0002) continue;
+      const px = live[o]!;
+      const pz = live[o + 2]!;
+      const along = px * nx + pz * nz;
+      if (along <= floor) continue;
+      const nextAlong = Math.max(floor, along - take);
+      const push = along - nextAlong;
+      if (push <= 1e-5) continue;
+      live[o] = px - nx * push;
+      live[o + 2] = pz - nz * push;
+      if (kind === "drum") {
+        const rad = Math.hypot(live[o]!, live[o + 2]!);
+        const restRad = Math.hypot(rx, rz);
+        if (restRad > inner + 0.01 && rad > inner) {
+          const nr = Math.max(inner, rad - take * 0.22);
+          const s = nr / rad;
+          live[o] *= s;
+          live[o + 2] *= s;
         }
-      } else {
-        const py = live[o + 1]!;
-        const sign = py >= 0 ? 1 : -1;
-        live[o + 1]! -= sign * take;
       }
-      const onCap = Math.abs(ry) > halfH * 0.62;
-      if (kind === "wheel" && onCap) {
-        const py = live[o + 1]!;
-        const sign = py >= 0 ? 1 : -1;
-        const nextY = py - sign * take * 0.7;
-        live[o + 1]! = sign > 0 ? Math.max(0.04, nextY) : Math.min(-0.04, nextY);
-      }
+      dent[i] += push;
+      bruise(shell, i);
+      added += push;
     }
   }
   if (added > 0) {
@@ -316,7 +359,6 @@ export function steelRim(shell: SteelShell) {
   return minR;
 }
 
-/** Min outer radius from the BufferGeometry the GPU actually draws. */
 export function steelMeshRim(geo: THREE.BufferGeometry, shell: SteelShell) {
   const pos = geo.getAttribute("position") as THREE.BufferAttribute | undefined;
   if (!pos) return shell.radius;
@@ -347,11 +389,14 @@ export function steelDish(shell: SteelShell) {
 export function refreshSteelMesh(geo: THREE.BufferGeometry, live?: Float32Array) {
   const pos = geo.getAttribute("position") as THREE.BufferAttribute;
   const dst = pos.array as Float32Array;
-  if (live && live.length >= dst.length) {
-    if (live !== dst) dst.set(live.subarray(0, dst.length));
-  }
+  if (live && live !== dst && live.length >= dst.length) dst.set(live.subarray(0, dst.length));
   pos.needsUpdate = true;
   pos.version += 1;
+  const col = geo.getAttribute("color") as THREE.BufferAttribute | undefined;
+  if (col) {
+    col.needsUpdate = true;
+    col.version += 1;
+  }
   geo.computeVertexNormals();
   const nrm = geo.getAttribute("normal") as THREE.BufferAttribute | undefined;
   if (nrm) {

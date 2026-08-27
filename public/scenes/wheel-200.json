@@ -1,7 +1,7 @@
 {
   "id": "wheel-200",
-  "name": "Wheel 200",
-  "blurb": "Same track. Steel wheel into stacked oil drums. Mesh and hulls yield.",
+  "name": "Wheel 200 t",
+  "blurb": "Same track. 200-ton steel wheel into stacked oil drums. Mesh and hulls yield.",
   "file": "scenes/wheel-200.json",
   "select": "wheel",
   "inspect": false,
@@ -58,9 +58,9 @@
       "vel": [
         0,
         0,
-        11.0
+        9.2
       ],
-      "mass": 200,
+      "mass": 200000,
       "grip": 0.08,
       "bounce": 0
     },
@@ -68,7 +68,7 @@
       "name": "drum-1",
       "kind": "drum",
       "pos": [
-        -0.52,
+        -0.53,
         1.268,
         -2.8
       ],
@@ -77,9 +77,9 @@
         0,
         0
       ],
-      "mass": 34,
-      "grip": 0.62,
-      "bounce": 0
+      "mass": 82,
+      "grip": 0.32,
+      "bounce": 0.04
     },
     {
       "name": "drum-2",
@@ -94,15 +94,15 @@
         0,
         0
       ],
-      "mass": 34,
-      "grip": 0.62,
-      "bounce": 0
+      "mass": 82,
+      "grip": 0.32,
+      "bounce": 0.04
     },
     {
       "name": "drum-3",
       "kind": "drum",
       "pos": [
-        0.52,
+        0.53,
         1.268,
         -2.8
       ],
@@ -111,16 +111,16 @@
         0,
         0
       ],
-      "mass": 34,
-      "grip": 0.62,
-      "bounce": 0
+      "mass": 82,
+      "grip": 0.32,
+      "bounce": 0.04
     },
     {
       "name": "drum-4",
       "kind": "drum",
       "pos": [
-        -0.52,
-        1.92,
+        -0.53,
+        1.908,
         -2.8
       ],
       "rot": [
@@ -128,16 +128,16 @@
         0,
         0
       ],
-      "mass": 34,
-      "grip": 0.62,
-      "bounce": 0
+      "mass": 82,
+      "grip": 0.32,
+      "bounce": 0.04
     },
     {
       "name": "drum-5",
       "kind": "drum",
       "pos": [
         0.0,
-        1.92,
+        1.908,
         -2.8
       ],
       "rot": [
@@ -145,16 +145,16 @@
         0,
         0
       ],
-      "mass": 34,
-      "grip": 0.62,
-      "bounce": 0
+      "mass": 82,
+      "grip": 0.32,
+      "bounce": 0.04
     },
     {
       "name": "drum-6",
       "kind": "drum",
       "pos": [
-        0.52,
-        1.92,
+        0.53,
+        1.908,
         -2.8
       ],
       "rot": [
@@ -162,43 +162,43 @@
         0,
         0
       ],
-      "mass": 34,
-      "grip": 0.62,
-      "bounce": 0
+      "mass": 82,
+      "grip": 0.32,
+      "bounce": 0.04
     },
     {
       "name": "drum-7",
       "kind": "drum",
       "pos": [
-        -0.26,
-        1.255,
-        -2.18
+        -0.265,
+        1.259,
+        -2.27
       ],
       "rot": [
         0,
         0,
         0
       ],
-      "mass": 28,
-      "grip": 0.55,
-      "bounce": 0
+      "mass": 82,
+      "grip": 0.32,
+      "bounce": 0.04
     },
     {
       "name": "drum-8",
       "kind": "drum",
       "pos": [
-        0.26,
-        1.255,
-        -2.18
+        0.265,
+        1.259,
+        -2.27
       ],
       "rot": [
         0,
         0,
         0
       ],
-      "mass": 28,
-      "grip": 0.55,
-      "bounce": 0
+      "mass": 82,
+      "grip": 0.32,
+      "bounce": 0.04
     },
     {
       "name": "drum-9",
