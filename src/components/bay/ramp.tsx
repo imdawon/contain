@@ -9,7 +9,6 @@ import { useBay } from "@/store/bay-store";
 const GROUPS = interactionGroups([WORLD_G], [WORLD_G, DUMMY_G, CRATE_G, WAGON_G]);
 const dirt = 0xc9a15c;
 const dirtHi = 0xe2c47a;
-const dirtEdge = 0x6a4a2c;
 const CUT = 0.75;
 const SEG = 48;
 const COL = 48;
@@ -94,11 +93,6 @@ function buildHill(w: number, h: number, d: number, cut: number) {
   geo.setIndex(new THREE.BufferAttribute(idx, 1));
   geo.computeVertexNormals();
 
-  const edge = new THREE.BufferGeometry();
-  const epts: THREE.Vector3[] = [];
-  for (const p of samples) epts.push(new THREE.Vector3(-hw, p.y + 0.02, p.z));
-  edge.setFromPoints(epts);
-
   const hulls: Float32Array[] = [];
   for (let i = 0; i < cols; i++) {
     const u0 = Math.max(0, i / cols - 0.012);
@@ -123,7 +117,7 @@ function buildHill(w: number, h: number, d: number, cut: number) {
     );
   }
 
-  return { geo, edge, hulls };
+  return { geo, hulls };
 }
 
 export function Ramp({
@@ -161,7 +155,6 @@ export function Ramp({
   useEffect(
     () => () => {
       hill.geo.dispose();
-      hill.edge.dispose();
     },
     [hill],
   );
@@ -183,16 +176,12 @@ export function Ramp({
       <mesh geometry={hill.geo}>
         <meshStandardMaterial
           color={selected ? 0xd4d7cf : dirt}
-          roughness={0.88}
-          metalness={0.03}
+          roughness={0.82}
+          metalness={0.04}
           side={THREE.DoubleSide}
+          shadowSide={THREE.DoubleSide}
         />
       </mesh>
-      {/* R3F <line> vs SVG line types */}
-      {/* @ts-expect-error three line, not svg */}
-      <line geometry={hill.edge}>
-        <lineBasicMaterial color={dirtEdge} />
-      </line>
       <mesh position={[0, parabolaY(0, h, cut) + 0.02, -d / 2 + 0.02]}>
         <boxGeometry args={[w * 0.98, 0.04, 0.04]} />
         <meshStandardMaterial color={dirtHi} roughness={0.9} metalness={0} />

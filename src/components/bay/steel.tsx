@@ -198,13 +198,13 @@ function SteelBody({
               restitution={rest}
             />
           )}
-      <mesh ref={mesh} geometry={geo} onPointerDown={grab.down} castShadow frustumCulled={false}>
+      <mesh ref={mesh} geometry={geo} onPointerDown={grab.down} frustumCulled={false}>
         <meshStandardMaterial
           color={color}
           vertexColors
           flatShading
-          metalness={kind === "wheel" ? 0.34 : 0.28}
-          roughness={kind === "wheel" ? 0.58 : 0.64}
+          metalness={kind === "wheel" ? 0.42 : 0.32}
+          roughness={kind === "wheel" ? 0.5 : 0.58}
           side={THREE.DoubleSide}
         />
       </mesh>

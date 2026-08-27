@@ -1,7 +1,7 @@
 import "@/lib/bay/raf";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 
-import { ContactShadows, Grid, OrbitControls } from "@react-three/drei";
+import { Grid, OrbitControls } from "@react-three/drei";
 import { CuboidCollider, Physics, RigidBody, useRapier } from "@react-three/rapier";
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
@@ -24,6 +24,7 @@ import { FLOOR } from "@/lib/bay/parts";
 import { DUMMY_G } from "@/lib/bay/groups";
 import { listSamplers } from "@/lib/bay/probe";
 import { useBay } from "@/store/bay-store";
+import { LabLook } from "@/components/bay/look";
 
 const _chase = new THREE.Vector3();
 
@@ -210,30 +211,21 @@ function World() {
         <CuboidCollider args={[FLOOR.half, 0.25, FLOOR.half]} position={[0, -0.25, 0]} />
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
           <planeGeometry args={[FLOOR.half * 2, FLOOR.half * 2]} />
-          <meshStandardMaterial color="#4a443c" roughness={0.92} metalness={0.04} />
+          <meshStandardMaterial color="#35312c" roughness={0.94} metalness={0.06} />
         </mesh>
       </RigidBody>
       <Grid
         infiniteGrid
         followCamera
-        fadeDistance={240}
-        fadeStrength={0.85}
+        fadeDistance={280}
+        fadeStrength={0.72}
         cellSize={1}
-        cellThickness={0.55}
-        cellColor="#6e675c"
+        cellThickness={0.7}
+        cellColor="#7a7368"
         sectionSize={10}
-        sectionThickness={1.15}
-        sectionColor="#a8a094"
+        sectionThickness={1.35}
+        sectionColor="#c4bba8"
         position={[0, 0.004, 0]}
-      />
-      <ContactShadows
-        position={[0, 0.006, 0]}
-        opacity={0.62}
-        scale={28}
-        blur={2.1}
-        far={9}
-        resolution={512}
-        color="#1a1612"
       />
       {entities.map((e) =>
         e.kind === "can" ? (
@@ -314,6 +306,7 @@ export function BayCanvas() {
           className="block h-full w-full touch-none"
           style={{ position: "absolute", inset: 0, width: box.w, height: box.h }}
           dpr={[1, 1.5]}
+          shadows
           frameloop="always"
           camera={{ position: [3.4, 1.7, 3.6], fov: 42, near: 0.08, far: 800 }}
           gl={{
@@ -326,21 +319,19 @@ export function BayCanvas() {
           onCreated={(state) => {
             const { gl } = state;
             gl.toneMapping = THREE.ACESFilmicToneMapping;
-            gl.toneMappingExposure = 1.38;
+            gl.toneMappingExposure = 1.18;
             gl.outputColorSpace = THREE.SRGBColorSpace;
-            gl.setClearColor("#2c261e", 1);
+            gl.shadowMap.enabled = true;
+            gl.shadowMap.type = THREE.PCFSoftShadowMap;
+            gl.setClearColor("#8a7c6a", 1);
             state.setSize(box.w, box.h);
           }}
         >
           <FitGl />
           <KickFrames />
-          <color attach="background" args={["#2c261e"]} />
-          <fog attach="fog" args={["#2c261e", 40, 320]} />
-          <hemisphereLight args={["#f2ebe0", "#3d372f", 1.35]} />
-          <ambientLight intensity={0.28} color="#e8e0d4" />
-          <directionalLight position={[6, 10, 4]} intensity={2.55} color="#fff3e4" />
-          <directionalLight position={[-5, 3.5, -4]} intensity={0.95} color="#c5d0e4" />
-          <directionalLight position={[0, 2.2, 7]} intensity={0.42} color="#ffe6c4" />
+          <color attach="background" args={["#8a7c6a"]} />
+          <fog attach="fog" args={["#6a5e50", 70, 420]} />
+          <LabLook />
           <World />
         </Canvas>
       ) : null}
