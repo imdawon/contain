@@ -45,6 +45,8 @@ export interface Entity {
   fixed?: boolean;
   size?: [number, number, number];
   fuse?: number;
+  /** 1 = full U, vertex at center. Wagon hill stays 0.75. */
+  cut?: number;
 }
 
 export function isSolid(kind: Kind): kind is SolidShape {

@@ -15,6 +15,7 @@ export type SceneActor = {
   fixed?: boolean;
   size?: Vec3;
   fuse?: number;
+  cut?: number;
 };
 
 export type SceneTie = {
@@ -47,9 +48,9 @@ export const SCENE_INDEX = [
   { id: "v1-tight", file: "scenes/v1-tight.json", name: "Wagon tight" },
   { id: "v1-peak", file: "scenes/v1-peak.json", name: "Wagon peak" },
   { id: "v1-two", file: "scenes/v1-two.json", name: "Wagon two" },
-  { id: "wheel-100", file: "scenes/wheel-100.json", name: "Wheel 100" },
-  { id: "wheel-200", file: "scenes/wheel-200.json", name: "Wheel 200" },
-  { id: "wheel-300", file: "scenes/wheel-300.json", name: "Wheel 300" },
+  { id: "wheel-100", file: "scenes/wheel-100.json", name: "Wheel 100 t" },
+  { id: "wheel-200", file: "scenes/wheel-200.json", name: "Wheel 200 t" },
+  { id: "wheel-300", file: "scenes/wheel-300.json", name: "Wheel 300 t" },
 ] as const;
 
 const KINDS = new Set<string>([
@@ -133,6 +134,8 @@ export function coerceScene(raw: unknown): Scene | null {
     if (e.fixed === true) actor.fixed = true;
     const fuse = num(e.fuse);
     if (fuse != null && fuse > 0) actor.fuse = fuse;
+    const cut = num(e.cut);
+    if (cut != null && cut > 0.2) actor.cut = cut;
     entities.push(actor);
   }
   if (entities.length === 0) return null;
@@ -226,6 +229,7 @@ export function materializeScene(scene: Scene, nextId: () => string): {
     if (a.fixed) e.fixed = true;
     if (a.size) e.size = a.size;
     if (a.fuse != null) e.fuse = a.fuse;
+    if (a.cut != null) e.cut = a.cut;
     return e;
   });
   const selectName = scene.select;
