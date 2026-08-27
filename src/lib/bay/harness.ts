@@ -60,7 +60,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 8;
+const PIPE_GEN = 10;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -577,16 +577,16 @@ async function tape(scene?: unknown, ms = 0) {
     const c = grabCanvas();
     if (!c) return;
     try {
-      frames.push(c.toDataURL("image/jpeg", 0.48));
+      frames.push(c.toDataURL("image/jpeg", 0.42));
     } catch {
       /* context lost */
     }
   };
   grab();
-  const iv = window.setInterval(grab, 66);
+  const iv = window.setInterval(grab, 33);
   clearHist();
   const staged = scene != null && scene !== "" ? await restageScene(scene) : { ok: true, id: null };
-  const hard = Number(ms) > 400 ? Number(ms) : 10000;
+  const hard = Number(ms) > 400 ? Number(ms) : 20000;
   const t0 = performance.now();
   let quiet = 0;
   let last = t0;
@@ -654,7 +654,7 @@ export function help() {
     until: "(eventType, timeoutMs) promise",
     wait: "(ms) rAF-wait so physics keeps ticking",
     shot: "jpeg of the live canvas (bay.mjs writes it to a file)",
-    tape: "(scene, ms?) recorder rolling, restage, run until the wheel stops; jpeg frames",
+    tape: "(scene, ms?) recorder rolling, restage, run until the wheel stops; ~30fps jpeg frames",
     audio: "hiss/roar loop levels",
     reload: "location.reload — last-ditch if the pipe died",
   };

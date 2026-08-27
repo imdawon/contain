@@ -55,9 +55,11 @@ function buildHill(w: number, h: number, d: number, cut: number) {
   const z0 = -hd;
   const z1 = cut >= 1 ? hd : hd + LIP;
   const span = z1 - z0;
+  const segs = d > 40 ? 96 : SEG;
+  const cols = d > 40 ? 96 : COL;
   const samples: { z: number; y: number; t: number }[] = [];
-  for (let i = 0; i <= SEG; i++) {
-    const z = z0 + (i / SEG) * span;
+  for (let i = 0; i <= segs; i++) {
+    const z = z0 + (i / segs) * span;
     samples.push({ z, y: surfaceY(z, h, d, cut), t: thickAt(z, d, cut) });
   }
   const n = samples.length;
@@ -98,9 +100,9 @@ function buildHill(w: number, h: number, d: number, cut: number) {
   edge.setFromPoints(epts);
 
   const hulls: Float32Array[] = [];
-  for (let i = 0; i < COL; i++) {
-    const u0 = Math.max(0, i / COL - 0.012);
-    const u1 = Math.min(1, (i + 1) / COL + 0.012);
+  for (let i = 0; i < cols; i++) {
+    const u0 = Math.max(0, i / cols - 0.012);
+    const u1 = Math.min(1, (i + 1) / cols + 0.012);
     const za = z0 + u0 * span;
     const zb = z0 + u1 * span;
     const ya = surfaceY(za, h, d, cut);

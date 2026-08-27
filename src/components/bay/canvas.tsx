@@ -216,7 +216,7 @@ function World() {
       <Grid
         infiniteGrid
         followCamera
-        fadeDistance={90}
+        fadeDistance={240}
         fadeStrength={0.85}
         cellSize={1}
         cellThickness={0.55}
@@ -315,7 +315,7 @@ export function BayCanvas() {
           style={{ position: "absolute", inset: 0, width: box.w, height: box.h }}
           dpr={[1, 1.5]}
           frameloop="always"
-          camera={{ position: [3.4, 1.7, 3.6], fov: 42, near: 0.08, far: 280 }}
+          camera={{ position: [3.4, 1.7, 3.6], fov: 42, near: 0.08, far: 800 }}
           gl={{
             antialias: true,
             alpha: false,
@@ -335,7 +335,7 @@ export function BayCanvas() {
           <FitGl />
           <KickFrames />
           <color attach="background" args={["#2c261e"]} />
-          <fog attach="fog" args={["#2c261e", 16, 110]} />
+          <fog attach="fog" args={["#2c261e", 40, 320]} />
           <hemisphereLight args={["#f2ebe0", "#3d372f", 1.35]} />
           <ambientLight intensity={0.28} color="#e8e0d4" />
           <directionalLight position={[6, 10, 4]} intensity={2.55} color="#fff3e4" />
