@@ -20,5 +20,5 @@ test("a drum side hit caves the wall inward", () => {
   const shell = makeSteelShell("drum");
   const r0 = steelRim(shell);
   applySteelHits(shell, [{ x: shell.radius, y: 0, z: 0, nx: -1, ny: 0, nz: 0, impulse: 20 }]);
-  assert.ok(steelRim(shell) < r0 - 0.03, `drum rim ${r0.toFixed(3)} → ${steelRim(shell).toFixed(3)}`);
+  assert.ok(steelRim(shell) < r0 - 0.06, `drum rim ${r0.toFixed(3)} → ${steelRim(shell).toFixed(3)}`);
 });
