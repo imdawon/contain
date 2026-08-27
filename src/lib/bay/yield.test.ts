@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applySteelHits, makeSteelShell, steelGeometry, steelMeshRim, steelRim } from "./yield.ts";
+import { coilInertia } from "./parts.ts";
+import { applySteelHits, makeSteelShell, steelExtents, steelGeometry, steelMeshRim, steelRim } from "./yield.ts";
 
 test("a hard slam caves the live rim, including inverted Rapier normals", () => {
   for (const nz of [1, -1]) {
     const shell = makeSteelShell("wheel");
     const r0 = steelRim(shell);
     const geo = steelGeometry(shell);
-    applySteelHits(shell, [{ x: 0, y: 0, z: shell.radius, nx: 0, ny: 0, nz, impulse: 120_000, closing: 12, otherMass: Infinity }]);
+    applySteelHits(shell, [{ x: 0, y: 0, z: shell.radius, nx: 0, ny: 0, nz, impulse: 2_400_000, closing: 28, otherMass: Infinity }]);
     const r1 = steelRim(shell);
     const mesh = steelMeshRim(geo, shell);
     assert.ok(r1 < r0 - 0.002, `nz=${nz} rim ${r0.toFixed(3)} → ${r1.toFixed(3)}`);
@@ -44,8 +45,8 @@ test("a corner slam dents the rim edge, not only the mid-tread", () => {
       nx: 1,
       ny: 0.5,
       nz: 0,
-      impulse: 120_000,
-      closing: 12,
+      impulse: 2_400_000,
+      closing: 28,
       otherMass: Infinity,
     },
   ]);
@@ -83,8 +84,8 @@ test("a mid-tread slam also dents both rims at that azimuth", () => {
       nx: 0,
       ny: 0,
       nz: 1,
-      impulse: 120_000,
-      closing: 12,
+      impulse: 2_400_000,
+      closing: 28,
       otherMass: Infinity,
     },
   ]);
@@ -101,4 +102,19 @@ test("a mid-tread slam also dents both rims at that azimuth", () => {
   }
   assert.ok(mid > 0.01, `mid ${mid}`);
   assert.ok(edge > 0.008, `rim at same azimuth ${edge}`);
+});
+
+test("coilInertia is tonne-scale, not a 6 kg hull", () => {
+  const I = coilInertia(100_000);
+  assert.ok(I.y > 40_000 && I.y < 80_000, `Iy ${I.y}`);
+  assert.ok(I.x > I.y * 4, `tumble Ix ${I.x} vs roll Iy ${I.y}`);
+});
+
+test("a tonne-scale hit pancakes an empty drum into a sheet", () => {
+  const shell = makeSteelShell("drum");
+  applySteelHits(shell, [
+    { x: 0, y: shell.halfH, z: 0, nx: 0, ny: 1, nz: 0, impulse: 8_000, closing: 12, otherMass: 1_000_000 },
+  ]);
+  const { halfH } = steelExtents(shell);
+  assert.ok(halfH < 0.09, `drum half-height ${halfH}`);
 });

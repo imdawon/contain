@@ -1,4 +1,5 @@
 import type { RapierRigidBody } from "@react-three/rapier";
+import { coilInertia, drumInertia } from "./parts";
 
 export type Vec3 = [number, number, number];
 
@@ -131,6 +132,15 @@ export function unregisterBody(id: string) {
   actors.delete(id);
 }
 
+export function findActorBody(kind: string) {
+  for (const a of actors.values()) {
+    if (a.kind !== kind) continue;
+    const b = a.getBody?.();
+    if (b) return b;
+  }
+  return null;
+}
+
 export function registerAssembly(group: string, ids: string[]) {
   assemblies.set(group, ids.slice());
   for (const id of ids) memberOf.set(id, group);
@@ -188,26 +198,23 @@ export function note(type: string, data: Record<string, string | number | boolea
   if (events.length > MAX_EVENTS) events.splice(0, events.length - MAX_EVENTS);
 }
 
-const colliderMass = new WeakMap<RapierRigidBody, number>();
+type InertiaKind = "wheel" | "drum";
 
-function colliderBaseMass(b: RapierRigidBody) {
-  let sum = 0;
-  const n = b.numColliders();
-  for (let i = 0; i < n; i++) {
-    const c = b.collider(i);
-    if (c) sum += c.mass();
-  }
-  return sum;
+function principalOf(kind: InertiaKind, kg: number) {
+  return kind === "drum" ? drumInertia(kg) : coilInertia(kg);
 }
 
-export function setBodyMass(b: RapierRigidBody, kg: number) {
+/** Mass AND inertia. setAdditionalMass alone leaves a 100 t coil with a 6 kg spin. */
+export function setBodyMass(b: RapierRigidBody, kg: number, kind: InertiaKind = "wheel") {
   if (!Number.isFinite(kg) || kg <= 0.02) return;
-  if (!colliderMass.has(b)) {
-    const native = colliderBaseMass(b);
-    colliderMass.set(b, native > 0.0001 ? native : kg);
+  const n = b.numColliders();
+  for (let i = 0; i < n; i++) {
+    const c = b.collider(i) as { setDensity?: (d: number) => void } | null;
+    c?.setDensity?.(0);
   }
-  const base = colliderMass.get(b) ?? kg;
-  b.setAdditionalMass(kg - base, true);
+  const I = principalOf(n <= 2 ? "drum" : kind, kg);
+  const ident = { x: 0, y: 0, z: 0, w: 1 };
+  b.setAdditionalMassProperties(kg, { x: 0, y: 0, z: 0 }, I, ident, true);
   b.wakeUp();
 }
 

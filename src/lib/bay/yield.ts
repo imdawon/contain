@@ -256,16 +256,29 @@ function craterOnShell(shell: SteelShell, hit: SteelHit) {
   return { x: hx, y: hy, z: hz, nx, nz };
 }
 
+export function steelExtents(shell: SteelShell) {
+  let halfH = 0;
+  let radius = 0;
+  const n = shell.dent.length;
+  for (let i = 0; i < n; i++) {
+    const o = i * 3;
+    const h = Math.abs(shell.live[o + 1]!);
+    const r = Math.hypot(shell.live[o]!, shell.live[o + 2]!);
+    if (h > halfH) halfH = h;
+    if (r > radius) radius = r;
+  }
+  return { halfH, radius };
+}
+
 export function applySteelHits(shell: SteelShell, hits: SteelHit[]) {
   if (hits.length === 0) return 0;
   const { rest, live, dent, yieldJ, stiff, maxDent, inner, kind, halfH } = shell;
   const n = dent.length;
   const sigma = kind === "wheel" ? 0.32 : 0.28;
-  const twoSig = 2 * sigma * sigma;
   const floorR =
     kind === "wheel" ? Math.max(shell.radius - maxDent, inner + 0.05) : Math.max(0.08, shell.radius - maxDent);
-  const floorH = Math.max(halfH * 0.42, halfH - maxDent);
-  const cap = kind === "wheel" ? 0.055 : 0.16;
+  const floorH = kind === "wheel" ? Math.max(halfH * 0.42, halfH - maxDent) : 0.032;
+  const cap = kind === "wheel" ? 0.055 : 0.9;
   let added = 0;
   for (const hit of hits) {
     if (kind === "wheel") {
@@ -277,16 +290,55 @@ export function applySteelHits(shell: SteelShell, hits: SteelHit[]) {
     if (!crater) continue;
     const onEdge = kind === "wheel" && Math.abs(crater.y) > halfH * 0.62;
     if (kind === "wheel") {
-      const need = onEdge ? 4.0 : 8.5;
+      const need = onEdge ? 8 : 12;
       if (hit.closing != null && hit.closing < need) continue;
     }
-    const hitCap = kind === "wheel" ? (onEdge ? 0.08 : 0.04) : cap;
+    const hitCap = kind === "wheel" ? (onEdge ? 0.08 : 0.05) : cap;
     const sigR = kind === "wheel" ? (onEdge ? 0.26 : 0.34) : sigma;
     const sigY = kind === "wheel" ? halfH * 0.55 : sigma;
     const twoR = 2 * sigR * sigR;
     const twoY = 2 * sigY * sigY;
     const depth = Math.min(hitCap, maxDent, excess / Math.max(0.5, stiff));
-    if (depth < 0.002) continue;
+    if (kind !== "drum" && depth < 0.002) continue;
+
+    if (kind === "drum") {
+      // Empty drum under a tonne-scale coil: one hit is a sheet of paper.
+      const squash = halfH - floorH;
+      for (let i = 0; i < n; i++) {
+        const o = i * 3;
+        const px = live[o]!;
+        const py = live[o + 1]!;
+        const pz = live[o + 2]!;
+        const ay = Math.abs(py);
+        const nextH = Math.max(floorH, ay - squash);
+        let push = 0;
+        if (nextH < ay - 1e-5) {
+          live[o + 1] = Math.sign(py || rest[o + 1] || 1) * nextH;
+          push += ay - nextH;
+        }
+        const along = px * crater.nx + pz * crater.nz;
+        if (along > floorR) {
+          const dx = px - crater.x;
+          const dy = rest[o + 1]! - crater.y;
+          const dz = pz - crater.z;
+          const w = Math.exp(-(dx * dx + dz * dz) / twoR - (dy * dy) / twoY);
+          if (w > 0.04) {
+            const take = Math.min(along - floorR, Math.max(depth, squash * 0.12) * w);
+            if (take > 1e-5) {
+              live[o] = px - crater.nx * take;
+              live[o + 2] = pz - crater.nz * take;
+              push += take;
+            }
+          }
+        }
+        if (push <= 1e-5) continue;
+        dent[i] = Math.min(1.2, dent[i]! + push);
+        bruise(shell, i);
+        added += push;
+      }
+      continue;
+    }
+
     const ix = -crater.x;
     const iy = kind === "wheel" && onEdge ? -crater.y * 0.78 : 0;
     const iz = -crater.z;
@@ -316,26 +368,6 @@ export function applySteelHits(shell: SteelShell, hits: SteelHit[]) {
       let px = live[o]!;
       let py = live[o + 1]!;
       let pz = live[o + 2]!;
-      if (kind === "drum") {
-        const along = px * crater.nx + pz * crater.nz;
-        if (along <= floorR) continue;
-        const nextAlong = Math.max(floorR, along - take);
-        const push = along - nextAlong;
-        if (push <= 1e-5) continue;
-        live[o] = px - crater.nx * push;
-        live[o + 2] = pz - crater.nz * push;
-        const rad = Math.hypot(live[o]!, live[o + 2]!);
-        if (rad > floorR + 0.002) {
-          const nr = Math.max(floorR, rad - take * 0.55);
-          const s = nr / rad;
-          live[o] *= s;
-          live[o + 2] *= s;
-        }
-        dent[i] = Math.min(maxDent, dent[i]! + push);
-        bruise(shell, i);
-        added += push;
-        continue;
-      }
       const vertEdge = Math.abs(ry) > halfH * 0.62;
       px += ux * take;
       if (vertEdge) py += uy * take;

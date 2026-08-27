@@ -60,7 +60,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 19;
+const PIPE_GEN = 31;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -399,6 +399,11 @@ export function peek() {
     spin: number;
     meshRim: string | number | boolean | null;
     dish: string | number | boolean | null;
+    mass: number | null;
+    Iy: number | null;
+    wx: number;
+    wy: number;
+    wz: number;
   }[] = [];
   for (const [id, rec] of listSamplers()) {
     const p = rec.sample();
@@ -408,6 +413,11 @@ export function peek() {
     let vz = 0;
     let spin = 0;
     let kin: boolean | null = null;
+    let mass: number | null = null;
+    let Iy: number | null = null;
+    let wx = 0;
+    let wy = 0;
+    let wz = 0;
     const b = rec.getBody?.();
     if (b) {
       const lv = b.linvel();
@@ -415,8 +425,13 @@ export function peek() {
       vy = round(lv.y);
       vz = round(lv.z);
       const av = b.angvel();
+      wx = round(av.x);
+      wy = round(av.y);
+      wz = round(av.z);
       spin = round(Math.hypot(av.x, av.y, av.z));
       kin = b.isKinematic();
+      mass = round(b.mass());
+      Iy = Math.round(b.principalInertia()?.y ?? 0);
     }
     objects.push({
       id,
@@ -441,6 +456,11 @@ export function peek() {
       dish: p.state?.dish ?? null,
       kin,
       spin,
+      mass,
+      Iy,
+      wx,
+      wy,
+      wz,
     });
   }
   const cam = s.camera;
@@ -610,7 +630,7 @@ async function tape(scene?: unknown, ms = 0) {
   while (performance.now() - t0 < hard) {
     await waitFrames(180);
     const w = peek().objects.find((o) => o.kind === "wheel");
-    const onFloor = Boolean(w && w.z > 1520 && w.y < 8);
+    const onFloor = Boolean(w && w.z > 1480 && w.y < 8);
     if (onFloor && floorAt === 0) floorAt = performance.now();
     if (floorAt > 0 && performance.now() - floorAt >= 7000) break;
   }
