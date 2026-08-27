@@ -198,7 +198,7 @@ function SteelBody({
               restitution={rest}
             />
           )}
-      <mesh geometry={geo} scale={kind === "wheel" ? 1.09 : 1.08} frustumCulled={false} userData={{ labSkip: true }}>
+      <mesh geometry={geo} scale={kind === "wheel" ? 1.055 : 1.05} frustumCulled={false} userData={{ labSkip: true }}>
         <meshBasicMaterial color="#000000" side={THREE.FrontSide} toneMapped={false} fog={false} />
       </mesh>
       <mesh ref={mesh} geometry={geo} onPointerDown={grab.down} castShadow receiveShadow frustumCulled={false}>

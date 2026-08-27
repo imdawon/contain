@@ -211,7 +211,7 @@ function World() {
         <CuboidCollider args={[FLOOR.half, 0.25, FLOOR.half]} position={[0, -0.25, 0]} />
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
           <planeGeometry args={[FLOOR.half * 2, FLOOR.half * 2]} />
-          <meshStandardMaterial color="#35312c" roughness={0.94} metalness={0.06} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
+          <meshStandardMaterial color="#4c463f" roughness={0.94} metalness={0.06} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
         </mesh>
       </RigidBody>
       <Grid
@@ -318,7 +318,7 @@ export function BayCanvas() {
           onCreated={(state) => {
             const { gl } = state;
             gl.toneMapping = THREE.ACESFilmicToneMapping;
-            gl.toneMappingExposure = 1.18;
+            gl.toneMappingExposure = 1.42;
             gl.outputColorSpace = THREE.SRGBColorSpace;
             gl.shadowMap.enabled = true;
             gl.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -329,7 +329,7 @@ export function BayCanvas() {
           <FitGl />
           <KickFrames />
           <color attach="background" args={["#8a7c6a"]} />
-          <fog attach="fog" args={["#6a5e50", 32, 120]} />
+          <fog attach="fog" args={["#8a7c6a", 170, 560]} />
           <LabLook />
           <World />
         </Canvas>

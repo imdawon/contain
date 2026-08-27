@@ -80,7 +80,7 @@ if (fn === "reload") {
 
 let waitMs = 20000;
 if (fn === "until") waitMs = Math.max(waitMs, Number(args[1] || 8000) + 4000);
-if (fn === "tape") waitMs = 60000;
+if (fn === "tape") waitMs = 90000;
 let pipeArgs = args;
 let tapeDest = null;
 if (fn === "tape") {
@@ -132,7 +132,7 @@ if (fn === "tape") {
       });
       const ff = spawnSync(
         "ffmpeg",
-        ["-y", "-framerate", "30", "-i", join(dir, "f%04d.jpg"), "-vf", "crop=ih*9/16:ih,scale=720:1280", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "26", "-movflags", "+faststart", mp4],
+        ["-y", "-framerate", "30", "-i", join(dir, "f%04d.jpg"), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "26", "-movflags", "+faststart", mp4],
         { encoding: "utf8" },
       );
       rmSync(dir, { recursive: true, force: true });
