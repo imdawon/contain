@@ -110,12 +110,13 @@ export const DRUM = {
   height: 0.64,
   wall: 0.042,
   segs: 16,
-  mass: 18,
-  yieldJ: 0.35,
-  stiff: 5.5,
-  maxDent: 0.12,
+  /** Part-filled 55-gal. Empty 18 kg reads as air against a 100 t roll. */
+  mass: 180,
+  yieldJ: 0.22,
+  stiff: 3.2,
+  maxDent: 0.16,
   color: 0x4a5240,
 };
 
 /** Half-extents of the physical floor, meters. Visual grid is infinite. */
-export const FLOOR = { half: 200 };
+export const FLOOR = { half: 400 };

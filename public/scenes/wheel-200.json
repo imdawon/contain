@@ -1,7 +1,7 @@
 {
   "id": "wheel-200",
   "name": "Wheel 200 t",
-  "blurb": "Full U. 200-ton steel roll down the ramp through drums.",
+  "blurb": "5x U. 200-ton steel drop from the crest through drums.",
   "file": "scenes/wheel-200.json",
   "select": "wheel",
   "inspect": false,
@@ -10,16 +10,16 @@
   },
   "cam": {
     "offset": [
-      1.2,
-      1.08,
-      -2.55
+      0,
+      3.6,
+      -4.8
     ],
     "look": [
-      -0.4,
-      -0.18,
-      4.4
+      0,
+      -0.85,
+      2.0
     ],
-    "fov": 58
+    "fov": 52
   },
   "entities": [
     {
@@ -36,9 +36,9 @@
         0
       ],
       "size": [
-        8.4,
-        7.4,
-        32.0
+        42.0,
+        37.0,
+        160.0
       ],
       "cut": 1.0,
       "fixed": true,
@@ -49,8 +49,8 @@
       "kind": "wheel",
       "pos": [
         0,
-        6.49,
-        -13.4
+        37.198,
+        -78.8
       ],
       "rot": [
         0,
@@ -60,7 +60,7 @@
       "vel": [
         0,
         0,
-        1.8
+        0.4
       ],
       "mass": 200000,
       "grip": 0.08,
@@ -173,7 +173,7 @@
       "kind": "drum",
       "pos": [
         -0.29,
-        1.231,
+        1.222,
         0.62
       ],
       "rot": [
@@ -190,7 +190,7 @@
       "kind": "drum",
       "pos": [
         0.29,
-        1.231,
+        1.222,
         0.62
       ],
       "rot": [
@@ -207,7 +207,7 @@
       "kind": "drum",
       "pos": [
         -0.52,
-        2.063,
+        1.389,
         5.4
       ],
       "rot": [
@@ -224,7 +224,7 @@
       "kind": "drum",
       "pos": [
         0.52,
-        2.063,
+        1.389,
         5.4
       ],
       "rot": [
