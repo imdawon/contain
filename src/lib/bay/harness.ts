@@ -435,6 +435,8 @@ export function peek() {
       dent: p.state?.dent ?? null,
       strain: p.state?.strain ?? null,
       rim: p.state?.rim ?? null,
+      meshRim: p.state?.meshRim ?? null,
+      dish: p.state?.dish ?? null,
       kin,
       spin,
     });

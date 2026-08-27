@@ -87,7 +87,7 @@ function SteelBody({
     );
     note("spawn", { kind, id });
     return () => unregisterBody(id);
-  }, [id, kind, shell]);
+  }, [id, kind, shell, geo]);
 
   useEffect(
     () => () => {
@@ -200,7 +200,6 @@ function SteelBody({
           metalness={kind === "wheel" ? 0.82 : 0.58}
           roughness={kind === "wheel" ? 0.3 : 0.46}
           side={THREE.DoubleSide}
-          flatShading
         />
       </mesh>
       {kind === "wheel" ? <WheelBits half={WHEEL.thick / 2} /> : <DrumBits half={DRUM.height / 2} />}
@@ -330,5 +329,3 @@ export function Drum(props: {
 }) {
   return <SteelBody kind="drum" {...props} />;
 }
-
-[Showing lines 1-300 of 303. Use :301 to continue]
