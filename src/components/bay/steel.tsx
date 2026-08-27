@@ -284,20 +284,51 @@ function collectHits(world: { contactPairsWith: Function; contactPair: Function 
   return hits;
 }
 
-function WheelBits({ radius, half }: { radius: number; half: number }) {
+function WheelBits({ half }: { half: number }) {
+  return (
+    <mesh>
+      <cylinderGeometry args={[0.028, 0.028, half * 2 + 0.03, 8]} />
+      <meshStandardMaterial color={0x8a8478} metalness={0.45} roughness={0.5} />
+    </mesh>
+  );
+}
+
+function DrumBits({ half }: { half: number }) {
+  const rim = 0x2f332c;
   return (
     <group>
-      <mesh rotation={[0, 0, 0]}>
-        <cylinderGeometry args={[radius, radius, half * 2 + 0.02, 12]} />
-        <meshStandardMaterial color={0x3a3a38} metalness={0.7} roughness={0.38} />
+      <mesh position={[0, half * 0.12, 0]}>
+        <cylinderGeometry args={[0.04, 0.04, 0.028, 10]} />
+        <meshStandardMaterial color={rim} metalness={0.62} roughness={0.4} />
       </mesh>
-      <mesh>
-        <cylinderGeometry args={[radius * 0.35, radius * 0.35, half * 2 + 0.04, 8]} />
-        <meshStandardMaterial color={0x8a8478} metalness={0.45} roughness={0.5} />
+      <mesh position={[0.055, half * 0.18, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.016, 0.016, 0.014, 8]} />
+        <meshStandardMaterial color={0x2a2c26} metalness={0.5} roughness={0.45} />
       </mesh>
     </group>
   );
 }
 
+export function Wheel(props: {
+  id: string;
+  pos: [number, number, number];
+  rot?: [number, number, number];
+  grip?: number;
+  bounce?: number;
+  mass?: number;
+}) {
+  return <SteelBody kind="wheel" {...props} />;
+}
 
-[Showing lines 1-300 of 304. Use :301 to continue]
+export function Drum(props: {
+  id: string;
+  pos: [number, number, number];
+  rot?: [number, number, number];
+  grip?: number;
+  bounce?: number;
+  mass?: number;
+}) {
+  return <SteelBody kind="drum" {...props} />;
+}
+
+[Showing lines 1-300 of 303. Use :301 to continue]
