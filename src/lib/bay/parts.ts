@@ -90,33 +90,34 @@ export const WAGON = {
 
 /** Machined steel wheel. Yields locally; Rapier still owns rigid motion. */
 export const WHEEL = {
-  radius: 0.4,
-  /** Wide enough to face a 3-drum wall. Not a coin on the rail. */
-  thick: 0.96,
-  hub: 0.1,
-  segs: 16,
+  radius: 1.0,
+  /** Coil face width. BeamNG 100 t roll is car-scale, not an 80 cm puck. */
+  thick: 1.8,
+  hub: 0.22,
+  segs: 24,
   /** Default 100 t. Rapier is kg. */
   mass: 100_000,
-  /** Contact impulse (N·s) before the rim takes a plastic bruise. */
-  yieldJ: 18,
-  stiff: 55,
-  maxDent: 0.048,
+  /** Contact impulse (N·s) before a plastic bruise. Rolling ~ m g / 60 ≈ 1.6e4 at 100 t; a 55-gal slam is ~2e3. */
+  yieldJ: 24_000,
+  stiff: 2.4e6,
+  maxDent: 0.22,
   color: 0x6e7278,
 };
 
 /** Thin-wall oil drum. Side panels cave in; lids ride the dented ring. */
 export const DRUM = {
-  radius: 0.255,
-  height: 0.64,
-  wall: 0.042,
-  segs: 16,
-  /** Part-filled 55-gal. Empty 18 kg reads as air against a 100 t roll. */
-  mass: 180,
+  /** 4x a 55-gal so the chase shot can read lids, not open washers. */
+  radius: 1.02,
+  height: 2.56,
+  wall: 0.08,
+  segs: 24,
+  /** Thin-wall tank, part-filled. Surface ~16x a 55-gal. */
+  mass: 3200,
   yieldJ: 0.22,
   stiff: 3.2,
-  maxDent: 0.16,
+  maxDent: 0.55,
   color: 0x4a5240,
 };
 
 /** Half-extents of the physical floor, meters. Visual grid is infinite. */
-export const FLOOR = { half: 400 };
+export const FLOOR = { half: 2000 };

@@ -64,7 +64,8 @@ function SteelBody({
   const mu = grip ?? (kind === "wheel" ? 0.72 : 0.48);
   const rest = bounce ?? 0.03;
   const groups = kind === "wheel" ? WHEEL_GROUPS : DRUM_GROUPS;
-  const shell = useMemo(() => makeSteelShell(kind), [kind]);
+  const stageN = useBay((s) => s.stageN);
+  const shell = useMemo(() => makeSteelShell(kind), [kind, stageN]);
   const geo = useMemo(() => steelGeometry(shell), [shell]);
   const parts = useMemo(() => shell.slices, [shell]);
   const hullArgs = useMemo(() => parts.map((p) => sliceHull(shell, p)), [parts, shell]);
@@ -217,7 +218,7 @@ function SteelBody({
 }
 
 function collectHits(world: { contactPairsWith: Function; contactPair: Function }, b: RapierRigidBody, kind: SteelKind) {
-  const hits: { x: number; y: number; z: number; nx: number; ny: number; nz: number; impulse: number }[] = [];
+  const hits: { x: number; y: number; z: number; nx: number; ny: number; nz: number; impulse: number; closing: number; otherMass: number }[] = [];
   const n = b.numColliders();
   const seen = new Set<number>();
   const v = b.linvel();
@@ -226,15 +227,21 @@ function collectHits(world: { contactPairsWith: Function; contactPair: Function 
     if (!c) continue;
     world.contactPairsWith(c, (other: RapierCollider) => {
       const ob = other.parent();
-      if (!ob || ob.handle === b.handle || ob.isFixed()) return;
+      if (!ob || ob.handle === b.handle) return;
       if (seen.has(ob.handle)) return;
       seen.add(ob.handle);
+      const otherFixed = typeof ob.isFixed === "function" && ob.isFixed();
       if (kind === "drum") {
+        if (otherFixed) return;
         const mem = other.collisionGroups() >>> 16;
         if ((mem & WHEEL_MEMBER) === 0) return;
       }
-      const ov = ob.linvel();
-      const closing = Math.hypot(v.x - ov.x, v.y - ov.y, v.z - ov.z);
+      const otherMass = otherFixed ? Number.POSITIVE_INFINITY : ob.mass();
+      if (kind === "wheel" && !otherFixed && otherMass < 4000) return;
+      const ov = otherFixed ? { x: 0, y: 0, z: 0 } : ob.linvel();
+      const relx = v.x - ov.x;
+      const rely = v.y - ov.y;
+      const relz = v.z - ov.z;
       let sum = 0;
       let cx = 0;
       let cy = 0;
@@ -283,10 +290,18 @@ function collectHits(world: { contactPairsWith: Function; contactPair: Function 
         }
       }
       if (sum < 0.08) return;
-      if (closing < 0.12 && sum < 0.55) return;
       const inv = 1 / sum;
       const nl = Math.hypot(nx, ny, nz) || 1;
-      hits.push({ x: cx * inv, y: cy * inv, z: cz * inv, nx: nx / nl, ny: ny / nl, nz: nz / nl, impulse: sum });
+      const nnx = nx / nl;
+      const nny = ny / nl;
+      const nnz = nz / nl;
+      const closing = Math.max(0, -(relx * nnx + rely * nny + relz * nnz));
+      if (kind === "wheel") {
+        if (closing < 3.2) return;
+      } else if (closing < 0.12 && sum < 0.55) {
+        return;
+      }
+      hits.push({ x: cx * inv, y: cy * inv, z: cz * inv, nx: nnx, ny: nny, nz: nnz, impulse: sum, closing, otherMass });
     });
   }
   return hits;
@@ -303,14 +318,15 @@ function WheelBits({ half }: { half: number }) {
 
 function DrumBits({ half }: { half: number }) {
   const rim = 0x2f332c;
+  const r = DRUM.radius;
   return (
     <group>
-      <mesh position={[0, half * 0.12, 0]}>
-        <cylinderGeometry args={[0.04, 0.04, 0.028, 10]} />
+      <mesh position={[0, half + 0.02, 0]}>
+        <cylinderGeometry args={[r * 0.18, r * 0.18, 0.1, 12]} />
         <meshStandardMaterial color={rim} metalness={0.62} roughness={0.4} />
       </mesh>
-      <mesh position={[0.055, half * 0.18, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[0.016, 0.016, 0.014, 8]} />
+      <mesh position={[r * 0.22, half + 0.06, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.07, 0.07, 0.06, 8]} />
         <meshStandardMaterial color={0x2a2c26} metalness={0.5} roughness={0.45} />
       </mesh>
     </group>

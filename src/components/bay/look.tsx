@@ -162,12 +162,12 @@ function LabLights() {
     L.position.set(p.x + 10, p.y + 42, p.z - 8);
     L.updateMatrixWorld();
     const cam = L.shadow.camera;
-    cam.left = -28;
-    cam.right = 28;
-    cam.top = 34;
-    cam.bottom = -34;
+    cam.left = -56;
+    cam.right = 56;
+    cam.top = 64;
+    cam.bottom = -64;
     cam.near = 8;
-    cam.far = 120;
+    cam.far = 240;
     cam.updateProjectionMatrix();
     cam.updateMatrixWorld();
     L.shadow.bias = -0.00018;
@@ -187,11 +187,11 @@ function LabLights() {
         shadow-bias={-0.00018}
         shadow-normalBias={0.03}
         shadow-camera-near={8}
-        shadow-camera-far={120}
-        shadow-camera-left={-28}
-        shadow-camera-right={28}
-        shadow-camera-top={34}
-        shadow-camera-bottom={-34}
+        shadow-camera-far={240}
+        shadow-camera-left={-56}
+        shadow-camera-right={56}
+        shadow-camera-top={64}
+        shadow-camera-bottom={-64}
       />
       <primitive object={target} />
       <directionalLight position={[-20, 30, 24]} intensity={0.7} color="#c5d4e6" />
