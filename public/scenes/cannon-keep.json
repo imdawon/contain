@@ -103,9 +103,9 @@
     }
   ],
   "ties": [],
-  "id": "cannon-100",
-  "name": "Cannon 100 t",
-  "blurb": "Dummy and a 100 t coil fired at each other on a Nintendo golf hole. Joints snap. Score is the sport.",
-  "file": "scenes/cannon-100.json",
-  "theme": "golf"
+  "id": "cannon-keep",
+  "name": "Cannon Keep",
+  "blurb": "Dummy vs 100 t coil through a castle gate. Banners, moat, dusk. Score is the sport.",
+  "file": "scenes/cannon-keep.json",
+  "theme": "medieval"
 }

@@ -103,9 +103,14 @@
     }
   ],
   "ties": [],
-  "id": "cannon-100",
-  "name": "Cannon 100 t",
-  "blurb": "Dummy and a 100 t coil fired at each other on a Nintendo golf hole. Joints snap. Score is the sport.",
-  "file": "scenes/cannon-100.json",
-  "theme": "golf"
+  "id": "cannon-mare",
+  "name": "Cannon Mare",
+  "blurb": "Dummy vs 100 t coil on the moon. Low gravity, lander, Earth in the sky. Score is the sport.",
+  "file": "scenes/cannon-mare.json",
+  "theme": "space",
+  "gravity": [
+    0,
+    -3.2,
+    0
+  ]
 }

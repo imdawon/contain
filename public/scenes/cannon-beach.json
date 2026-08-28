@@ -103,9 +103,9 @@
     }
   ],
   "ties": [],
-  "id": "cannon-100",
-  "name": "Cannon 100 t",
-  "blurb": "Dummy and a 100 t coil fired at each other on a Nintendo golf hole. Joints snap. Score is the sport.",
-  "file": "scenes/cannon-100.json",
-  "theme": "golf"
+  "id": "cannon-beach",
+  "name": "Cannon Beach",
+  "blurb": "Dummy vs 100 t coil over a toy beach. Palms, surf, sandcastle. Score is the sport.",
+  "file": "scenes/cannon-beach.json",
+  "theme": "beach"
 }
