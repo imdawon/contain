@@ -39,6 +39,9 @@ export type Scene = {
   track?: SceneTrack;
   airborne?: SceneAirborne;
   cam?: SceneCam;
+  theme?: string;
+  gravity?: Vec3;
+  inspect?: boolean;
   entities: SceneActor[];
   ties: SceneTie[];
 };
@@ -53,6 +56,10 @@ export const SCENE_INDEX = [
   { id: "wheel-200", file: "scenes/wheel-200.json", name: "Wheel 200 t" },
   { id: "wheel-300", file: "scenes/wheel-300.json", name: "Wheel 300 t" },
   { id: "cannon-100", file: "scenes/cannon-100.json", name: "Cannon 100 t" },
+  { id: "cannon-keep", file: "scenes/cannon-keep.json", name: "Cannon Keep" },
+  { id: "cannon-beach", file: "scenes/cannon-beach.json", name: "Cannon Beach" },
+  { id: "cannon-grove", file: "scenes/cannon-grove.json", name: "Cannon Grove" },
+  { id: "cannon-mare", file: "scenes/cannon-mare.json", name: "Cannon Mare" },
 ] as const;
 
 const KINDS = new Set<string>([
@@ -187,6 +194,8 @@ export function coerceScene(raw: unknown): Scene | null {
       };
     }
   }
+  const theme = typeof o.theme === "string" ? o.theme.slice(0, 24) : undefined;
+  const gravity = vec3(o.gravity);
   return {
     id: o.id.slice(0, 48),
     name: o.name.slice(0, 40),
@@ -196,6 +205,9 @@ export function coerceScene(raw: unknown): Scene | null {
     track,
     airborne,
     cam,
+    theme,
+    gravity,
+    inspect: o.inspect === true,
     entities,
     ties,
   };

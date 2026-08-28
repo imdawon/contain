@@ -27,7 +27,8 @@ import { CRATE_G, DUMMY_G, WAGON_G, WORLD_G } from "@/lib/bay/groups";
 import { listSamplers } from "@/lib/bay/probe";
 import { useBay } from "@/store/bay-store";
 import { LabLook } from "@/components/bay/look";
-import { Green } from "@/components/bay/green";
+import { Arena, ArenaLook } from "@/components/bay/arena";
+import { sceneGravity, sceneTheme } from "@/lib/bay/arena";
 
 function TrackCam({
   orbit,
@@ -120,11 +121,6 @@ function SlowMoDriver() {
     step(Math.min(dt, 0.05) * 0.25);
   });
   return null;
-}
-
-function gardenOn() {
-  const ents = useBay.getState().entities;
-  return ents.some((e) => e.kind === "cannon") && !ents.some((e) => e.kind === "ramp" || e.kind === "hill");
 }
 
 function FitGl() {
@@ -226,10 +222,10 @@ function World() {
   const fire = useFireMap();
   const hangar = Boolean(scene?.cam?.offset || scene?.cam?.eye);
   const tracking = Boolean(useBay((s) => s.trackId));
-  const garden = gardenOn();
+  const garden = Boolean(sceneTheme(scene));
 
   return (
-    <Physics key={stageN} gravity={[0, -9.81, 0]} timeStep={slowMo ? "vary" : 1 / 60} paused={slowMo} interpolate numSolverIterations={24} numInternalPgsIterations={12} maxCcdSubsteps={1}>
+    <Physics key={stageN} gravity={sceneGravity(scene)} timeStep={slowMo ? "vary" : 1 / 60} paused={slowMo} interpolate numSolverIterations={24} numInternalPgsIterations={12} maxCcdSubsteps={1}>
       <SlowMoDriver />
       <TrackCam orbit={orbit} />
       <ProbeTick />
@@ -244,7 +240,7 @@ function World() {
           </mesh>
         )}
       </RigidBody>
-      {garden ? <Green /> : (
+      {garden ? <Arena /> : (
       <Grid
         infiniteGrid
         fadeDistance={34}
@@ -309,20 +305,10 @@ function World() {
   );
 }
 
-function GardenLook() {
-  const garden = useBay((s) => s.entities.some((e) => e.kind === "cannon") && !s.entities.some((e) => e.kind === "ramp" || e.kind === "hill"));
-  const sky = garden ? "#8ec8e8" : "#8a7c6a";
-  return (
-    <>
-      <color attach="background" args={[sky]} />
-      <fog attach="fog" args={garden ? ["#b5dcec", 110, 260] : ["#8a7c6a", 90, 1400]} />
-    </>
-  );
-}
 
 export function BayCanvas() {
   const wrap = useRef<HTMLDivElement>(null);
-  const [box, setBox] = useState({ w: 0, h: 0 });
+  const [box, setBox] = useState({ w: 1800, h: 1280 });
   useLayoutEffect(() => {
     const el = wrap.current;
     if (!el) return;
@@ -372,7 +358,7 @@ export function BayCanvas() {
         >
           <FitGl />
           <KickFrames />
-          <GardenLook />
+          <ArenaLook />
           <LabLook />
           <World />
           <ScorePlate />

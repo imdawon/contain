@@ -2,6 +2,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { listSamplers } from "@/lib/bay/probe";
+import { ARENA_LOOK, sceneTheme, type ArenaTheme } from "@/lib/bay/arena";
 import { useBay } from "@/store/bay-store";
 
 const INK = "labInk4";
@@ -95,25 +96,26 @@ export function LabLook() {
     });
   }, [scene, stageN, nEnt, gl]);
 
-  const garden = useBay((s) => s.entities.some((e) => e.kind === "cannon") && !s.entities.some((e) => e.kind === "ramp" || e.kind === "hill"));
+  const theme = useBay((s) => sceneTheme(s.scene));
   return (
     <>
-      <LabSky garden={garden} />
-      {garden ? null : <HangarLamps />}
-      <LabLights garden={garden} />
+      <LabSky theme={theme} />
+      {theme ? null : <HangarLamps />}
+      <LabLights theme={theme} />
     </>
   );
 }
 
-function LabSky({ garden }: { garden?: boolean }) {
+function LabSky({ theme }: { theme: ArenaTheme | null }) {
   const geo = useMemo(() => {
     const g = new THREE.SphereGeometry(420, 32, 20);
     const n = g.attributes.position.count;
     const col = new Float32Array(n * 3);
     const pos = g.attributes.position;
-    const nadir = garden ? [0.42, 0.62, 0.38] : [0.28, 0.25, 0.22];
-    const horizon = garden ? [0.72, 0.86, 0.92] : [0.62, 0.55, 0.46];
-    const zenith = garden ? [0.45, 0.72, 0.95] : [0.86, 0.8, 0.7];
+    const pal = theme ? ARENA_LOOK[theme] : null;
+    const nadir = pal ? pal.nadir : [0.28, 0.25, 0.22];
+    const horizon = pal ? pal.horizon : [0.62, 0.55, 0.46];
+    const zenith = pal ? pal.zenith : [0.86, 0.8, 0.7];
     for (let i = 0; i < n; i++) {
       const h = THREE.MathUtils.clamp((pos.getY(i) / 420) * 0.5 + 0.5, 0, 1);
       const a = h < 0.46 ? h / 0.46 : (h - 0.46) / 0.54;
@@ -125,7 +127,7 @@ function LabSky({ garden }: { garden?: boolean }) {
     }
     g.setAttribute("color", new THREE.BufferAttribute(col, 3));
     return g;
-  }, [garden]);
+  }, [theme]);
   useLayoutEffect(
     () => () => {
       geo.dispose();
@@ -153,7 +155,7 @@ function HangarLamps() {
   );
 }
 
-function LabLights({ garden }: { garden?: boolean }) {
+function LabLights({ theme }: { theme: ArenaTheme | null }) {
   const light = useRef<THREE.DirectionalLight>(null);
   const target = useMemo(() => new THREE.Object3D(), []);
   useFrame(() => {
@@ -180,12 +182,12 @@ function LabLights({ garden }: { garden?: boolean }) {
 
   return (
     <>
-      <hemisphereLight args={garden ? ["#d8f0ff", "#5a8a48", 0.95] : ["#fff4e4", "#4a433c", 0.78]} />
-      <ambientLight intensity={garden ? 0.7 : 0.52} color={garden ? "#e7f6ff" : "#efe6d8"} />
+      <hemisphereLight args={theme ? [ARENA_LOOK[theme].hemiSky, ARENA_LOOK[theme].hemiGround, ARENA_LOOK[theme].hemiI] : ["#fff4e4", "#4a433c", 0.78]} />
+      <ambientLight intensity={theme ? ARENA_LOOK[theme].ambient : 0.52} color={theme ? ARENA_LOOK[theme].ambientC : "#efe6d8"} />
       <directionalLight
         ref={light}
-        intensity={garden ? 2.8 : 3.4}
-        color={garden ? "#fff6d2" : "#fff6e4"}
+        intensity={theme ? ARENA_LOOK[theme].sunI : 3.4}
+        color={theme ? ARENA_LOOK[theme].sunC : "#fff6e4"}
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-bias={-0.00018}
@@ -198,7 +200,7 @@ function LabLights({ garden }: { garden?: boolean }) {
         shadow-camera-bottom={-64}
       />
       <primitive object={target} />
-      <directionalLight position={[-20, 30, 24]} intensity={garden ? 1.05 : 0.7} color={garden ? "#9ad0ff" : "#c5d4e6"} />
+      <directionalLight position={[-20, 30, 24]} intensity={theme ? ARENA_LOOK[theme].fillI : 0.7} color={theme ? ARENA_LOOK[theme].fillC : "#c5d4e6"} />
     </>
   );
 }

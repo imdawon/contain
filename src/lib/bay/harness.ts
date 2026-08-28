@@ -60,7 +60,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 59;
+const PIPE_GEN = 62;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -651,7 +651,12 @@ async function tape(scene?: unknown, ms = 0) {
   let floorAt = 0;
   const hangar = Boolean(useBay.getState().entities.some((e) => e.kind === "ramp"));
   while (performance.now() - t0 < hard) {
-    await waitFrames(180);
+    await waitFrames(hangar ? 160 : 45);
+    try {
+      grab();
+    } catch {
+      /* context lost */
+    }
     const snap = peek();
     if (hangar) {
       const w = snap.objects.find((o) => o.kind === "wheel");
@@ -661,10 +666,11 @@ async function tape(scene?: unknown, ms = 0) {
     } else {
       const hips = snap.objects.find((o) => String(o.id).endsWith("-hips"));
       const speed = hips ? Math.hypot(hips.vx ?? 0, hips.vy ?? 0, hips.vz ?? 0) : 0;
-      const down = Boolean(hips && hips.y < 1.35 && speed < 1.6);
+      const warmed = performance.now() - t0 > 7000;
+      const down = Boolean(warmed && hips && hips.y < 1.35 && speed < 1.6);
       if (down && floorAt === 0) floorAt = performance.now();
-      if (floorAt > 0 && performance.now() - floorAt >= 5000) break;
-      if (!hangar && performance.now() - t0 > 16000) break;
+      if (floorAt > 0 && performance.now() - floorAt >= 4000) break;
+      if (!hangar && performance.now() - t0 > 12000) break;
     }
   }
   window.cancelAnimationFrame(raf);
