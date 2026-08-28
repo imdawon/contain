@@ -52,6 +52,8 @@ function trackPoint() {
 /** One shader + one light. Walks the scene so objects do not opt into outlines or shadows. */
 export function LabLook() {
   const scene = useThree((s) => s.scene);
+  const gl = useThree((s) => s.gl);
+  const hangar = useBay((s) => s.entities.some((e) => e.kind === "wheel"));
   const installed = useRef(false);
 
   useLayoutEffect(() => {
@@ -78,10 +80,11 @@ export function LabLook() {
   const stageN = useBay((s) => s.stageN);
   const nEnt = useBay((s) => s.entities.length);
   useLayoutEffect(() => {
+    gl.shadowMap.enabled = !hangar;
     scene.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (!mesh.isMesh) return;
-      if (skipMesh(mesh)) {
+      if (hangar || skipMesh(mesh)) {
         mesh.castShadow = false;
         mesh.receiveShadow = false;
         return;
@@ -91,7 +94,16 @@ export function LabLook() {
       mesh.castShadow = span < 4;
       mesh.receiveShadow = span < 80;
     });
-  }, [scene, stageN, nEnt]);
+  }, [scene, stageN, nEnt, hangar, gl]);
+
+  if (hangar) {
+    return (
+      <>
+        <hemisphereLight args={["#fff4e4", "#4a433c", 0.9]} />
+        <ambientLight intensity={0.85} color="#efe6d8" />
+      </>
+    );
+  }
 
   return (
     <>
@@ -153,8 +165,10 @@ function HangarLamps() {
 function LabLights() {
   const light = useRef<THREE.DirectionalLight>(null);
   const target = useMemo(() => new THREE.Object3D(), []);
+  const hangar = useBay((s) => s.entities.some((e) => e.kind === "wheel"));
 
   useFrame(() => {
+    if (hangar) return;
     const p = trackPoint();
     target.position.set(p.x, p.y + 0.2, p.z);
     target.updateMatrixWorld();
@@ -184,7 +198,7 @@ function LabLights() {
         ref={light}
         intensity={3.4}
         color="#fff6e4"
-        castShadow
+        castShadow={!hangar}
         shadow-mapSize={[1024, 1024]}
         shadow-bias={-0.00018}
         shadow-normalBias={0.03}

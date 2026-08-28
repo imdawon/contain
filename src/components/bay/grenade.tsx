@@ -21,37 +21,34 @@ const spoonCol = 0x6a734c;
 
 type Frag = { key: string; pos: [number, number, number]; vel: [number, number, number]; size: number };
 
-function FragBit({ id, pos, vel, size }: Frag & { id: string }) {
-  const r = useRef<RapierRigidBody>(null);
-  const kicked = useRef(false);
-  useEffect(() => {
-    registerBody(
-      id,
-      "frag",
-      () => {
-        const b = r.current;
-        if (!b) return { x: pos[0], y: pos[1], z: pos[2], rx: 0, ry: 0, rz: 0, state: { missing: true } };
-        const p = b.translation();
-        return { x: p.x, y: p.y, z: p.z, rx: 0, ry: 0, rz: 0, state: { missing: false } };
-      },
-      () => r.current,
-    );
-    return () => unregisterBody(id);
-  }, [id, pos]);
-  useFrame(() => {
-    const b = r.current;
-    if (!b || kicked.current) return;
-    b.setLinvel({ x: vel[0], y: vel[1], z: vel[2] }, true);
-    b.setAngvel({ x: vel[2] * 2, y: vel[0] * 2, z: vel[1] * 2 }, true);
-    kicked.current = true;
+function FragBit({ pos, vel, size }: Frag) {
+  const mesh = useRef<THREE.Mesh>(null);
+  const s = useRef({ x: pos[0], y: pos[1], z: pos[2], vx: vel[0], vy: vel[1], vz: vel[2] });
+  useFrame((_, dt) => {
+    const cap = Math.min(dt, 0.05);
+    const p = s.current;
+    p.vy -= 9.81 * cap;
+    p.x += p.vx * cap;
+    p.y += p.vy * cap;
+    p.z += p.vz * cap;
+    if (p.y < 0.02) {
+      p.y = 0.02;
+      p.vy *= -0.18;
+      p.vx *= 0.55;
+      p.vz *= 0.55;
+    }
+    const m = mesh.current;
+    if (m) {
+      m.position.set(p.x, p.y, p.z);
+      m.rotation.x += cap * 8;
+      m.rotation.z += cap * 5;
+    }
   });
   return (
-    <RigidBody ref={r} position={pos} colliders="cuboid" mass={0.04} friction={0.7} restitution={0.12} linearDamping={0.18} angularDamping={0.22}>
-      <mesh>
-        <boxGeometry args={[size, size * 0.7, size * 0.5]} />
-        <meshStandardMaterial color={oliveDark} roughness={0.7} metalness={0.25} />
-      </mesh>
-    </RigidBody>
+    <mesh ref={mesh} position={pos} frustumCulled={false}>
+      <boxGeometry args={[size, size * 0.7, size * 0.5]} />
+      <meshStandardMaterial color={oliveDark} roughness={0.7} metalness={0.25} />
+    </mesh>
   );
 }
 
@@ -73,6 +70,7 @@ export function Grenade({
   const massPinned = useRef(false);
   const spoon = useRef<THREE.Mesh>(null);
   const selected = useBay((s) => s.selected === id);
+  const hangar = useBay((s) => s.entities.some((e) => e.kind === "wheel"));
   const grab = useGrab(body, id);
   const [frags, setFrags] = useState<Frag[]>([]);
   const [gone, setGone] = useState(false);
@@ -233,11 +231,13 @@ export function Grenade({
             </mesh>
           ) : null}
         </group>
-        <JetFire cook={() => cooks.get(id)} map={fireMap} />
+        {hangar ? null : <JetFire cook={() => cooks.get(id)} map={fireMap} />}
       </RigidBody>
-      {frags.map((f) => (
-        <FragBit key={f.key} id={f.key} pos={f.pos} vel={f.vel} size={f.size} />
-      ))}
+      {hangar
+        ? null
+        : frags.map((f) => (
+            <FragBit key={f.key} pos={f.pos} vel={f.vel} size={f.size} />
+          ))}
     </>
   );
 }

@@ -62,9 +62,9 @@ function vid(s: number, y: number, r: number, ringsY: number, ringsR: number) {
 
 export function makeSteelShell(kind: SteelKind): SteelShell {
   const s = spec(kind);
-  const segs = kind === "wheel" ? 48 : 32;
-  const ringsY = kind === "wheel" ? 9 : 10;
-  const ringsR = kind === "wheel" ? 6 : 5;
+  const segs = kind === "wheel" ? 48 : 12;
+  const ringsY = kind === "wheel" ? 9 : 5;
+  const ringsR = kind === "wheel" ? 6 : 2;
   const radius = s.radius;
   // Drums close the lids: inner ~0 so the end faces are disks, not open washers.
   const inner = kind === "wheel" ? WHEEL.hub : 0.02;

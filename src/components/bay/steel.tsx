@@ -36,6 +36,7 @@ import {
 const WHEEL_GROUPS = interactionGroups([WHEEL_G], [WORLD_G, DRUM_G, CRATE_G]);
 const DRUM_SHEET_GROUPS = interactionGroups([DRUM_G], [WORLD_G, DRUM_G]);
 const WHEEL_MEMBER = 1 << WHEEL_G;
+let lastWheelZ = 0;
 
 type CrushCol = RapierCollider & {
   raw?: () => CrushCol;
@@ -157,6 +158,7 @@ function SteelBody({
     const b = body.current;
     if (!b || b.numColliders() === 0) return;
     if (kind === "wheel") {
+      lastWheelZ = b.translation().z;
       const w = b.angvel();
       const v = b.linvel();
       const q = b.rotation();
@@ -199,13 +201,16 @@ function SteelBody({
       }
     }
     let added = 0;
-    if (kind === "drum" && shell.maxTaken < 0.25) {
+    if (kind === "drum") {
+      const p = b.translation();
+      if (Math.abs(p.z - lastWheelZ) > 18) return;
       const wheel = findActorBody("wheel");
-      if (wheel) {
-        const wp = wheel.translation();
-        const p = b.translation();
-        const dx = wp.x - p.x;
-        const dz = wp.z - p.z;
+      if (!wheel) return;
+      const wp = wheel.translation();
+      const dx = wp.x - p.x;
+      const dz = wp.z - p.z;
+      if (dx * dx + dz * dz > 64) return;
+      if (shell.maxTaken < 0.25) {
         const horiz = WHEEL.radius + DRUM.radius + 1.1;
         if (dx * dx + dz * dz < horiz * horiz && p.z < wp.z + 1.2) {
           added += crumpleDrum(shell, {
@@ -312,20 +317,26 @@ function SteelBody({
               restitution={0}
             />
           )}
-      <mesh geometry={geo} scale={kind === "wheel" ? 1.055 : 1.05} frustumCulled={false} userData={{ labSkip: true }}>
-        <meshBasicMaterial color="#000000" side={THREE.FrontSide} toneMapped={false} fog={false} />
+      {kind === "wheel" ? (
+        <mesh geometry={geo} scale={1.055} frustumCulled={false} userData={{ labSkip: true }}>
+          <meshBasicMaterial color="#000000" side={THREE.FrontSide} toneMapped={false} fog={false} />
+        </mesh>
+      ) : null}
+      <mesh ref={mesh} geometry={geo} onPointerDown={grab.down} castShadow={false} receiveShadow={false} frustumCulled={kind !== "wheel"}>
+        {kind === "drum" ? (
+          <meshBasicMaterial color={color} vertexColors flatShading side={THREE.FrontSide} />
+        ) : (
+          <meshStandardMaterial
+            color={color}
+            vertexColors
+            flatShading
+            metalness={0.42}
+            roughness={0.5}
+            side={THREE.FrontSide}
+          />
+        )}
       </mesh>
-      <mesh ref={mesh} geometry={geo} onPointerDown={grab.down} castShadow={kind === "wheel"} receiveShadow frustumCulled={false}>
-        <meshStandardMaterial
-          color={color}
-          vertexColors
-          flatShading
-          metalness={kind === "wheel" ? 0.42 : 0.32}
-          roughness={kind === "wheel" ? 0.5 : 0.58}
-          side={THREE.DoubleSide}
-        />
-      </mesh>
-      {kind === "wheel" ? <WheelBits half={WHEEL.thick / 2} /> : <group ref={bits}><DrumBits half={DRUM.height / 2} /></group>}
+      {kind === "wheel" ? <WheelBits half={WHEEL.thick / 2} /> : null}
     </RigidBody>
   );
 }

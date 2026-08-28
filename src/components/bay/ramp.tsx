@@ -1,8 +1,9 @@
 import { ConvexHullCollider, RigidBody, interactionGroups, type RapierRigidBody } from "@react-three/rapier";
 import { useEffect, useMemo, useRef } from "react";
+import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { CRATE_G, DUMMY_G, WAGON_G, WORLD_G } from "@/lib/bay/groups";
-import { registerBody, unregisterBody } from "@/lib/bay/probe";
+import { findActorBody, registerBody, unregisterBody } from "@/lib/bay/probe";
 import { poseOf } from "@/lib/bay/sample";
 import { useBay } from "@/store/bay-store";
 
@@ -54,8 +55,8 @@ function buildHill(w: number, h: number, d: number, cut: number, grade = 0) {
   const z0 = -hd;
   const z1 = cut >= 1 ? hd : hd + LIP;
   const span = z1 - z0;
-  const segs = d > 40 ? 96 : SEG;
-  const cols = d > 28 ? 16 : COL;
+  const segs = d > 40 ? 12 : SEG;
+  const cols = d > 28 ? 4 : COL;
   const samples: { z: number; y: number; t: number }[] = [];
   for (let i = 0; i <= segs; i++) {
     const z = z0 + (i / segs) * span;
@@ -140,7 +141,9 @@ export function Ramp({
   grade?: number;
 }) {
   const r = useRef<RapierRigidBody>(null);
+  const vis = useRef<THREE.Mesh>(null);
   const selected = useBay((s) => s.selected === id);
+  const hangar = useBay((s) => s.entities.some((e) => e.kind === "wheel"));
   const [w, h, d] = size ?? [8, 8, 22];
   const cut = cutArg != null && cutArg > 0.2 ? cutArg : CUT;
   const mu = grip ?? 0.55;
@@ -165,6 +168,14 @@ export function Ramp({
     [hill],
   );
 
+
+  useFrame(() => {
+    if (!hangar || !vis.current) return;
+    const wheel = findActorBody("wheel");
+    if (!wheel) return;
+    const dz = wheel.translation().z - pos[2];
+    vis.current.visible = dz > -50 && dz < 110;
+  });
   return (
     <RigidBody
       ref={r}
@@ -179,14 +190,17 @@ export function Ramp({
       {hill.hulls.map((hull, i) => (
         <ConvexHullCollider key={i} args={[hull]} collisionGroups={GROUPS} friction={mu} restitution={rest} />
       ))}
-      <mesh geometry={hill.geo} receiveShadow>
-        <meshStandardMaterial
-          color={selected ? 0xd4d7cf : dirt}
-          roughness={0.82}
-          metalness={0.04}
-          side={THREE.DoubleSide}
-          shadowSide={THREE.DoubleSide}
-        />
+      <mesh ref={vis} geometry={hill.geo} receiveShadow={false} frustumCulled>
+        {hangar ? (
+          <meshBasicMaterial color={selected ? 0xd4d7cf : dirt} side={THREE.FrontSide} />
+        ) : (
+          <meshStandardMaterial
+            color={selected ? 0xd4d7cf : dirt}
+            roughness={0.82}
+            metalness={0.04}
+            side={THREE.DoubleSide}
+          />
+        )}
       </mesh>
       <mesh position={[0, parabolaY(0, h, cut) + 0.02, -d / 2 + 0.02]}>
         <boxGeometry args={[w * 0.98, 0.04, 0.04]} />
