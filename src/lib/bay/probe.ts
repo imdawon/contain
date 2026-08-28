@@ -211,7 +211,12 @@ function principalOf(kind: InertiaKind, kg: number) {
 /** Mass AND inertia. setAdditionalMass alone leaves a 100 t coil with a 6 kg spin. */
 export function setBodyMass(b: RapierRigidBody, kg: number, kind: InertiaKind = "wheel") {
   if (!Number.isFinite(kg) || kg <= 0.02) return;
-  const n = b.numColliders();
+  let n = 0;
+  try {
+    n = b.numColliders();
+  } catch {
+    return;
+  }
   for (let i = 0; i < n; i++) {
     const c = b.collider(i) as { setDensity?: (d: number) => void } | null;
     c?.setDensity?.(0);

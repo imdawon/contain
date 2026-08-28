@@ -15,6 +15,8 @@ import { Ramp } from "@/components/bay/ramp";
 import { Pack } from "@/components/bay/pack";
 import { SceneRig } from "@/components/bay/scene-rig";
 import { Solid } from "@/components/bay/solid";
+import { Cannon } from "@/components/bay/cannon";
+import { ScorePlate } from "@/components/bay/score-plate";
 import { Drum, Wheel } from "@/components/bay/steel";
 import { Wagon } from "@/components/bay/wagon";
 import { Wall } from "@/components/bay/wall";
@@ -25,8 +27,6 @@ import { CRATE_G, DUMMY_G, WAGON_G, WORLD_G } from "@/lib/bay/groups";
 import { listSamplers } from "@/lib/bay/probe";
 import { useBay } from "@/store/bay-store";
 import { LabLook } from "@/components/bay/look";
-
-const _chase = new THREE.Vector3();
 
 function TrackCam({
   orbit,
@@ -41,10 +41,8 @@ function TrackCam({
   const fov = useBay((s) => s.scene?.cam?.fov);
   const camera = useThree((s) => s.camera);
   const primed = useRef(false);
-  const shake = useRef(0);
   useEffect(() => {
     primed.current = false;
-    shake.current = 0;
   }, [trackId, stageN]);
   useFrame(() => {
     if (fov && "fov" in camera && camera.fov !== fov) {
@@ -59,40 +57,24 @@ function TrackCam({
     }
     if (!trackId) return;
     const rec = listSamplers().get(trackId);
-    if (!rec) {
-      const ent = useBay.getState().entities.find((e) => e.id === trackId);
-      if (!ent || !offset) return;
-      camera.position.set(ent.pos[0] + offset[0], ent.pos[1] + offset[1], ent.pos[2] + offset[2]);
-      camera.lookAt(ent.pos[0], ent.pos[1] + 0.2, ent.pos[2] + 2.4);
+    const ent = rec ? null : useBay.getState().entities.find((e) => e.id === trackId);
+    if (!rec && !ent) return;
+    const p = rec ? rec.sample() : { x: ent!.pos[0], y: ent!.pos[1], z: ent!.pos[2] };
+    const controls = orbit.current;
+    if (!controls) return;
+    const t = controls.target;
+    if (!primed.current) {
+      t.set(p.x, p.y, p.z);
+      if (offset) camera.position.set(p.x + offset[0], p.y + offset[1], p.z + offset[2]);
+      primed.current = true;
       camera.updateMatrixWorld();
       return;
     }
-    const p = rec.sample();
-    if (orbit.current) orbit.current.target.set(p.x, p.y, p.z);
-    if (offset) {
-      _chase.set(p.x + offset[0], p.y + offset[1], p.z + offset[2]);
-      if (!primed.current) {
-        camera.position.copy(_chase);
-        primed.current = true;
-      } else {
-        camera.position.lerp(_chase, 0.55);
-      }
-      const body = rec.getBody?.();
-      if (body) {
-        const vy = body.linvel().y;
-        if (vy < -12) shake.current = Math.min(0.55, shake.current + (-vy - 12) * 0.014);
-      }
-      shake.current *= 0.84;
-      if (shake.current > 0.004) {
-        camera.position.x += (Math.random() - 0.5) * shake.current;
-        camera.position.y += (Math.random() - 0.5) * shake.current * 0.55;
-      }
-      const lx = look?.[0] ?? 0;
-      const ly = look?.[1] ?? 0.2;
-      const lz = look?.[2] ?? 2.4;
-      camera.lookAt(p.x + lx, p.y + ly, p.z + lz);
-      camera.updateMatrixWorld();
-    }
+    camera.position.x += p.x - t.x;
+    camera.position.y += p.y - t.y;
+    camera.position.z += p.z - t.z;
+    t.set(p.x, p.y, p.z);
+    camera.updateMatrixWorld();
   }, -1);
   return null;
 }
@@ -107,12 +89,12 @@ function KickFrames() {
     lastRaf.current = performance.now();
   });
   useEffect(() => {
+    if (hangar) return;
     const id = window.setInterval(() => {
       if (busy.current) return;
       if (typeof document !== "undefined" && document.hidden) return;
       const now = performance.now();
-      const stall = hangar ? 220 : 80;
-      if (now - lastRaf.current < stall) return;
+      if (now - lastRaf.current < 80) return;
       busy.current = true;
       lastRaf.current = now;
       try {
@@ -123,7 +105,7 @@ function KickFrames() {
       } finally {
         busy.current = false;
       }
-    }, hangar ? 250 : 50);
+    }, 50);
     return () => window.clearInterval(id);
   }, [advance, invalidate, hangar]);
   return null;
@@ -225,12 +207,11 @@ function World() {
   const stageN = useBay((s) => s.stageN);
   const orbit = useRef<{ target: THREE.Vector3 } | null>(null);
   const fire = useFireMap();
-  const hangar = entities.some((e) => e.kind === "wheel");
-  const solver = hangar ? 8 : 24;
-  const pgs = hangar ? 4 : 12;
+  const hangar = Boolean(scene?.cam?.offset);
+  const tracking = Boolean(useBay((s) => s.trackId));
 
   return (
-    <Physics key={stageN} gravity={[0, -9.81, 0]} timeStep={1 / 60} interpolate={!hangar} numSolverIterations={solver} numInternalPgsIterations={pgs}>
+    <Physics key={stageN} gravity={[0, -9.81, 0]} timeStep={1 / 60} interpolate numSolverIterations={24} numInternalPgsIterations={12} maxCcdSubsteps={1}>
       <TrackCam orbit={orbit} />
       <ProbeTick />
       <BlastBus />
@@ -242,20 +223,18 @@ function World() {
           <meshStandardMaterial color="#4c463f" roughness={0.94} metalness={0.06} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
         </mesh>
       </RigidBody>
-      {hangar ? null : (
-        <Grid
-          infiniteGrid
-          fadeDistance={34}
-          fadeStrength={2.4}
-          cellSize={20}
-          cellThickness={0.2}
-          cellColor="#5a544c"
-          sectionSize={40}
-          sectionThickness={1.05}
-          sectionColor="#8f8678"
-          position={[0, 0.012, 0]}
-        />
-      )}
+      <Grid
+        infiniteGrid
+        fadeDistance={34}
+        fadeStrength={2.4}
+        cellSize={20}
+        cellThickness={0.2}
+        cellColor="#5a544c"
+        sectionSize={40}
+        sectionThickness={1.05}
+        sectionColor="#8f8678"
+        position={[0, 0.012, 0]}
+      />
       {entities.map((e) =>
         e.kind === "can" ? (
           <AmmoCan key={e.id} id={e.id} pos={e.pos} />
@@ -266,7 +245,7 @@ function World() {
         ) : e.kind === "crate" ? (
           <Crate key={e.id} id={e.id} pos={e.pos} />
         ) : e.kind === "dummy" ? (
-          <Dummy key={e.id} id={e.id} pos={e.pos} rot={e.rot} live={e.live} />
+          <Dummy key={e.id} id={e.id} pos={e.pos} rot={e.rot} live={e.live} vel={e.vel} />
         ) : e.kind === "wagon" ? (
           <Wagon key={e.id} id={e.id} pos={e.pos} rot={e.rot} grip={e.grip} bounce={e.bounce} mass={e.mass} />
         ) : e.kind === "hill" || e.kind === "ramp" ? (
@@ -277,30 +256,32 @@ function World() {
           <Doorway key={e.id} id={e.id} pos={e.pos} />
         ) : e.kind === "grass" ? (
           <Grass key={e.id} id={e.id} pos={e.pos} />
+        ) : e.kind === "cannon" ? (
+          <Cannon key={e.id} id={e.id} pos={e.pos} rot={e.rot} size={e.size} />
         ) : e.kind === "wheel" ? (
-          <Wheel key={e.id} id={e.id} pos={e.pos} rot={e.rot} grip={e.grip} bounce={e.bounce} mass={e.mass} />
+          <Wheel key={e.id} id={e.id} pos={e.pos} rot={e.rot} grip={e.grip} bounce={e.bounce} mass={e.mass} vel={e.vel} />
         ) : e.kind === "drum" ? (
           <Drum key={e.id} id={e.id} pos={e.pos} rot={e.rot} grip={e.grip} bounce={e.bounce} mass={e.mass} />
         ) : isSolid(e.kind) ? (
           <Solid key={e.id} id={e.id} shape={e.kind} pos={e.pos} />
         ) : null,
       )}
-      {scene?.cam?.offset ? null : (
-        <OrbitControls
-          ref={(el) => {
-            orbit.current = el;
-          }}
-          makeDefault
-          enabled={!dragging}
-          enablePan
-          minDistance={0.5}
-          maxDistance={80}
-          maxPolarAngle={1.48}
-          target={[0, 0.7, 0.55]}
-          enableDamping
-          dampingFactor={0.08}
-        />
-      )}
+      <OrbitControls
+        ref={(el) => {
+          orbit.current = el;
+        }}
+        makeDefault
+        enabled={!dragging}
+        enablePan={!tracking}
+        enableZoom
+        zoomSpeed={hangar ? 1.35 : 1}
+        minDistance={hangar ? 2 : 0.5}
+        maxDistance={hangar ? 2500 : 80}
+        maxPolarAngle={1.48}
+        target={[0, 0.7, 0.55]}
+        enableDamping
+        dampingFactor={0.08}
+      />
     </Physics>
   );
 }
@@ -308,7 +289,6 @@ function World() {
 export function BayCanvas() {
   const wrap = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
-  const hangar = useBay((s) => s.entities.some((e) => e.kind === "wheel"));
   useLayoutEffect(() => {
     const el = wrap.current;
     if (!el) return;
@@ -332,15 +312,14 @@ export function BayCanvas() {
     <div ref={wrap} className="lab-stage absolute inset-0 h-full w-full">
       {ready ? (
         <Canvas
-          key={`${box.w}x${box.h}`}
           className="block h-full w-full touch-none"
           style={{ position: "absolute", inset: 0, width: box.w, height: box.h }}
-          dpr={1}
-          shadows={!hangar}
+          dpr={[1, 1.5]}
+          shadows
           frameloop="always"
           camera={{ position: [3.4, 1.7, 3.6], fov: 42, near: 0.08, far: 2500 }}
           gl={{
-            antialias: !hangar,
+            antialias: true,
             alpha: false,
             preserveDrawingBuffer: true,
             powerPreference: "default",
@@ -351,7 +330,7 @@ export function BayCanvas() {
             gl.toneMapping = THREE.ACESFilmicToneMapping;
             gl.toneMappingExposure = 1.42;
             gl.outputColorSpace = THREE.SRGBColorSpace;
-            gl.shadowMap.enabled = !hangar;
+            gl.shadowMap.enabled = true;
             gl.shadowMap.type = THREE.PCFSoftShadowMap;
             gl.setClearColor("#8a7c6a", 1);
             state.setSize(box.w, box.h);
@@ -363,6 +342,7 @@ export function BayCanvas() {
           <fog attach="fog" args={["#8a7c6a", 90, 1400]} />
           <LabLook />
           <World />
+          <ScorePlate />
         </Canvas>
       ) : null}
     </div>

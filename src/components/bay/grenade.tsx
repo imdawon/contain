@@ -70,7 +70,6 @@ export function Grenade({
   const massPinned = useRef(false);
   const spoon = useRef<THREE.Mesh>(null);
   const selected = useBay((s) => s.selected === id);
-  const hangar = useBay((s) => s.entities.some((e) => e.kind === "wheel"));
   const grab = useGrab(body, id);
   const [frags, setFrags] = useState<Frag[]>([]);
   const [gone, setGone] = useState(false);
@@ -231,13 +230,11 @@ export function Grenade({
             </mesh>
           ) : null}
         </group>
-        {hangar ? null : <JetFire cook={() => cooks.get(id)} map={fireMap} />}
+        <JetFire cook={() => cooks.get(id)} map={fireMap} />
       </RigidBody>
-      {hangar
-        ? null
-        : frags.map((f) => (
-            <FragBit key={f.key} pos={f.pos} vel={f.vel} size={f.size} />
-          ))}
+      {frags.map((f) => (
+        <FragBit key={f.key} pos={f.pos} vel={f.vel} size={f.size} />
+      ))}
     </>
   );
 }

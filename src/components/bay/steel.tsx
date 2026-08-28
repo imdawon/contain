@@ -12,7 +12,7 @@ import { useFrame } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useGrab } from "@/components/bay/grab";
-import { CRATE_G, DRUM_G, WHEEL_G, WORLD_G } from "@/lib/bay/groups";
+import { CRATE_G, DRUM_G, DUMMY_G, WHEEL_G, WORLD_G } from "@/lib/bay/groups";
 import { DRUM, WHEEL } from "@/lib/bay/parts";
 import { findActorBody, note, registerBody, setBodyMass, unregisterBody } from "@/lib/bay/probe";
 import { poseOf } from "@/lib/bay/sample";
@@ -33,7 +33,7 @@ import {
   type SteelKind,
 } from "@/lib/bay/yield";
 
-const WHEEL_GROUPS = interactionGroups([WHEEL_G], [WORLD_G, DRUM_G, CRATE_G]);
+const WHEEL_GROUPS = interactionGroups([WHEEL_G], [WORLD_G, DRUM_G, CRATE_G, DUMMY_G]);
 const DRUM_SHEET_GROUPS = interactionGroups([DRUM_G], [WORLD_G, DRUM_G]);
 const WHEEL_MEMBER = 1 << WHEEL_G;
 let lastWheelZ = 0;
@@ -67,6 +67,7 @@ function SteelBody({
   grip,
   bounce,
   mass,
+  vel,
 }: {
   id: string;
   kind: SteelKind;
@@ -75,6 +76,7 @@ function SteelBody({
   grip?: number;
   bounce?: number;
   mass?: number;
+  vel?: [number, number, number];
 }) {
   const body = useRef<RapierRigidBody>(null);
   const hulls = useRef<Array<RapierCollider | null>>([]);
@@ -84,6 +86,7 @@ function SteelBody({
   const pinned = useRef(false);
   const armed = useRef(false);
   const selected = useBay((s) => s.selected === id);
+  const hangarTrack = useBay((s) => s.entities.some((e) => e.kind === "ramp"));
   const { world, rapier } = useRapier();
   const spec = kind === "wheel" ? WHEEL : DRUM;
   const kg = mass ?? spec.mass;
@@ -131,8 +134,12 @@ function SteelBody({
     const b = body.current;
     if (!b) return;
     setBodyMass(b, kg, kind);
+    if (vel) {
+      b.setLinvel({ x: vel[0], y: vel[1], z: vel[2] }, true);
+      b.wakeUp();
+    }
     pinned.current = true;
-  }, [kg, kind, stageN]);
+  }, [kg, kind, stageN, vel]);
 
   useFrame((state, dt) => {
     grab.tick(state.raycaster.ray, Math.min(dt, 0.05));
@@ -155,9 +162,10 @@ function SteelBody({
   });
 
   useAfterPhysicsStep(() => {
+    if (kind !== "wheel") return;
     const b = body.current;
     if (!b || b.numColliders() === 0) return;
-    if (kind === "wheel") {
+    if (kind === "wheel" && hangarTrack) {
       lastWheelZ = b.translation().z;
       const w = b.angvel();
       const v = b.linvel();
@@ -191,7 +199,6 @@ function SteelBody({
           b,
         );
         const toi = hit?.timeOfImpact;
-        // Only kill clear flight. Snapping ordinary rolling clearance plants the coil in the first pipe.
         if (toi != null && toi > 2.4) {
           const drop = Math.min(toi - WHEEL.radius, 0.55);
           if (drop > 0.2) b.setTranslation({ x: p.x, y: p.y - drop, z: p.z }, true);
@@ -199,6 +206,8 @@ function SteelBody({
       } catch {
         /* ray missed */
       }
+    } else if (kind === "wheel") {
+      lastWheelZ = b.translation().z;
     }
     let added = 0;
     if (kind === "drum") {
@@ -288,7 +297,7 @@ function SteelBody({
       angularDamping={kind === "wheel" ? 0.08 : 0.12}
       collisionGroups={groups}
       canSleep={kind !== "wheel"}
-      ccd={kind === "wheel"}
+      ccd={Boolean(vel)}
       enabledRotations={[true, true, true]}
     >
       {kind === "wheel"
@@ -317,26 +326,20 @@ function SteelBody({
               restitution={0}
             />
           )}
-      {kind === "wheel" ? (
-        <mesh geometry={geo} scale={1.055} frustumCulled={false} userData={{ labSkip: true }}>
-          <meshBasicMaterial color="#000000" side={THREE.FrontSide} toneMapped={false} fog={false} />
-        </mesh>
-      ) : null}
-      <mesh ref={mesh} geometry={geo} onPointerDown={grab.down} castShadow={false} receiveShadow={false} frustumCulled={kind !== "wheel"}>
-        {kind === "drum" ? (
-          <meshBasicMaterial color={color} vertexColors flatShading side={THREE.FrontSide} />
-        ) : (
-          <meshStandardMaterial
-            color={color}
-            vertexColors
-            flatShading
-            metalness={0.42}
-            roughness={0.5}
-            side={THREE.FrontSide}
-          />
-        )}
+      <mesh geometry={geo} scale={kind === "wheel" ? 1.055 : 1.05} frustumCulled={false} userData={{ labSkip: true }}>
+        <meshBasicMaterial color="#000000" side={THREE.FrontSide} toneMapped={false} fog={false} />
       </mesh>
-      {kind === "wheel" ? <WheelBits half={WHEEL.thick / 2} /> : null}
+      <mesh ref={mesh} geometry={geo} onPointerDown={grab.down} castShadow receiveShadow frustumCulled={false}>
+        <meshStandardMaterial
+          color={color}
+          vertexColors
+          flatShading
+          metalness={kind === "wheel" ? 0.42 : 0.32}
+          roughness={kind === "wheel" ? 0.5 : 0.58}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+      {kind === "wheel" ? <WheelBits half={WHEEL.thick / 2} /> : <group ref={bits}><DrumBits half={DRUM.height / 2} /></group>}
     </RigidBody>
   );
 }
@@ -464,6 +467,7 @@ export function Wheel(props: {
   grip?: number;
   bounce?: number;
   mass?: number;
+  vel?: [number, number, number];
 }) {
   return <SteelBody kind="wheel" {...props} />;
 }

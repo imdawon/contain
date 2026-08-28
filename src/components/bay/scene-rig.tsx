@@ -160,6 +160,9 @@ export function SceneRig({ scene }: { scene: Scene }) {
       for (const e of ents) {
         const rot = quatFromEuler(e.rot ?? [0, 0, 0]);
         if (e.kind === "dummy") {
+          // Wagon ride seats him and ghosts bone-vs-world until the boom.
+          // Cannon / free dummy keeps Dummy.tsx pose and wheel/floor groups.
+          if (!wagon) continue;
           _q.set(rot.x, rot.y, rot.z, rot.w);
           for (const [part, sit] of Object.entries(DUMMY_SIT)) {
             const bone = bodyOf(`${e.id}-${part}`);

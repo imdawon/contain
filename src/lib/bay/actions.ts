@@ -1,3 +1,4 @@
+import { resetAllInjury } from "@/lib/bay/atd";
 import { ensureFuseClock } from "@/lib/bay/blast";
 import { clearCooks, startCook } from "@/lib/bay/cook";
 import { clearAllHeat } from "@/lib/bay/heat";
@@ -67,6 +68,7 @@ function quietStage() {
   clearCooks();
   clearAllHeat();
   clearLog();
+  resetAllInjury();
   silenceLoops();
 }
 

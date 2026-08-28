@@ -28,6 +28,7 @@ export type Kind =
   | "ramp"
   | "wheel"
   | "drum"
+  | "cannon"
   | SolidShape;
 
 export interface Entity {

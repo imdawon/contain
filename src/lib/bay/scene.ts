@@ -52,6 +52,7 @@ export const SCENE_INDEX = [
   { id: "wheel-100", file: "scenes/wheel-100.json", name: "Wheel 100 t" },
   { id: "wheel-200", file: "scenes/wheel-200.json", name: "Wheel 200 t" },
   { id: "wheel-300", file: "scenes/wheel-300.json", name: "Wheel 300 t" },
+  { id: "cannon-100", file: "scenes/cannon-100.json", name: "Cannon 100 t" },
 ] as const;
 
 const KINDS = new Set<string>([
@@ -78,6 +79,7 @@ const KINDS = new Set<string>([
   "ramp",
   "wheel",
   "drum",
+  "cannon",
 ]);
 
 function round(n: number) {
