@@ -207,3 +207,97 @@ export function loopLevels() {
     roar: Math.round(bus.roar.gain.value * 1000) / 1000,
   };
 }
+
+let slowFwd: AudioBuffer | null = null;
+let slowRev: AudioBuffer | null = null;
+let creek: { src: AudioBufferSourceNode; filter: BiquadFilterNode; gain: GainNode } | null = null;
+
+function buildSlowBuffers(ctx: AudioContext) {
+  const dur = 0.8;
+  const sr = ctx.sampleRate;
+  const n = Math.floor(sr * dur);
+  const fwd = ctx.createBuffer(1, n, sr);
+  const d = fwd.getChannelData(0);
+  let ph1 = 0;
+  let ph2 = 0;
+  let lp = 0;
+  for (let i = 0; i < n; i++) {
+    const u = i / (n - 1);
+    const env = Math.min(1, i / (sr * 0.045)) * Math.pow(1 - u, 0.36);
+    const f1 = 620 * Math.pow(0.12, u);
+    const f2 = 210 * Math.pow(0.17, u);
+    ph1 += (2 * Math.PI * f1) / sr;
+    ph2 += (2 * Math.PI * f2) / sr;
+    const noise = Math.random() * 2 - 1;
+    const cut = 0.2 * (1 - u) + 0.018;
+    lp += cut * (noise - lp);
+    d[i] = Math.max(-1, Math.min(1, (lp * 0.7 + Math.sin(ph1) * 0.34 + Math.sin(ph2) * 0.5) * env));
+  }
+  const rev = ctx.createBuffer(1, n, sr);
+  const r = rev.getChannelData(0);
+  for (let i = 0; i < n; i++) r[i] = d[n - 1 - i];
+  slowFwd = fwd;
+  slowRev = rev;
+}
+
+/** Matrix whoosh in. The same buffer, reversed, on the way out. */
+export function playSlowMo(on: boolean) {
+  unlockAudio();
+  if (!bus || muted) return;
+  if (!slowFwd || !slowRev) buildSlowBuffers(bus.ctx);
+  const { ctx, sfx } = bus;
+  const now = ctx.currentTime;
+  const src = ctx.createBufferSource();
+  src.buffer = on ? slowFwd : slowRev;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(on ? 0.4 : 0.48, now + 0.028);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + 0.8);
+  src.connect(g);
+  g.connect(sfx);
+  src.start();
+  const osc = ctx.createOscillator();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(on ? 96 : 42, now);
+  osc.frequency.exponentialRampToValueAtTime(on ? 36 : 170, now + 0.58);
+  const og = ctx.createGain();
+  og.gain.setValueAtTime(0.2, now);
+  og.gain.exponentialRampToValueAtTime(0.0001, now + 0.72);
+  osc.connect(og);
+  og.connect(sfx);
+  osc.start();
+  osc.stop(now + 0.74);
+}
+
+export function startCreek() {
+  unlockAudio();
+  if (!bus || creek) return;
+  const { ctx, master } = bus;
+  const filter = ctx.createBiquadFilter();
+  filter.type = "bandpass";
+  filter.frequency.value = 760;
+  filter.Q.value = 0.5;
+  const gain = ctx.createGain();
+  gain.gain.value = 0.042;
+  const src = ctx.createBufferSource();
+  src.buffer = noiseBuffer(ctx);
+  src.loop = true;
+  src.connect(filter);
+  filter.connect(gain);
+  gain.connect(master);
+  src.start();
+  creek = { src, filter, gain };
+}
+
+export function stopCreek() {
+  if (!creek) return;
+  try {
+    creek.src.stop();
+  } catch {
+    /* already gone */
+  }
+  creek.src.disconnect();
+  creek.filter.disconnect();
+  creek.gain.disconnect();
+  creek = null;
+}
