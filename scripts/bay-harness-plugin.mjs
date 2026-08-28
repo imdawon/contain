@@ -37,9 +37,12 @@ export function bayHarnessPlugin() {
             nobj: Number(u.searchParams.get("nobj") || 0),
             paint: u.searchParams.get("paint") === "1",
             bot: u.searchParams.get("bot") === "1",
+            fps: Number(u.searchParams.get("fps") || 0),
+            ms: Number(u.searchParams.get("ms") || 0),
+            gen: Number(u.searchParams.get("gen") || 0),
           };
         } catch {
-          return { vis: "hidden", nobj: 0, paint: false, bot: false };
+          return { vis: "hidden", nobj: 0, paint: false, bot: false, fps: 0, ms: 0, gen: 0 };
         }
       }
 
@@ -67,8 +70,24 @@ export function bayHarnessPlugin() {
         job.status = "done";
         jobs.delete(job.id);
         clearTimeout(job.timer);
-        const payload =
+        let payload =
           job.expect > 1 ? pickBest(job.replies) : job.replies[0] || fallback || { error: "timeout", value: null };
+        if (job.expect > 1 && job.fn === "peek") {
+          const all = (job.replies || []).map((r) => {
+            const v = r && r.value ? r.value : r;
+            return {
+              paint: Boolean(r && (r.paint || v && v.paint)),
+              hidden: Boolean(v && v.hidden),
+              fps: v && v.fps,
+              frameMs: v && v.frameMs,
+              nobj: Number(r && r.nobj != null ? r.nobj : v && v.nobj || 0),
+              level: v && v.level && v.level.id,
+              error: r && r.error,
+              skipped: Boolean(r && r.skipped),
+            };
+          });
+          payload = { ...payload, all, replies: all.length };
+        }
         job.resolve(payload);
       }
 
@@ -133,6 +152,7 @@ export function bayHarnessPlugin() {
             jobs: jobs.size,
             clients: clientCount(),
             paints: takers.filter((t) => t.paint).length,
+            list: takers.map((t) => ({ vis: t.vis, nobj: t.nobj, paint: t.paint, bot: t.bot, fps: t.fps, ms: t.ms, gen: t.gen })),
           });
           return;
         }
@@ -237,7 +257,7 @@ export function bayHarnessPlugin() {
   };
 }
 
-const FANOUT = new Set(["restage", "run", "load", "reset", "next"]);
+const FANOUT = new Set(["restage", "run", "load", "reset", "next", "peek"]);
 
 /** @typedef {{ id: string, fn: string, args: unknown[], waitMs?: number, status: "open" | "out" | "done", resolve: (v: { value?: unknown, error?: string | null }) => void, timer: NodeJS.Timeout, replies: unknown[], expect: number }} Job */
 /** @typedef {{ res: import("node:http").ServerResponse, timer: NodeJS.Timeout, vis: string, nobj: number, paint: boolean, bot: boolean }} Taker */
@@ -277,11 +297,14 @@ if (!(g.__bayPipeCtl && !g.__bayPipeCtl.signal.aborted)) {
     try { nobj = (g.__bay?.peek?.().objects || []).length; } catch {}
     const bot = typeof navigator !== "undefined" && navigator.webdriver === true;
     const paint = vis === "visible" && typeof document !== "undefined" && !!document.querySelector("canvas") && !bot;
-    return { vis, nobj, paint, bot };
+    const fps = Number(g.__bayFps || 0);
+    const ms = Number(g.__bayFrameMs || 0);
+    const gen = Number(g.__bayPipeGen || 0);
+    return { vis, nobj, paint, bot, fps, ms, gen };
   };
   const takeUrl = () => {
     const p = paintInfo();
-    return "/__bay/take?wait=10000&vis=" + encodeURIComponent(p.vis) + "&nobj=" + p.nobj + "&paint=" + (p.paint ? "1" : "0") + "&bot=" + (p.bot ? "1" : "0");
+    return "/__bay/take?wait=10000&vis=" + encodeURIComponent(p.vis) + "&nobj=" + p.nobj + "&paint=" + (p.paint ? "1" : "0") + "&bot=" + (p.bot ? "1" : "0") + "&fps=" + Math.round(p.fps) + "&ms=" + Math.round(p.ms) + "&gen=" + p.gen;
   };
   const run = async (fn, args) => {
     const api = g.__bay;

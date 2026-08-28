@@ -2,6 +2,7 @@ import {
   CuboidCollider,
   RigidBody,
   interactionGroups,
+  useAfterPhysicsStep,
   useBeforePhysicsStep,
   useRapier,
   useRevoluteJoint,
@@ -9,13 +10,25 @@ import {
 } from "@react-three/rapier";
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef, type ReactNode, type RefObject } from "react";
+import * as THREE from "three";
 import { useGrab } from "@/components/bay/grab";
-import { armLoadWindow, resetLoads, sampleContact, sampleHinge, toyJointImpulse, type HingeId } from "@/lib/bay/atd";
+import {
+  armLoadWindow,
+  armSnaps,
+  isSnapped,
+  resetInjury,
+  sampleContact,
+  sampleHinge,
+  sampleImpact,
+  takeSnap,
+  toyJointImpulse,
+  type HingeId,
+} from "@/lib/bay/atd";
 import { cooks } from "@/lib/bay/cook";
 import { lineOccluded } from "@/lib/bay/cover";
-import { COVER_G, CRATE_G, DUMMY_G, WORLD_G } from "@/lib/bay/groups";
+import { COVER_G, CRATE_G, DUMMY_G, WHEEL_G, WORLD_G } from "@/lib/bay/groups";
 import { DUMMY } from "@/lib/bay/parts";
-import { note, registerAssembly, registerBody, setBodyMass, unregisterAssembly, unregisterBody } from "@/lib/bay/probe";
+import { note, registerAssembly, registerBody, setBodyMass, setColliderGroups, unregisterAssembly, unregisterBody } from "@/lib/bay/probe";
 import { poseOf } from "@/lib/bay/sample";
 import { useBay } from "@/store/bay-store";
 import { carriedHang, onRide, ridePeakY } from "@/lib/bay/ride";
@@ -39,7 +52,7 @@ const ALL_BONES = Object.values(BONE_G);
 function dummyGroups(self: number, skip: number[]) {
   const blocked = new Set([self, ...skip]);
   const others = ALL_BONES.filter((g) => !blocked.has(g));
-  return interactionGroups([DUMMY_G, self], [WORLD_G, CRATE_G, COVER_G, ...others]);
+  return interactionGroups([DUMMY_G, self], [WORLD_G, CRATE_G, COVER_G, WHEEL_G, ...others]);
 }
 
 const GROUPS = {
@@ -58,7 +71,8 @@ const GROUPS = {
 
 const bone = 0xc4b8a8;
 const jointCol = 0x6a5348;
-type BodyType = "kinematicPosition";
+const snappedCol = 0x8a4638;
+type BodyType = "kinematicPosition" | "dynamic";
 type ContactId = Extract<HingeId, "femur-l" | "femur-r" | "humerus-lower-l" | "humerus-lower-r">;
 
 function Hinge({
@@ -81,10 +95,42 @@ function Hinge({
   lim: [number, number];
 }) {
   const j = useRevoluteJoint(a, b, [pa, pb, axis, lim]);
+  const { world } = useRapier();
+  const gone = useRef(false);
+  const pending = useRef(false);
   useBeforePhysicsStep(() => {
+    if (gone.current || pending.current) return;
     const joint = j.current;
     if (!joint?.isValid()) return;
-    sampleHinge(dummyId, label, toyJointImpulse(joint));
+    const mag = toyJointImpulse(joint);
+    sampleHinge(dummyId, label, mag);
+    if (!takeSnap(dummyId, label, mag)) return;
+    pending.current = true;
+  });
+  useAfterPhysicsStep(() => {
+    if (!pending.current || gone.current) return;
+    gone.current = true;
+    pending.current = false;
+    const joint = j.current;
+    const distal = b.current;
+    const proximal = a.current;
+    if (joint?.isValid()) {
+      try {
+        world.removeImpulseJoint(joint, true);
+      } catch {
+        /* already gone */
+      }
+    }
+    if (distal && proximal) {
+      const pa2 = proximal.translation();
+      const pb2 = distal.translation();
+      const dx = pb2.x - pa2.x;
+      const dy = pb2.y - pa2.y;
+      const dz = pb2.z - pa2.z;
+      const d = Math.max(0.08, Math.hypot(dx, dy, dz));
+      distal.applyImpulse({ x: (dx / d) * 0.45, y: 0.28 + (dy / d) * 0.2, z: (dz / d) * 0.45 }, true);
+      distal.wakeUp();
+    }
   });
   return null;
 }
@@ -102,6 +148,7 @@ function Bone({
   groups,
   color = bone,
   contact,
+  snap,
   children,
 }: {
   r: RefObject<RapierRigidBody>;
@@ -116,11 +163,14 @@ function Bone({
   groups: number;
   color?: number;
   contact?: ContactId;
+  snap?: HingeId;
   children?: ReactNode;
 }) {
   const grab = useGrab(r, id);
   const pinned = useRef(false);
+  const mesh = useRef<THREE.Mesh>(null);
   const selected = useBay((s) => s.selected === id);
+  const mat = useRef<THREE.MeshStandardMaterial>(null);
 
   useEffect(() => {
     registerBody(
@@ -139,12 +189,15 @@ function Bone({
   useFrame((state, dt) => {
     grab.tick(state.raycaster.ray, Math.min(dt, 0.05));
     const b = r.current;
-    if (!b || pinned.current) return;
-    setBodyMass(b, mass);
-    if (contact && b.numColliders() > 0) {
-      b.collider(0)?.setContactForceEventThreshold(0.08);
+    if (!b) return;
+    if (!pinned.current) {
+      setBodyMass(b, mass);
+      if (b.numColliders() > 0) b.collider(0)?.setContactForceEventThreshold(0.08);
+      pinned.current = true;
     }
-    pinned.current = true;
+    if (snap && mat.current && isSnapped(dummyId, snap)) {
+      mat.current.color.setHex(snappedCol);
+    }
   });
 
   const [sx, sy, sz] = size;
@@ -165,17 +218,15 @@ function Bone({
       <CuboidCollider
         args={[sx * 0.44, sy * 0.44, sz * 0.44]}
         collisionGroups={groups}
-        onContactForce={
-          contact
-            ? (p) => {
-                sampleContact(dummyId, contact, p.totalForceMagnitude);
-              }
-            : undefined
-        }
+        onContactForce={(p) => {
+          sampleImpact(dummyId, p.totalForceMagnitude);
+          if (contact) sampleContact(dummyId, contact, p.totalForceMagnitude);
+        }}
       />
-      <mesh onPointerDown={grab.down}>
+      <mesh ref={mesh} onPointerDown={grab.down}>
         <boxGeometry args={size} />
         <meshStandardMaterial
+          ref={mat}
           color={selected ? 0xd4d7cf : color}
           roughness={0.7}
           metalness={0.05}
@@ -197,11 +248,13 @@ export function Dummy({
   pos,
   rot,
   live: startLive,
+  vel,
 }: {
   id: string;
   pos: [number, number, number];
   rot?: [number, number, number];
   live?: boolean;
+  vel?: [number, number, number];
 }) {
   const hips = useRef<RapierRigidBody>(null!);
   const chest = useRef<RapierRigidBody>(null!);
@@ -218,7 +271,15 @@ export function Dummy({
   const floppy = useRef(false);
   const live = useRef(false);
   const blasted = useRef(false);
+  const launched = useRef(false);
+  const injuryArmed = useRef(false);
   const { world, rapier } = useRapier();
+  if (!injuryArmed.current) {
+    injuryArmed.current = true;
+    resetInjury(id);
+    armLoadWindow(24);
+    armSnaps(id, 0.75);
+  }
 
   useEffect(() => {
     const ids = [
@@ -238,11 +299,16 @@ export function Dummy({
     return () => unregisterAssembly(id);
   }, [id]);
 
+  const boneGroups = [
+    GROUPS.hips, GROUPS.chest, GROUPS.head,
+    GROUPS.thighL, GROUPS.thighR, GROUPS.shinL, GROUPS.shinR,
+    GROUPS.uarmL, GROUPS.uarmR, GROUPS.larmL, GROUPS.larmR,
+  ];
   function setLive(on: boolean, gravity: number, lin: number, ang: number) {
     live.current = on;
-    for (const r of bones.current) {
+    bones.current.forEach((r, i) => {
       const b = r.current;
-      if (!b) continue;
+      if (!b) return;
       b.setBodyType(on ? 0 : 2, true);
       b.setGravityScale(gravity, true);
       b.setLinearDamping(lin);
@@ -251,16 +317,46 @@ export function Dummy({
         b.setLinvel({ x: 0, y: 0, z: 0 }, true);
         b.setAngvel({ x: 0, y: 0, z: 0 }, true);
       } else {
+        setColliderGroups(b, boneGroups[i] ?? GROUPS.hips);
         b.wakeUp();
       }
-    }
+    });
   }
 
-  useFrame(() => {
+  useBeforePhysicsStep(() => {
     if (startLive && !live.current && !floppy.current && !blasted.current) {
-      setLive(true, 1, 0.18, 0.46);
+      setLive(true, 1, 0.05, 1.45);
+      if (vel) {
+        launched.current = true;
+        for (const r of bones.current) {
+          const b = r.current;
+          if (!b) continue;
+          b.setLinvel({ x: vel[0], y: vel[1], z: vel[2] }, true);
+          b.wakeUp();
+        }
+      }
       note("dummy-live", { id, via: "scene" });
-      return;
+    }
+  });
+
+  useFrame(() => {
+    if (live.current || floppy.current) {
+      for (const r of bones.current) {
+        const b = r.current;
+        if (!b) continue;
+        const v = b.linvel();
+        const s = Math.hypot(v.x, v.y, v.z);
+        if (s > 52) {
+          const k = 52 / s;
+          b.setLinvel({ x: v.x * k, y: v.y * k, z: v.z * k }, true);
+        }
+        const w = b.angvel();
+        const ws = Math.hypot(w.x, w.y, w.z);
+        if (ws > 24) {
+          const k = 24 / ws;
+          b.setAngvel({ x: w.x * k, y: w.y * k, z: w.z * k }, true);
+        }
+      }
     }
     if (floppy.current || live.current || blasted.current) return;
     for (const c of cooks.values()) {
@@ -288,7 +384,7 @@ export function Dummy({
       const blast = { x, y, z };
       const hipsBlock = lineOccluded(world, rapier, blast, p);
       if (!already) {
-        resetLoads(id);
+        resetInjury(id);
         armLoadWindow(0.55);
       }
 
@@ -306,7 +402,6 @@ export function Dummy({
         b.wakeUp();
       };
 
-      /** Far bang is a shrug — freeze back to a T-statue so early vs-rungs can fail. */
       if (dist > 3.5) {
         if (!already) setLive(false, 0, 3.2, 8);
         return;
@@ -328,7 +423,7 @@ export function Dummy({
         return;
       }
 
-      const first = !floppy.current;
+      const first = __omp_shell("floppy.current;")
       floppy.current = true;
       unregisterAssembly(id);
       const hx = p.x - x;
@@ -338,7 +433,6 @@ export function Dummy({
       const kx = (hx / hl) * kick;
       const ky = (hy / hl) * kick;
       const kz = (hz / hl) * kick;
-      /** +ωx on a +Y torso sends the chest toward +Z — onto its back, away from the crate. */
       const wx = hz >= 0 ? 5.3 : -5.3;
       let n = 0;
       for (const r of bones.current) {
@@ -371,9 +465,9 @@ export function Dummy({
       set(uarmR, kx + 1.1, ky + 0.4, kz, 0, 0, 3.4);
       set(larmL, kx - 1.6, ky + 0.2, kz, 0, 0, -2.2);
       set(larmR, kx + 1.6, ky + 0.2, kz, 0, 0, 2.2);
-      const pair = (hinge: HingeId, a: RefObject<RapierRigidBody>, b: RefObject<RapierRigidBody>) => {
-        const ja = a.current;
-        const jb = b.current;
+      const pair = (hinge: HingeId, aa: RefObject<RapierRigidBody>, bb: RefObject<RapierRigidBody>) => {
+        const ja = aa.current;
+        const jb = bb.current;
         if (!ja || !jb) return;
         sampleHinge(id, hinge, toyJointImpulse({ isValid: () => true, body1: () => ja, body2: () => jb }));
       };
@@ -403,16 +497,16 @@ export function Dummy({
   return (
     <group position={pos} rotation={rot ?? [0, 0, 0]}>
       <Bone r={hips} id={`${id}-hips`} pos={[0, 0.74, 0]} size={[0.3, 0.16, 0.18]} mass={DUMMY.hipMass} groups={GROUPS.hips} {...boneProps} />
-      <Bone r={chest} id={`${id}-chest`} pos={[0, 1.0, 0]} size={[0.28, 0.34, 0.16]} mass={DUMMY.chestMass} groups={GROUPS.chest} {...boneProps} />
-      <Bone r={head} id={`${id}-head`} pos={[0, 1.28, 0]} size={[0.16, 0.16, 0.16]} mass={DUMMY.headMass} color={jointCol} groups={GROUPS.head} {...boneProps} />
-      <Bone r={thighL} id={`${id}-thigh-l`} pos={[-0.08, 0.5, 0]} size={[0.1, 0.32, 0.1]} mass={DUMMY.thighMass} groups={GROUPS.thighL} contact="femur-l" {...boneProps} />
-      <Bone r={thighR} id={`${id}-thigh-r`} pos={[0.08, 0.5, 0]} size={[0.1, 0.32, 0.1]} mass={DUMMY.thighMass} groups={GROUPS.thighR} contact="femur-r" {...boneProps} />
-      <Bone r={shinL} id={`${id}-shin-l`} pos={[-0.08, 0.17, 0]} size={[0.09, 0.32, 0.09]} mass={DUMMY.shinMass} groups={GROUPS.shinL} {...boneProps} />
-      <Bone r={shinR} id={`${id}-shin-r`} pos={[0.08, 0.17, 0]} size={[0.09, 0.32, 0.09]} mass={DUMMY.shinMass} groups={GROUPS.shinR} {...boneProps} />
-      <Bone r={uarmL} id={`${id}-uarm-l`} pos={[-0.28, 1.08, 0]} size={[0.26, 0.08, 0.08]} mass={DUMMY.uarmMass} groups={GROUPS.uarmL} contact="humerus-lower-l" {...boneProps} />
-      <Bone r={uarmR} id={`${id}-uarm-r`} pos={[0.28, 1.08, 0]} size={[0.26, 0.08, 0.08]} mass={DUMMY.uarmMass} groups={GROUPS.uarmR} contact="humerus-lower-r" {...boneProps} />
-      <Bone r={larmL} id={`${id}-larm-l`} pos={[-0.52, 1.08, 0]} size={[0.22, 0.07, 0.07]} mass={DUMMY.larmMass} groups={GROUPS.larmL} {...boneProps} />
-      <Bone r={larmR} id={`${id}-larm-r`} pos={[0.52, 1.08, 0]} size={[0.22, 0.07, 0.07]} mass={DUMMY.larmMass} groups={GROUPS.larmR} {...boneProps} />
+      <Bone r={chest} id={`${id}-chest`} pos={[0, 1.0, 0]} size={[0.28, 0.34, 0.16]} mass={DUMMY.chestMass} groups={GROUPS.chest} snap="lumbar" {...boneProps} />
+      <Bone r={head} id={`${id}-head`} pos={[0, 1.28, 0]} size={[0.16, 0.16, 0.16]} mass={DUMMY.headMass} color={jointCol} groups={GROUPS.head} snap="upper-neck" {...boneProps} />
+      <Bone r={thighL} id={`${id}-thigh-l`} pos={[-0.08, 0.5, 0]} size={[0.1, 0.32, 0.1]} mass={DUMMY.thighMass} groups={GROUPS.thighL} contact="femur-l" snap="femur-l" {...boneProps} />
+      <Bone r={thighR} id={`${id}-thigh-r`} pos={[0.08, 0.5, 0]} size={[0.1, 0.32, 0.1]} mass={DUMMY.thighMass} groups={GROUPS.thighR} contact="femur-r" snap="femur-r" {...boneProps} />
+      <Bone r={shinL} id={`${id}-shin-l`} pos={[-0.08, 0.17, 0]} size={[0.09, 0.32, 0.09]} mass={DUMMY.shinMass} groups={GROUPS.shinL} snap="knee-l" {...boneProps} />
+      <Bone r={shinR} id={`${id}-shin-r`} pos={[0.08, 0.17, 0]} size={[0.09, 0.32, 0.09]} mass={DUMMY.shinMass} groups={GROUPS.shinR} snap="knee-r" {...boneProps} />
+      <Bone r={uarmL} id={`${id}-uarm-l`} pos={[-0.28, 1.08, 0]} size={[0.26, 0.08, 0.08]} mass={DUMMY.uarmMass} groups={GROUPS.uarmL} contact="humerus-lower-l" snap="shoulder-l" {...boneProps} />
+      <Bone r={uarmR} id={`${id}-uarm-r`} pos={[0.28, 1.08, 0]} size={[0.26, 0.08, 0.08]} mass={DUMMY.uarmMass} groups={GROUPS.uarmR} contact="humerus-lower-r" snap="shoulder-r" {...boneProps} />
+      <Bone r={larmL} id={`${id}-larm-l`} pos={[-0.52, 1.08, 0]} size={[0.22, 0.07, 0.07]} mass={DUMMY.larmMass} groups={GROUPS.larmL} snap="humerus-lower-l" {...boneProps} />
+      <Bone r={larmR} id={`${id}-larm-r`} pos={[0.52, 1.08, 0]} size={[0.22, 0.07, 0.07]} mass={DUMMY.larmMass} groups={GROUPS.larmR} snap="humerus-lower-r" {...boneProps} />
 
       <Hinge dummyId={id} label="lumbar" a={hips} b={chest} pa={[0, 0.08, 0]} pb={[0, -0.17, 0]} axis={[1, 0, 0]} lim={[-1.15, 0.5]} />
       <Hinge dummyId={id} label="upper-neck" a={chest} b={head} pa={[0, 0.17, 0]} pb={[0, -0.08, 0]} axis={[1, 0, 0]} lim={[-0.75, 0.55]} />

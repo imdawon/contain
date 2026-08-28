@@ -1,0 +1,43 @@
+{
+  "id": "cannon-100",
+  "name": "Cannon 100 t",
+  "blurb": "Dummy and a 100 t coil fired at each other. Joints snap. Score is the sport.",
+  "file": "scenes/cannon-100.json",
+  "select": "dummy",
+  "inspect": false,
+  "track": { "ref": "dummy-hips" },
+  "cam": { "offset": [2.2, 3.6, -14], "look": [-0.4, -0.6, 6.5], "fov": 48 },
+  "entities": [
+    {
+      "name": "dummy-gun",
+      "kind": "cannon",
+      "pos": [0, 4.15, -20.2],
+      "rot": [-0.06, 0, 0],
+      "size": [0.46, 3.0, 0.46]
+    },
+    {
+      "name": "dummy",
+      "kind": "dummy",
+      "pos": [0, 3.55, -16.6],
+      "rot": [0, 0, 0],
+      "vel": [0, 4.2, 19],
+      "live": true
+    },
+    {
+      "name": "wheel-gun",
+      "kind": "cannon",
+      "pos": [0, 5.55, 20.4],
+      "rot": [-0.06, 3.1416, 0],
+      "size": [1.55, 6.2, 1.55]
+    },
+    {
+      "name": "wheel",
+      "kind": "wheel",
+      "pos": [0, 5.05, 16.6],
+      "rot": [0, 0, 1.571],
+      "vel": [0, 4.2, -19],
+      "mass": 100000
+    }
+  ],
+  "ties": []
+}

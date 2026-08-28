@@ -1,5 +1,5 @@
 import { forgetBay, listBayLevels, listBayRuns, listBayScenes, loadBay, loadRun, nextTrial, punctureId, resetBay, restageScene, saveBay, setToolName, spawnKind } from "@/lib/bay/actions";
-import { hingeSnapshot } from "@/lib/bay/atd";
+import { dummyScore, hingeSnapshot } from "@/lib/bay/atd";
 import { ensureFuseClock, tickFuse } from "@/lib/bay/blast";
 import { getLevel, levelCard } from "@/lib/bay/level";
 import { getRun, runCard } from "@/lib/bay/run";
@@ -60,7 +60,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 43;
+const PIPE_GEN = 52;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -506,12 +506,20 @@ export function peek() {
     })),
     objects,
     loads: hingeSnapshot(),
+    score: dummyScore(store.entities.find((e) => e.kind === "dummy")?.id),
     inspect: store.inspect,
     paint: typeof document !== "undefined" && document.visibilityState === "visible",
     hidden: typeof document !== "undefined" && document.hidden,
     fps: Math.round((s.fps ?? 0) * 10) / 10,
     frameMs: Math.round((s.frameMs ?? 0) * 10) / 10,
     nobj: objects.length,
+    pipeGen: g.__bayPipeGen ?? PIPE_GEN,
+    canvas: typeof document !== "undefined" ? (() => {
+      const c = document.querySelector("canvas");
+      return c ? { w: c.width, h: c.height, cw: c.clientWidth, ch: c.clientHeight } : null;
+    })() : null,
+    dpr: typeof window !== "undefined" ? window.devicePixelRatio : null,
+    vis: typeof document !== "undefined" ? document.visibilityState : "unknown",
   };
 }
 
@@ -630,12 +638,23 @@ async function tape(scene?: unknown, ms = 0) {
   const hard = Number(ms) > 400 ? Number(ms) : 95000;
   const t0 = performance.now();
   let floorAt = 0;
+  const hangar = Boolean(useBay.getState().entities.some((e) => e.kind === "ramp"));
   while (performance.now() - t0 < hard) {
     await waitFrames(180);
-    const w = peek().objects.find((o) => o.kind === "wheel");
-    const onFloor = Boolean(w && w.z > 1480 && w.y < 8);
-    if (onFloor && floorAt === 0) floorAt = performance.now();
-    if (floorAt > 0 && performance.now() - floorAt >= 7000) break;
+    const snap = peek();
+    if (hangar) {
+      const w = snap.objects.find((o) => o.kind === "wheel");
+      const onFloor = Boolean(w && w.z > 1480 && w.y < 8);
+      if (onFloor && floorAt === 0) floorAt = performance.now();
+      if (floorAt > 0 && performance.now() - floorAt >= 7000) break;
+    } else {
+      const hips = snap.objects.find((o) => String(o.id).endsWith("-hips"));
+      const speed = hips ? Math.hypot(hips.vx ?? 0, hips.vy ?? 0, hips.vz ?? 0) : 0;
+      const down = Boolean(hips && hips.y < 1.35 && speed < 1.6);
+      if (down && floorAt === 0) floorAt = performance.now();
+      if (floorAt > 0 && performance.now() - floorAt >= 5000) break;
+      if (!hangar && performance.now() - t0 > 16000) break;
+    }
   }
   window.cancelAnimationFrame(raf);
   try {

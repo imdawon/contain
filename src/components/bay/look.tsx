@@ -53,7 +53,6 @@ function trackPoint() {
 export function LabLook() {
   const scene = useThree((s) => s.scene);
   const gl = useThree((s) => s.gl);
-  const hangar = useBay((s) => s.entities.some((e) => e.kind === "wheel"));
   const installed = useRef(false);
 
   useLayoutEffect(() => {
@@ -80,30 +79,21 @@ export function LabLook() {
   const stageN = useBay((s) => s.stageN);
   const nEnt = useBay((s) => s.entities.length);
   useLayoutEffect(() => {
-    gl.shadowMap.enabled = !hangar;
+    gl.shadowMap.enabled = true;
     scene.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (!mesh.isMesh) return;
-      if (hangar || skipMesh(mesh)) {
+      if (skipMesh(mesh)) {
         mesh.castShadow = false;
         mesh.receiveShadow = false;
         return;
       }
       if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
       const span = (mesh.geometry.boundingSphere?.radius ?? 1) * 2 * Math.max(mesh.scale.x, mesh.scale.y, mesh.scale.z);
-      mesh.castShadow = span < 4;
-      mesh.receiveShadow = span < 80;
+      mesh.castShadow = span < 10;
+      mesh.receiveShadow = true;
     });
-  }, [scene, stageN, nEnt, hangar, gl]);
-
-  if (hangar) {
-    return (
-      <>
-        <hemisphereLight args={["#fff4e4", "#4a433c", 0.9]} />
-        <ambientLight intensity={0.85} color="#efe6d8" />
-      </>
-    );
-  }
+  }, [scene, stageN, nEnt, gl]);
 
   return (
     <>
@@ -165,10 +155,7 @@ function HangarLamps() {
 function LabLights() {
   const light = useRef<THREE.DirectionalLight>(null);
   const target = useMemo(() => new THREE.Object3D(), []);
-  const hangar = useBay((s) => s.entities.some((e) => e.kind === "wheel"));
-
   useFrame(() => {
-    if (hangar) return;
     const p = trackPoint();
     target.position.set(p.x, p.y + 0.2, p.z);
     target.updateMatrixWorld();
@@ -198,8 +185,8 @@ function LabLights() {
         ref={light}
         intensity={3.4}
         color="#fff6e4"
-        castShadow={!hangar}
-        shadow-mapSize={[1024, 1024]}
+        castShadow
+        shadow-mapSize={[2048, 2048]}
         shadow-bias={-0.00018}
         shadow-normalBias={0.03}
         shadow-camera-near={8}

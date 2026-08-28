@@ -32,19 +32,39 @@ export const HINGE_LABEL: Record<HingeId, string> = {
   "knee-r": "Knee R",
 };
 
+/** Toy snap thresholds. Neck goes first; lumbar lasts. Not certified IARVs. */
+export const SNAP_N: Record<HingeId, number> = {
+  "upper-neck": 9.5,
+  lumbar: 14,
+  "shoulder-l": 7.2,
+  "shoulder-r": 7.2,
+  "humerus-lower-l": 6.4,
+  "humerus-lower-r": 6.4,
+  "femur-l": 11,
+  "femur-r": 11,
+  "knee-l": 8.5,
+  "knee-r": 8.5,
+};
+
 type Peak = { mag: number; n: number; noted: boolean };
 
 const g = globalThis as unknown as {
-  __bayLoads?: { peaks: Map<string, Peak>; until: number };
+  __bayLoads?: { peaks: Map<string, Peak>; until: number; snaps: Set<string>; snapAt: Map<string, number> };
 };
-const store = (g.__bayLoads ??= { peaks: new Map<string, Peak>(), until: 0 });
+const store = (g.__bayLoads ??= {
+  peaks: new Map<string, Peak>(),
+  until: 0,
+  snaps: new Set<string>(),
+  snapAt: new Map<string, number>(),
+});
+if (!store.snaps) store.snaps = new Set<string>();
+if (!store.snapAt) store.snapAt = new Map<string, number>();
 
 function key(dummyId: string, hinge: string) {
   return `${dummyId}:${hinge}`;
 }
 
 export function armLoadWindow(seconds = 0.5) {
-  store.peaks.clear();
   store.until = probeTime() + seconds;
 }
 
@@ -54,6 +74,25 @@ export function resetLoads(dummyId: string) {
   store.peaks.delete(key(dummyId, "femur-r-contact"));
   store.peaks.delete(key(dummyId, "humerus-l-contact"));
   store.peaks.delete(key(dummyId, "humerus-r-contact"));
+  store.peaks.delete(key(dummyId, "impact"));
+}
+
+export function resetAllInjury() {
+  store.peaks.clear();
+  store.snaps.clear();
+  store.snapAt.clear();
+  store.until = 0;
+}
+
+export function resetInjury(dummyId: string) {
+  resetLoads(dummyId);
+  for (const id of HINGE_IDS) store.snaps.delete(key(dummyId, id));
+  store.snapAt.delete(dummyId);
+}
+
+/** Ignore spawn-frame joint spikes. Snap after this many seconds. */
+export function armSnaps(dummyId: string, after = 0.45) {
+  store.snapAt.set(dummyId, probeTime() + after);
 }
 
 type JointLike = {
@@ -127,6 +166,36 @@ export function sampleContact(dummyId: string, hinge: HingeId, mag: number) {
   }
 }
 
+export function sampleImpact(dummyId: string, mag: number) {
+  if (!Number.isFinite(mag) || mag <= 0.4) return;
+  const k = key(dummyId, "impact");
+  const prev = store.peaks.get(k) ?? { mag: 0, n: 0, noted: false };
+  prev.n += 1;
+  if (mag > prev.mag) prev.mag = mag;
+  store.peaks.set(k, prev);
+}
+
+export function isSnapped(dummyId: string, hinge: HingeId) {
+  return store.snaps.has(key(dummyId, hinge));
+}
+
+/** First frame the load clears the toy snap line. */
+export function takeSnap(dummyId: string, hinge: HingeId, mag: number) {
+  const gated = store.snapAt.get(dummyId);
+  if (gated == null || probeTime() < gated) return false;
+  if (!Number.isFinite(mag) || mag < SNAP_N[hinge]) return false;
+  const k = key(dummyId, hinge);
+  if (store.snaps.has(k)) return false;
+  store.snaps.add(k);
+  note("joint-snap", {
+    id: dummyId,
+    hinge,
+    label: HINGE_LABEL[hinge],
+    mag: Math.round(mag * 1000) / 1000,
+  });
+  return true;
+}
+
 export function hingeSnapshot(dummyId?: string) {
   const out: Record<string, number> = {};
   for (const [k, v] of store.peaks) {
@@ -137,4 +206,22 @@ export function hingeSnapshot(dummyId?: string) {
     out[hinge] = Math.max(out[hinge] ?? 0, mag);
   }
   return out;
+}
+
+export function dummyScore(dummyId?: string) {
+  const peaks = hingeSnapshot(dummyId);
+  let snaps = 0;
+  let score = 0;
+  for (const hinge of HINGE_IDS) {
+    const mag = peaks[hinge] ?? 0;
+    score += Math.min(4200, Math.round(mag * 220));
+    const snapped = dummyId ? isSnapped(dummyId, hinge) : [...store.snaps].some((k) => k.endsWith(`:${hinge}`));
+    if (snapped) {
+      snaps += 1;
+      score += 2800;
+    }
+  }
+  const impact = Math.min(9000, Math.round((peaks.impact ?? 0) * 0.018));
+  score += impact;
+  return { score, snaps, impact, peaks };
 }
