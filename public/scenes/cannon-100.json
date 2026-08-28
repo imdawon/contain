@@ -6,19 +6,24 @@
   "select": "dummy",
   "inspect": false,
   "track": { "ref": "dummy-hips" },
-  "cam": { "offset": [6.4, 4.4, -11.5], "look": [-1.6, -1.35, 7.8], "fov": 50 },
+  "cam": {
+    "offset": [0, 4.8, -14],
+    "eye": [4.2, 4.7, -26.5],
+    "look": [0, 3.5, 6],
+    "fov": 40
+  },
   "entities": [
     {
       "name": "dummy-gun",
       "kind": "cannon",
-      "pos": [0, 3.98, -20.2],
+      "pos": [0, 4.18, -20.2],
       "rot": [-0.06, 0, 0],
       "size": [0.46, 3.0, 0.46]
     },
     {
       "name": "dummy",
       "kind": "dummy",
-      "pos": [0, 3.55, -16.6],
+      "pos": [0, 3.62, -16.6],
       "rot": [0, 0, 0],
       "vel": [0, 4.2, 19],
       "live": true
@@ -26,7 +31,7 @@
     {
       "name": "wheel-gun",
       "kind": "cannon",
-      "pos": [0, 5.55, 20.4],
+      "pos": [0, 6.02, 20.4],
       "rot": [-0.06, 3.1416, 0],
       "size": [1.55, 6.2, 1.55]
     },
