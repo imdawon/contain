@@ -60,7 +60,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 54;
+const PIPE_GEN = 59;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -634,6 +634,16 @@ async function tape(scene?: unknown, ms = 0) {
     }
   };
   raf = window.requestAnimationFrame(tick);
+  const grabIv = window.setInterval(() => {
+    const now = performance.now();
+    if (now - lastGrab < DT) return;
+    lastGrab = now;
+    try {
+      grab();
+    } catch {
+      /* context lost */
+    }
+  }, 33);
   clearHist();
   const staged = scene != null && scene !== "" ? await restageScene(scene) : { ok: true, id: null };
   const hard = Number(ms) > 400 ? Number(ms) : 95000;
@@ -658,6 +668,7 @@ async function tape(scene?: unknown, ms = 0) {
     }
   }
   window.cancelAnimationFrame(raf);
+  window.clearInterval(grabIv);
   try {
     grab();
   } catch {

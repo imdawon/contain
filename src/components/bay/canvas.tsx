@@ -81,7 +81,7 @@ function TrackCam({
 }
 
 function KickFrames() {
-  const hangar = useBay((s) => s.entities.some((e) => e.kind === "wheel"));
+  const hangar = useBay((s) => s.entities.some((e) => e.kind === "ramp"));
   const advance = useThree((s) => s.advance);
   const invalidate = useThree((s) => s.invalidate);
   const lastRaf = useRef(performance.now());
@@ -93,9 +93,9 @@ function KickFrames() {
     if (hangar) return;
     const id = window.setInterval(() => {
       if (busy.current) return;
-      if (typeof document !== "undefined" && document.hidden) return;
       const now = performance.now();
-      if (now - lastRaf.current < 80) return;
+      const quiet = typeof document !== "undefined" && document.hidden ? 18 : 80;
+      if (now - lastRaf.current < quiet) return;
       busy.current = true;
       lastRaf.current = now;
       try {
@@ -106,7 +106,7 @@ function KickFrames() {
       } finally {
         busy.current = false;
       }
-    }, 50);
+    }, 20);
     return () => window.clearInterval(id);
   }, [advance, invalidate, hangar]);
   return null;
@@ -224,7 +224,7 @@ function World() {
   const slowMo = useBay((s) => s.slowMo);
   const orbit = useRef<{ target: THREE.Vector3 } | null>(null);
   const fire = useFireMap();
-  const hangar = Boolean(scene?.cam?.offset);
+  const hangar = Boolean(scene?.cam?.offset || scene?.cam?.eye);
   const tracking = Boolean(useBay((s) => s.trackId));
   const garden = gardenOn();
 
@@ -315,7 +315,7 @@ function GardenLook() {
   return (
     <>
       <color attach="background" args={[sky]} />
-      <fog attach="fog" args={garden ? ["#b5dcec", 80, 180] : ["#8a7c6a", 90, 1400]} />
+      <fog attach="fog" args={garden ? ["#b5dcec", 110, 260] : ["#8a7c6a", 90, 1400]} />
     </>
   );
 }

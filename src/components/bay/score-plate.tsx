@@ -46,13 +46,13 @@ export function ScorePlate() {
     const m = mesh.current;
     if (!m) return;
     m.quaternion.copy(camera.quaternion);
-    const dir = new THREE.Vector3(0, -0.58, -1.85).applyQuaternion(camera.quaternion);
+    const dir = new THREE.Vector3(0, -0.38, -1.8).applyQuaternion(camera.quaternion);
     m.position.copy(camera.position).add(dir);
   });
 
   return (
     <mesh ref={mesh} renderOrder={20} frustumCulled={false}>
-      <planeGeometry args={[1.05, 0.36]} />
+      <planeGeometry args={[0.72, 0.26]} />
       <meshBasicMaterial map={tex} transparent depthTest={false} toneMapped={false} />
     </mesh>
   );
