@@ -60,7 +60,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 52;
+const PIPE_GEN = 54;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -508,6 +508,7 @@ export function peek() {
     loads: hingeSnapshot(),
     score: dummyScore(store.entities.find((e) => e.kind === "dummy")?.id),
     inspect: store.inspect,
+    slowMo: store.slowMo,
     paint: typeof document !== "undefined" && document.visibilityState === "visible",
     hidden: typeof document !== "undefined" && document.hidden,
     fps: Math.round((s.fps ?? 0) * 10) / 10,

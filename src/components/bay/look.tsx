@@ -95,26 +95,27 @@ export function LabLook() {
     });
   }, [scene, stageN, nEnt, gl]);
 
+  const garden = useBay((s) => s.entities.some((e) => e.kind === "cannon") && !s.entities.some((e) => e.kind === "ramp" || e.kind === "hill"));
   return (
     <>
-      <LabSky />
-      <HangarLamps />
-      <LabLights />
+      <LabSky garden={garden} />
+      {garden ? null : <HangarLamps />}
+      <LabLights garden={garden} />
     </>
   );
 }
 
-function LabSky() {
+function LabSky({ garden }: { garden?: boolean }) {
   const geo = useMemo(() => {
     const g = new THREE.SphereGeometry(420, 32, 20);
     const n = g.attributes.position.count;
     const col = new Float32Array(n * 3);
     const pos = g.attributes.position;
+    const nadir = garden ? [0.42, 0.62, 0.38] : [0.28, 0.25, 0.22];
+    const horizon = garden ? [0.72, 0.86, 0.92] : [0.62, 0.55, 0.46];
+    const zenith = garden ? [0.45, 0.72, 0.95] : [0.86, 0.8, 0.7];
     for (let i = 0; i < n; i++) {
       const h = THREE.MathUtils.clamp((pos.getY(i) / 420) * 0.5 + 0.5, 0, 1);
-      const nadir = [0.28, 0.25, 0.22];
-      const horizon = [0.62, 0.55, 0.46];
-      const zenith = [0.86, 0.8, 0.7];
       const a = h < 0.46 ? h / 0.46 : (h - 0.46) / 0.54;
       const from = h < 0.46 ? nadir : horizon;
       const to = h < 0.46 ? horizon : zenith;
@@ -124,7 +125,7 @@ function LabSky() {
     }
     g.setAttribute("color", new THREE.BufferAttribute(col, 3));
     return g;
-  }, []);
+  }, [garden]);
   useLayoutEffect(
     () => () => {
       geo.dispose();
@@ -152,7 +153,7 @@ function HangarLamps() {
   );
 }
 
-function LabLights() {
+function LabLights({ garden }: { garden?: boolean }) {
   const light = useRef<THREE.DirectionalLight>(null);
   const target = useMemo(() => new THREE.Object3D(), []);
   useFrame(() => {
@@ -179,12 +180,12 @@ function LabLights() {
 
   return (
     <>
-      <hemisphereLight args={["#fff4e4", "#4a433c", 0.78]} />
-      <ambientLight intensity={0.52} color="#efe6d8" />
+      <hemisphereLight args={garden ? ["#d8f0ff", "#5a8a48", 0.95] : ["#fff4e4", "#4a433c", 0.78]} />
+      <ambientLight intensity={garden ? 0.7 : 0.52} color={garden ? "#e7f6ff" : "#efe6d8"} />
       <directionalLight
         ref={light}
-        intensity={3.4}
-        color="#fff6e4"
+        intensity={garden ? 2.8 : 3.4}
+        color={garden ? "#fff6d2" : "#fff6e4"}
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-bias={-0.00018}
@@ -197,7 +198,7 @@ function LabLights() {
         shadow-camera-bottom={-64}
       />
       <primitive object={target} />
-      <directionalLight position={[-20, 30, 24]} intensity={0.7} color="#c5d4e6" />
+      <directionalLight position={[-20, 30, 24]} intensity={garden ? 1.05 : 0.7} color={garden ? "#9ad0ff" : "#c5d4e6"} />
     </>
   );
 }

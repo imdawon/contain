@@ -64,6 +64,7 @@ interface BayState {
   dragging: boolean;
   latch: "sealed" | "hinged" | "free";
   cutaway: boolean;
+  slowMo: boolean;
   levelId: string;
   runId: string | null;
   trial: number;
@@ -85,6 +86,7 @@ interface BayState {
   setDragging: (v: boolean) => void;
   setLatch: (latch: BayState["latch"]) => void;
   toggleCutaway: () => void;
+  toggleSlowMo: () => void;
 }
 
 let n = 1;
@@ -120,6 +122,7 @@ export const useBay = create<BayState>((set, get) => ({
   muted: false,
   dragging: false,
   cutaway: false,
+  slowMo: false,
   inspect: true,
   spawn: (kind) => {
     if (kind === "charge") kind = "grenade";
@@ -155,7 +158,7 @@ export const useBay = create<BayState>((set, get) => ({
   reset: () => {
     const s = get();
     if (s.scene) {
-      set({ ...materializeScene(s.scene, nid), dragging: false, latch: "sealed", stageN: s.stageN + 1 });
+      set({ ...materializeScene(s.scene, nid), dragging: false, latch: "sealed", stageN: s.stageN + 1, slowMo: false });
       return;
     }
     const run = getRun(s.runId);
@@ -223,4 +226,5 @@ export const useBay = create<BayState>((set, get) => ({
   setDragging: (dragging) => set({ dragging }),
   setLatch: (latch) => set({ latch }),
   toggleCutaway: () => set({ cutaway: !get().cutaway }),
+  toggleSlowMo: () => set({ slowMo: !get().slowMo }),
 }));

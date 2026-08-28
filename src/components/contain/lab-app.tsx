@@ -10,7 +10,7 @@ import { listSceneCards } from "@/lib/bay/scene";
 import { getRun, runCard, RUNS } from "@/lib/bay/run";
 import { note } from "@/lib/bay/probe";
 import { punctureSelected } from "@/components/bay/pack";
-import { isMuted, setMuted, unlockAudio } from "@/lib/contain/audio";
+import { isMuted, playSlowMo, setMuted, unlockAudio } from "@/lib/contain/audio";
 import { SOLID, SOLID_SHAPES } from "@/lib/bay/solids";
 import { useBay, type Tool } from "@/store/bay-store";
 import { cn } from "@/lib/utils";
@@ -50,6 +50,8 @@ export function LabApp() {
   const setTrack = useBay((s) => s.setTrack);
   const cutaway = useBay((s) => s.cutaway);
   const toggleCutaway = useBay((s) => s.toggleCutaway);
+  const slowMo = useBay((s) => s.slowMo);
+  const toggleSlowMo = useBay((s) => s.toggleSlowMo);
   const levelId = useBay((s) => s.levelId);
   const runId = useBay((s) => s.runId);
   const trial = useBay((s) => s.trial);
@@ -80,6 +82,21 @@ export function LabApp() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [toggleCutaway]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "KeyS") return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "SELECT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
+      e.preventDefault();
+      unlockAudio();
+      const nextSlow = useBay.getState().slowMo ? false : true;
+      toggleSlowMo();
+      playSlowMo(nextSlow);
+      note("slowmo", { on: nextSlow });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [toggleSlowMo]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== "KeyN") return;
@@ -210,6 +227,24 @@ export function LabApp() {
             data-bay="xray"
           >
             X-ray
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              unlockAudio();
+              const nextSlow = useBay.getState().slowMo ? false : true;
+              toggleSlowMo();
+              playSlowMo(nextSlow);
+              note("slowmo", { on: nextSlow });
+            }}
+            className={cn(
+              "h-11 rounded-[var(--radius-sm)] border px-3 font-mono text-[11px] uppercase tracking-[0.14em]",
+              slowMo ? "border-fg bg-raised text-fg" : "border-border bg-bg text-muted",
+            )}
+            title="Quarter-speed. Same whoosh, reversed, on the way out (S)"
+            data-bay="slowmo"
+          >
+            Slo-mo
           </button>
           {(["grab", "nail"] as Tool[]).map((t) => (
             <button

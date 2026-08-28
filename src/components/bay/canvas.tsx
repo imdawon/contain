@@ -27,6 +27,7 @@ import { CRATE_G, DUMMY_G, WAGON_G, WORLD_G } from "@/lib/bay/groups";
 import { listSamplers } from "@/lib/bay/probe";
 import { useBay } from "@/store/bay-store";
 import { LabLook } from "@/components/bay/look";
+import { Green } from "@/components/bay/green";
 
 function TrackCam({
   orbit,
@@ -109,6 +110,21 @@ function KickFrames() {
     return () => window.clearInterval(id);
   }, [advance, invalidate, hangar]);
   return null;
+}
+
+function SlowMoDriver() {
+  const slowMo = useBay((s) => s.slowMo);
+  const { step } = useRapier();
+  useFrame((_, dt) => {
+    if (!slowMo) return;
+    step(Math.min(dt, 0.05) * 0.25);
+  });
+  return null;
+}
+
+function gardenOn() {
+  const ents = useBay.getState().entities;
+  return ents.some((e) => e.kind === "cannon") && !ents.some((e) => e.kind === "ramp" || e.kind === "hill");
 }
 
 function FitGl() {
@@ -205,24 +221,30 @@ function World() {
   const dragging = useBay((s) => s.dragging);
   const scene = useBay((s) => s.scene);
   const stageN = useBay((s) => s.stageN);
+  const slowMo = useBay((s) => s.slowMo);
   const orbit = useRef<{ target: THREE.Vector3 } | null>(null);
   const fire = useFireMap();
   const hangar = Boolean(scene?.cam?.offset);
   const tracking = Boolean(useBay((s) => s.trackId));
+  const garden = gardenOn();
 
   return (
-    <Physics key={stageN} gravity={[0, -9.81, 0]} timeStep={1 / 60} interpolate numSolverIterations={24} numInternalPgsIterations={12} maxCcdSubsteps={1}>
+    <Physics key={stageN} gravity={[0, -9.81, 0]} timeStep={slowMo ? "vary" : 1 / 60} paused={slowMo} interpolate numSolverIterations={24} numInternalPgsIterations={12} maxCcdSubsteps={1}>
+      <SlowMoDriver />
       <TrackCam orbit={orbit} />
       <ProbeTick />
       <BlastBus />
       {scene ? <SceneRig key={`${scene.id}-${stageN}`} scene={scene} /> : null}
       <RigidBody type="fixed" colliders={false} friction={0.95} restitution={0}>
         <CuboidCollider args={[FLOOR.half, 0.25, FLOOR.half]} position={[0, -0.25, 0]} collisionGroups={interactionGroups([WORLD_G], [WORLD_G, DUMMY_G, CRATE_G, WAGON_G])} />
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-          <planeGeometry args={[FLOOR.half * 2, FLOOR.half * 2]} />
-          <meshStandardMaterial color="#4c463f" roughness={0.94} metalness={0.06} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
-        </mesh>
+        {garden ? null : (
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+            <planeGeometry args={[FLOOR.half * 2, FLOOR.half * 2]} />
+            <meshStandardMaterial color="#4c463f" roughness={0.94} metalness={0.06} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
+          </mesh>
+        )}
       </RigidBody>
+      {garden ? <Green /> : (
       <Grid
         infiniteGrid
         fadeDistance={34}
@@ -235,6 +257,7 @@ function World() {
         sectionColor="#8f8678"
         position={[0, 0.012, 0]}
       />
+      )}
       {entities.map((e) =>
         e.kind === "can" ? (
           <AmmoCan key={e.id} id={e.id} pos={e.pos} />
@@ -283,6 +306,17 @@ function World() {
         dampingFactor={0.08}
       />
     </Physics>
+  );
+}
+
+function GardenLook() {
+  const garden = useBay((s) => s.entities.some((e) => e.kind === "cannon") && !s.entities.some((e) => e.kind === "ramp" || e.kind === "hill"));
+  const sky = garden ? "#8ec8e8" : "#8a7c6a";
+  return (
+    <>
+      <color attach="background" args={[sky]} />
+      <fog attach="fog" args={garden ? ["#b5dcec", 80, 180] : ["#8a7c6a", 90, 1400]} />
+    </>
   );
 }
 
@@ -338,8 +372,7 @@ export function BayCanvas() {
         >
           <FitGl />
           <KickFrames />
-          <color attach="background" args={["#8a7c6a"]} />
-          <fog attach="fog" args={["#8a7c6a", 90, 1400]} />
+          <GardenLook />
           <LabLook />
           <World />
           <ScorePlate />

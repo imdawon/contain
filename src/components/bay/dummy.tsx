@@ -423,7 +423,6 @@ export function Dummy({
         return;
       }
 
-      const first = __omp_shell("floppy.current;")
       floppy.current = true;
       unregisterAssembly(id);
       const hx = p.x - x;
