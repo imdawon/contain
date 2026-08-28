@@ -151,11 +151,6 @@ function SteelBody({
       }
       armed.current = true;
     }
-    if (shell.maxTaken > 0) {
-      refreshSteelMesh(geo, shell.live);
-      const drawn = mesh.current;
-      if (drawn && drawn.geometry !== geo) drawn.geometry = geo;
-    }
   });
 
   useAfterPhysicsStep(() => {
@@ -227,16 +222,18 @@ function SteelBody({
         }
       }
     }
-    let raw: ReturnType<typeof collectHits> = [];
-    try {
-      raw = collectHits(world, b, kind);
-    } catch {
-      return;
-    }
-    if (raw.length > 0) {
-      const reach = kind === "wheel" ? WHEEL.radius * 1.7 + WHEEL.thick : DRUM.radius * 1.7 + DRUM.height;
-      const local = raw.some((h) => Math.hypot(h.x, h.y, h.z) > reach) ? worldHitsToLocal(b, raw) : raw;
-      added += applySteelHits(shell, local);
+    if (kind === "wheel") {
+      let raw: ReturnType<typeof collectHits> = [];
+      try {
+        raw = collectHits(world, b, kind);
+      } catch {
+        return;
+      }
+      if (raw.length > 0) {
+        const reach = WHEEL.radius * 1.7 + WHEEL.thick;
+        const local = raw.some((h) => Math.hypot(h.x, h.y, h.z) > reach) ? worldHitsToLocal(b, raw) : raw;
+        added += applySteelHits(shell, local);
+      }
     }
     if (added <= 0) return;
     refreshSteelMesh(geo, shell.live);
@@ -285,7 +282,7 @@ function SteelBody({
       linearDamping={kind === "wheel" ? 0.004 : 0.05}
       angularDamping={kind === "wheel" ? 0.08 : 0.12}
       collisionGroups={groups}
-      canSleep={false}
+      canSleep={kind !== "wheel"}
       ccd={kind === "wheel"}
       enabledRotations={[true, true, true]}
     >
@@ -318,7 +315,7 @@ function SteelBody({
       <mesh geometry={geo} scale={kind === "wheel" ? 1.055 : 1.05} frustumCulled={false} userData={{ labSkip: true }}>
         <meshBasicMaterial color="#000000" side={THREE.FrontSide} toneMapped={false} fog={false} />
       </mesh>
-      <mesh ref={mesh} geometry={geo} onPointerDown={grab.down} castShadow receiveShadow frustumCulled={false}>
+      <mesh ref={mesh} geometry={geo} onPointerDown={grab.down} castShadow={kind === "wheel"} receiveShadow frustumCulled={false}>
         <meshStandardMaterial
           color={color}
           vertexColors

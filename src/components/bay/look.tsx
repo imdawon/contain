@@ -75,7 +75,9 @@ export function LabLook() {
     };
   }, []);
 
-  useFrame(() => {
+  const stageN = useBay((s) => s.stageN);
+  const nEnt = useBay((s) => s.entities.length);
+  useLayoutEffect(() => {
     scene.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (!mesh.isMesh) return;
@@ -86,10 +88,10 @@ export function LabLook() {
       }
       if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
       const span = (mesh.geometry.boundingSphere?.radius ?? 1) * 2 * Math.max(mesh.scale.x, mesh.scale.y, mesh.scale.z);
-      mesh.castShadow = span < 10;
-      mesh.receiveShadow = true;
+      mesh.castShadow = span < 4;
+      mesh.receiveShadow = span < 80;
     });
-  });
+  }, [scene, stageN, nEnt]);
 
   return (
     <>
@@ -183,7 +185,7 @@ function LabLights() {
         intensity={3.4}
         color="#fff6e4"
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[1024, 1024]}
         shadow-bias={-0.00018}
         shadow-normalBias={0.03}
         shadow-camera-near={8}

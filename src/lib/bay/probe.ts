@@ -50,6 +50,8 @@ export interface ProbeSnap {
   objects: ProbeObject[];
   inView: string[];
   events: ProbeEvent[];
+  fps?: number;
+  frameMs?: number;
 }
 
 export type ActorPatch = {
@@ -87,6 +89,8 @@ const g = globalThis as unknown as {
   __bayEvents?: ProbeEvent[];
   __bayLast?: ProbeSnap;
   __bayStarted?: number;
+  __bayFps?: number;
+  __bayFrameMs?: number;
 };
 const actors = (g.__bayActors ??= new Map<string, Actor>());
 const assemblies = (g.__bayAssemblies ??= new Map<string, string[]>());
@@ -275,9 +279,18 @@ export function applyActor(id: string, patch: ActorPatch) {
   return true;
 }
 
+export function markPerf(fps: number, frameMs: number) {
+  g.__bayFps = fps;
+  g.__bayFrameMs = frameMs;
+  last.fps = fps;
+  last.frameMs = frameMs;
+}
+
 export function writeSnap(partial: Omit<ProbeSnap, "events" | "t">) {
   setLast({
     t: now(),
+    fps: g.__bayFps ?? last.fps ?? 0,
+    frameMs: g.__bayFrameMs ?? last.frameMs ?? 0,
     ...partial,
     events: events.slice(-40),
   });
