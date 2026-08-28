@@ -254,9 +254,16 @@ export function materializeScene(scene: Scene, nextId: () => string): {
   let trackId: string | null = selected;
   if (scene.track?.ref) {
     const ref = scene.track.ref;
-    const hit = byName.get(ref) ?? entities.find((e) => e.kind === ref)?.id;
+    let hit = byName.get(ref) ?? entities.find((e) => e.kind === ref)?.id;
+    let part = scene.track.part;
+    if (!hit && ref.includes("-")) {
+      const cut = ref.lastIndexOf("-");
+      const name = ref.slice(0, cut);
+      part = part ?? ref.slice(cut + 1);
+      hit = byName.get(name) ?? entities.find((e) => e.kind === name)?.id;
+    }
     trackId = hit ?? selected;
-    if (hit && scene.track.part) trackId = `${hit}-${scene.track.part}`;
+    if (hit && part) trackId = `${hit}-${part}`;
   } else if (scene.track?.kind) {
     const e = entities.find((x) => x.kind === scene.track!.kind);
     if (e) trackId = scene.track.part ? `${e.id}-${scene.track.part}` : e.id;

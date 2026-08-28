@@ -75,7 +75,7 @@ function TrackCam({
         camera.position.copy(_chase);
         primed.current = true;
       } else {
-        camera.position.lerp(_chase, 0.22);
+        camera.position.lerp(_chase, 0.55);
       }
       const body = rec.getBody?.();
       if (body) {
@@ -122,28 +122,6 @@ function FitGl() {
       window.clearInterval(iv);
     };
   }, [gl, setSize]);
-  return null;
-}
-
-function KickFrames() {
-  const advance = useThree((s) => s.advance);
-  const invalidate = useThree((s) => s.invalidate);
-  useEffect(() => {
-    let last = performance.now();
-    const id = window.setInterval(() => {
-      const now = performance.now();
-      const dt = Math.min(0.05, (now - last) / 1000);
-      last = now;
-      try {
-        invalidate();
-        advance(now, true);
-      } catch {
-        /* rAF-less kick is best-effort */
-      }
-      void dt;
-    }, 50);
-    return () => window.clearInterval(id);
-  }, [advance, invalidate]);
   return null;
 }
 
@@ -212,9 +190,12 @@ function World() {
   const stageN = useBay((s) => s.stageN);
   const orbit = useRef<{ target: THREE.Vector3 } | null>(null);
   const fire = useFireMap();
+  const hangar = entities.some((e) => e.kind === "wheel");
+  const solver = hangar ? 8 : 24;
+  const pgs = hangar ? 4 : 12;
 
   return (
-    <Physics key={stageN} gravity={[0, -9.81, 0]} timeStep={1 / 60} interpolate numSolverIterations={24} numInternalPgsIterations={12}>
+    <Physics key={stageN} gravity={[0, -9.81, 0]} timeStep={1 / 60} interpolate numSolverIterations={solver} numInternalPgsIterations={pgs}>
       <TrackCam orbit={orbit} />
       <ProbeTick />
       <BlastBus />
@@ -316,7 +297,7 @@ export function BayCanvas() {
           key={`${box.w}x${box.h}`}
           className="block h-full w-full touch-none"
           style={{ position: "absolute", inset: 0, width: box.w, height: box.h }}
-          dpr={[1, 1.5]}
+          dpr={1}
           shadows
           frameloop="always"
           camera={{ position: [3.4, 1.7, 3.6], fov: 42, near: 0.08, far: 2500 }}
@@ -339,7 +320,6 @@ export function BayCanvas() {
           }}
         >
           <FitGl />
-          <KickFrames />
           <color attach="background" args={["#8a7c6a"]} />
           <fog attach="fog" args={["#8a7c6a", 90, 1400]} />
           <LabLook />

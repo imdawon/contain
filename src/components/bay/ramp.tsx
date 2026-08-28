@@ -55,7 +55,7 @@ function buildHill(w: number, h: number, d: number, cut: number, grade = 0) {
   const z1 = cut >= 1 ? hd : hd + LIP;
   const span = z1 - z0;
   const segs = d > 40 ? 96 : SEG;
-  const cols = d > 40 ? 96 : COL;
+  const cols = d > 28 ? 16 : COL;
   const samples: { z: number; y: number; t: number }[] = [];
   for (let i = 0; i <= segs; i++) {
     const z = z0 + (i / segs) * span;

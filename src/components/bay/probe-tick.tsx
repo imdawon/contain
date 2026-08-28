@@ -1,9 +1,9 @@
 import { useFrame, useThree } from "@react-three/fiber";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { ensureFuseClock, tickFuse } from "@/lib/bay/blast";
 import { bindHarnessPipe, bindHarnessWindow, recordHistory, tickDrags } from "@/lib/bay/harness";
-import { listSamplers, probeTime, writeSnap } from "@/lib/bay/probe";
+import { listSamplers, markPerf, probeTime, writeSnap } from "@/lib/bay/probe";
 import { useBay } from "@/store/bay-store";
 
 const _proj = new THREE.Matrix4();
@@ -22,6 +22,8 @@ export function ProbeTick() {
   const cutaway = useBay((s) => s.cutaway);
   const setTrack = useBay((s) => s.setTrack);
   const toggleCutaway = useBay((s) => s.toggleCutaway);
+  const fpsEma = useRef(0);
+  const sampleAcc = useRef(0);
 
   useEffect(() => {
     bindHarnessWindow();
@@ -37,8 +39,14 @@ export function ProbeTick() {
 
   useFrame((_, dt) => {
     const cap = Math.min(dt, 0.05);
+    const inst = dt > 1e-4 ? 1 / dt : 0;
+    fpsEma.current = fpsEma.current === 0 ? inst : fpsEma.current * 0.85 + inst * 0.15;
+    markPerf(fpsEma.current, dt * 1000);
     tickDrags(cap);
     tickFuse(cap);
+    sampleAcc.current += dt;
+    if (sampleAcc.current < 0.1) return;
+    sampleAcc.current = 0;
     _proj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     _frustum.setFromProjectionMatrix(_proj);
     camera.getWorldDirection(_dir);

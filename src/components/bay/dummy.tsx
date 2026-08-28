@@ -277,6 +277,7 @@ export function Dummy({
       const { x, y, z, power } = (ev as CustomEvent<{ x: number; y: number; z: number; power: number }>).detail;
       const h = hips.current;
       if (!h || power < 4) return;
+      const already = blasted.current;
       blasted.current = true;
       const p = h.translation();
       if (onRide(id)) {
@@ -286,8 +287,10 @@ export function Dummy({
       const dist = Math.hypot(p.x - x, p.z - z);
       const blast = { x, y, z };
       const hipsBlock = lineOccluded(world, rapier, blast, p);
-      resetLoads(id);
-      armLoadWindow(0.55);
+      if (!already) {
+        resetLoads(id);
+        armLoadWindow(0.55);
+      }
 
       const kickBone = (r: RefObject<RapierRigidBody>, scale: number) => {
         const b = r.current;
@@ -298,39 +301,45 @@ export function Dummy({
         const dy = q.y - y;
         const dz = q.z - z;
         const d = Math.max(0.22, Math.hypot(dx, dy, dz));
-        const j = Math.min(1.15, (power * 0.045 * scale) / d);
-        b.applyImpulse({ x: (dx / d) * j, y: j * 0.22, z: (dz / d) * j }, true);
+        const j = Math.min(5.8, (power * 0.225 * scale) / d);
+        b.applyImpulse({ x: (dx / d) * j, y: (dy / d) * j, z: (dz / d) * j }, true);
         b.wakeUp();
       };
 
       /** Far bang is a shrug — freeze back to a T-statue so early vs-rungs can fail. */
       if (dist > 3.5) {
-        setLive(false, 0, 3.2, 8);
+        if (!already) setLive(false, 0, 3.2, 8);
         return;
       }
       const fall = Math.min(1, 0.7 / Math.max(0.35, dist));
-      const kick = Math.min(2.35, (1.4 + power * 0.07) * fall);
+      const kick = Math.min(12, (1.4 + power * 0.07) * fall * 5);
       if (kick < 0.9) {
-        setLive(false, 0, 3.2, 8);
+        if (!already) setLive(false, 0, 3.2, 8);
         return;
       }
       if (hipsBlock.hit) {
-        note("cover-block", { id, kind: hipsBlock.kind, toi: Math.round(hipsBlock.toi * 1000) / 1000, x: p.x, z: p.z });
-        for (const r of bones.current) kickBone(r, 0.35);
+        if (!already) note("cover-block", { id, kind: hipsBlock.kind, toi: Math.round(hipsBlock.toi * 1000) / 1000, x: p.x, z: p.z });
+        for (const r of bones.current) kickBone(r, already ? 1 : 0.35);
+        return;
+      }
+
+      if (already) {
+        for (const r of bones.current) kickBone(r, 1);
         return;
       }
 
       const first = !floppy.current;
       floppy.current = true;
       unregisterAssembly(id);
-      const away = Math.max(0.4, dist);
-      const nx = (p.x - x) / away;
-      const nz = (p.z - z) / away;
-      const kx = nx * kick;
-      const kz = nz * kick;
-      const ky = 1.05 + Math.min(0.4, power * 0.025);
+      const hx = p.x - x;
+      const hy = p.y - y;
+      const hz = p.z - z;
+      const hl = Math.max(0.22, Math.hypot(hx, hy, hz));
+      const kx = (hx / hl) * kick;
+      const ky = (hy / hl) * kick;
+      const kz = (hz / hl) * kick;
       /** +ωx on a +Y torso sends the chest toward +Z — onto its back, away from the crate. */
-      const wx = nz >= 0 ? 5.3 : -5.3;
+      const wx = hz >= 0 ? 5.3 : -5.3;
       let n = 0;
       for (const r of bones.current) {
         const b = r.current;

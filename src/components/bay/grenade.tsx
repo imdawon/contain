@@ -46,7 +46,7 @@ function FragBit({ id, pos, vel, size }: Frag & { id: string }) {
     kicked.current = true;
   });
   return (
-    <RigidBody ref={r} position={pos} colliders="cuboid" mass={0.04} friction={0.7} restitution={0.12} linearDamping={0.18} angularDamping={0.22} ccd>
+    <RigidBody ref={r} position={pos} colliders="cuboid" mass={0.04} friction={0.7} restitution={0.12} linearDamping={0.18} angularDamping={0.22}>
       <mesh>
         <boxGeometry args={[size, size * 0.7, size * 0.5]} />
         <meshStandardMaterial color={oliveDark} roughness={0.7} metalness={0.25} />
