@@ -4,7 +4,7 @@ import { ensureFuseClock, tickFuse } from "@/lib/bay/blast";
 import { getLevel, levelCard } from "@/lib/bay/level";
 import { getRun, runCard } from "@/lib/bay/run";
 import { cooks } from "@/lib/bay/cook";
-import { loopLevels } from "@/lib/contain/audio";
+import { loopLevels, playSlowMo } from "@/lib/contain/audio";
 import {
   applyActor,
   assemblyMembers,
@@ -60,7 +60,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 65;
+const PIPE_GEN = 66;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -649,11 +649,23 @@ async function tape(scene?: unknown, ms = 0) {
   kick();
   await yieldPaint();
   grab();
+  const setSlow = (on: boolean) => {
+    if (useBay.getState().slowMo === on) return;
+    useBay.getState().toggleSlowMo();
+    try {
+      playSlowMo(on);
+    } catch {
+      /* hidden tab / no audio */
+    }
+    note("slowmo", { on });
+  };
   const hard = Number(ms) > 400 ? Number(ms) : 95000;
   const t0 = performance.now();
   let floorAt = 0;
+  let slowAt = 0;
+  let slowOff = 0;
   const hangar = Boolean(useBay.getState().entities.some((e) => e.kind === "ramp"));
-  const cap = hangar ? hard : Math.min(hard, 11000);
+  const cap = hangar ? hard : Math.min(hard, 14000);
   while (performance.now() - t0 < cap) {
     const tick0 = performance.now();
     kick();
@@ -666,15 +678,27 @@ async function tape(scene?: unknown, ms = 0) {
       if (onFloor && floorAt === 0) floorAt = performance.now();
       if (floorAt > 0 && performance.now() - floorAt >= 7000) break;
     } else {
+      const wheel = snap.objects.find((o) => o.kind === "wheel");
       const hips = snap.objects.find((o) => String(o.id).endsWith("-hips"));
+      const gap = wheel && hips ? Math.hypot(wheel.x - hips.x, wheel.y - hips.y, wheel.z - hips.z) : 99;
+      const elapsed = performance.now() - t0;
+      if (!slowAt && elapsed > 250 && gap < 6.4) {
+        setSlow(true);
+        slowAt = elapsed;
+      }
+      if (slowAt && !slowOff && elapsed - slowAt >= 3200) {
+        setSlow(false);
+        slowOff = elapsed;
+      }
       const speed = hips ? Math.hypot(hips.vx ?? 0, hips.vy ?? 0, hips.vz ?? 0) : 0;
-      const warmed = performance.now() - t0 > 8000;
+      const warmed = elapsed > 9000;
       const down = Boolean(warmed && hips && hips.y < 1.35 && speed < 1.6);
       if (down && floorAt === 0) floorAt = performance.now();
       if (floorAt > 0 && performance.now() - floorAt >= 2500) break;
     }
     while (performance.now() - tick0 < DT) await yieldPaint();
   }
+  setSlow(false);
   kick();
   await yieldPaint();
   grab();
@@ -685,6 +709,8 @@ async function tape(scene?: unknown, ms = 0) {
     mime: "image/jpeg",
     n: frames.length,
     restage: staged,
+    slowAtMs: slowAt || null,
+    slowOffMs: slowOff || null,
     frames,
   };
 }
@@ -725,7 +751,8 @@ export function help() {
     until: "(eventType, timeoutMs) promise",
     wait: "(ms) rAF-wait so physics keeps ticking",
     shot: "jpeg of the live canvas (bay.mjs writes it to a file)",
-    tape: "(scene, ms?) recorder rolling, restage, 30fps jpeg, keep 7s after floor contact",
+    tape: "(scene, ms?) recorder rolling, restage, 30fps jpeg; cannon holes drop into slo-mo just before impact",
+    slowmo: "(on?) Matrix whoosh; omit to toggle",
     audio: "hiss/roar loop levels",
     reload: "location.reload — last-ditch if the pipe died",
   };
@@ -803,6 +830,17 @@ export function harnessApi() {
       };
     },
     tape,
+    slowmo: (on?: boolean) => {
+      const next = typeof on === "boolean" ? on : !useBay.getState().slowMo;
+      if (useBay.getState().slowMo !== next) useBay.getState().toggleSlowMo();
+      try {
+        playSlowMo(next);
+      } catch {
+        /* hidden tab / no audio */
+      }
+      note("slowmo", { on: next });
+      return { ok: true, on: next };
+    },
     audio: loopLevels,
     reload: () => {
       location.reload();

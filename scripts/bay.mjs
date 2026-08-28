@@ -116,6 +116,60 @@ if (fn === "shot") {
     /* keep raw */
   }
 }
+
+function writeWhooshWav(path, reverse) {
+  const sr = 44100;
+  const n = Math.floor(sr * 0.8);
+  const samples = new Float32Array(n);
+  let ph1 = 0;
+  let ph2 = 0;
+  let lp = 0;
+  for (let i = 0; i < n; i++) {
+    const u = i / (n - 1);
+    const env = Math.min(1, i / (sr * 0.045)) * (1 - u) ** 0.36;
+    const f1 = 620 * 0.12 ** u;
+    const f2 = 210 * 0.17 ** u;
+    ph1 += (2 * Math.PI * f1) / sr;
+    ph2 += (2 * Math.PI * f2) / sr;
+    const noise = Math.random() * 2 - 1;
+    const cut = 0.2 * (1 - u) + 0.018;
+    lp += cut * (noise - lp);
+    samples[i] = Math.max(-1, Math.min(1, (lp * 0.7 + Math.sin(ph1) * 0.34 + Math.sin(ph2) * 0.5) * env));
+  }
+  if (reverse) {
+    for (let i = 0, j = n - 1; i < j; i++, j--) {
+      const tmp = samples[i];
+      samples[i] = samples[j];
+      samples[j] = tmp;
+    }
+  }
+  let oscPh = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / sr;
+    const f0 = reverse ? 42 : 96;
+    const f1 = reverse ? 170 : 36;
+    const f = f0 * (f1 / f0) ** Math.min(1, t / 0.58);
+    oscPh += (2 * Math.PI * f) / sr;
+    const g = 0.2 * Math.exp(-t / 0.22);
+    samples[i] = Math.max(-1, Math.min(1, samples[i] + Math.sin(oscPh) * g));
+  }
+  const pcm = Buffer.alloc(44 + n * 2);
+  pcm.write("RIFF", 0);
+  pcm.writeUInt32LE(36 + n * 2, 4);
+  pcm.write("WAVEfmt ", 8);
+  pcm.writeUInt32LE(16, 16);
+  pcm.writeUInt16LE(1, 20);
+  pcm.writeUInt16LE(1, 22);
+  pcm.writeUInt32LE(sr, 24);
+  pcm.writeUInt32LE(sr * 2, 28);
+  pcm.writeUInt16LE(2, 32);
+  pcm.writeUInt16LE(16, 34);
+  pcm.write("data", 36);
+  pcm.writeUInt32LE(n * 2, 40);
+  for (let i = 0; i < n; i++) pcm.writeInt16LE(Math.round(samples[i] * 32767), 44 + i * 2);
+  writeFileSync(path, pcm);
+}
+
 if (fn === "tape") {
   try {
     const parsed = JSON.parse(text);
@@ -135,6 +189,34 @@ if (fn === "tape") {
         ["-y", "-framerate", "30", "-i", join(dir, "f%04d.jpg"), "-vf", "crop=ih*9/16:ih,scale=720:1280", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "26", "-movflags", "+faststart", mp4],
         { encoding: "utf8" },
       );
+      const slowAt = Number(val?.slowAtMs);
+      const slowOff = Number(val?.slowOffMs);
+      if (ff.status === 0 && Number.isFinite(slowAt) && slowAt > 0) {
+        const inn = join(dir, "whoosh-in.wav");
+        const outw = join(dir, "whoosh-out.wav");
+        const mixed = mp4.replace(/\.mp4$/i, ".a.mp4");
+        writeWhooshWav(inn, false);
+        const fc = [];
+        const ins = ["-y", "-i", mp4, "-i", inn];
+        if (Number.isFinite(slowOff) && slowOff > slowAt) {
+          writeWhooshWav(outw, true);
+          ins.push("-i", outw);
+          fc.push(`[1:a]adelay=${Math.round(slowAt)}|${Math.round(slowAt)}[in]`);
+          fc.push(`[2:a]adelay=${Math.round(slowOff)}|${Math.round(slowOff)}[out]`);
+          fc.push("[in][out]amix=inputs=2:normalize=0,apad[a]");
+        } else {
+          fc.push(`[1:a]adelay=${Math.round(slowAt)}|${Math.round(slowAt)},apad[a]`);
+        }
+        const mix = spawnSync("ffmpeg", [...ins, "-filter_complex", fc.join(";"), "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart", mixed], { encoding: "utf8" });
+        if (mix.status === 0 && existsSync(mixed)) {
+          writeFileSync(mp4, readFileSync(mixed));
+          rmSync(mixed, { force: true });
+          val.audio = true;
+        } else {
+          val.audio = false;
+          val.audioErr = (mix.stderr || mix.stdout || "").slice(-400);
+        }
+      }
       rmSync(dir, { recursive: true, force: true });
       delete val.frames;
       val.n = frames.length;
