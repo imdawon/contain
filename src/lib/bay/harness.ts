@@ -60,7 +60,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 62;
+const PIPE_GEN = 65;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -599,64 +599,66 @@ function loadClip(id: string) {
 
 
 async function tape(scene?: unknown, ms = 0) {
-  const grabCanvas = () => {
-    const el = document.querySelector("canvas");
-    return el instanceof HTMLCanvasElement && el.width >= 8 && el.height >= 8 ? el : null;
+  const liveCanvas = () => {
+    const all = [...document.querySelectorAll("canvas")].filter(
+      (el): el is HTMLCanvasElement => el instanceof HTMLCanvasElement && el.width >= 64 && el.height >= 64,
+    );
+    all.sort((a, b) => b.width * b.height - a.width * a.height);
+    return all[0] ?? null;
   };
-  if (!grabCanvas()) return { ok: false as const, reason: "no-canvas" as const };
+  if (!liveCanvas()) return { ok: false as const, reason: "no-canvas" as const };
   const W = 720;
   const H = 1280;
   const DT = 1000 / 30;
-  const scratch = document.createElement("canvas");
-  scratch.width = W;
-  scratch.height = H;
-  const ctx = scratch.getContext("2d", { alpha: false });
-  if (!ctx) return { ok: false as const, reason: "no-canvas" as const };
   const frames: string[] = [];
+  const kick = () => {
+    try {
+      (window as unknown as { __bayKick?: () => void }).__bayKick?.();
+    } catch {
+      /* kick is best-effort */
+    }
+  };
   const grab = () => {
-    const c = grabCanvas();
+    const c = liveCanvas() ?? (document.querySelector("canvas") instanceof HTMLCanvasElement ? (document.querySelector("canvas") as HTMLCanvasElement) : null);
     if (!c) return;
-    const cropW = Math.min(c.width, Math.round((c.height * 9) / 16));
-    const sx = Math.max(0, Math.round((c.width - cropW) / 2));
-    ctx.drawImage(c, sx, 0, cropW, c.height, 0, 0, W, H);
-    frames.push(scratch.toDataURL("image/jpeg", 0.55));
-  };
-  let lastGrab = -DT;
-  let raf = 0;
-  const tick = (now: number) => {
-    raf = window.requestAnimationFrame(tick);
-    if (now - lastGrab < DT) return;
-    lastGrab = now;
     try {
-      grab();
+      const gl = c.getContext("webgl2") || c.getContext("webgl");
+      gl?.finish();
+      const data = c.toDataURL("image/jpeg", 0.52);
+      if (data.startsWith("data:image")) frames.push(data);
     } catch {
       /* context lost */
     }
   };
-  raf = window.requestAnimationFrame(tick);
-  const grabIv = window.setInterval(() => {
-    const now = performance.now();
-    if (now - lastGrab < DT) return;
-    lastGrab = now;
-    try {
-      grab();
-    } catch {
-      /* context lost */
-    }
-  }, 33);
+  const yieldPaint = () =>
+    new Promise<void>((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        resolve();
+      };
+      const ch = new MessageChannel();
+      ch.port1.onmessage = () => finish();
+      ch.port2.postMessage(0);
+      requestAnimationFrame(() => finish());
+    });
   clearHist();
   const staged = scene != null && scene !== "" ? await restageScene(scene) : { ok: true, id: null };
+  await waitFrames(350);
+  kick();
+  await yieldPaint();
+  grab();
   const hard = Number(ms) > 400 ? Number(ms) : 95000;
   const t0 = performance.now();
   let floorAt = 0;
   const hangar = Boolean(useBay.getState().entities.some((e) => e.kind === "ramp"));
-  while (performance.now() - t0 < hard) {
-    await waitFrames(hangar ? 160 : 45);
-    try {
-      grab();
-    } catch {
-      /* context lost */
-    }
+  const cap = hangar ? hard : Math.min(hard, 11000);
+  while (performance.now() - t0 < cap) {
+    const tick0 = performance.now();
+    kick();
+    await yieldPaint();
+    grab();
     const snap = peek();
     if (hangar) {
       const w = snap.objects.find((o) => o.kind === "wheel");
@@ -666,20 +668,16 @@ async function tape(scene?: unknown, ms = 0) {
     } else {
       const hips = snap.objects.find((o) => String(o.id).endsWith("-hips"));
       const speed = hips ? Math.hypot(hips.vx ?? 0, hips.vy ?? 0, hips.vz ?? 0) : 0;
-      const warmed = performance.now() - t0 > 7000;
+      const warmed = performance.now() - t0 > 8000;
       const down = Boolean(warmed && hips && hips.y < 1.35 && speed < 1.6);
       if (down && floorAt === 0) floorAt = performance.now();
-      if (floorAt > 0 && performance.now() - floorAt >= 4000) break;
-      if (!hangar && performance.now() - t0 > 12000) break;
+      if (floorAt > 0 && performance.now() - floorAt >= 2500) break;
     }
+    while (performance.now() - tick0 < DT) await yieldPaint();
   }
-  window.cancelAnimationFrame(raf);
-  window.clearInterval(grabIv);
-  try {
-    grab();
-  } catch {
-    /* context lost */
-  }
+  kick();
+  await yieldPaint();
+  grab();
   return {
     ok: frames.length > 2,
     w: W,

@@ -91,14 +91,10 @@ function KickFrames() {
     lastRaf.current = performance.now();
   });
   useEffect(() => {
-    if (hangar) return;
-    const id = window.setInterval(() => {
+    const g = window as unknown as { __bayKick?: () => void };
+    g.__bayKick = () => {
       if (busy.current) return;
-      const now = performance.now();
-      const quiet = typeof document !== "undefined" && document.hidden ? 18 : 80;
-      if (now - lastRaf.current < quiet) return;
       busy.current = true;
-      lastRaf.current = now;
       try {
         invalidate();
         advance(performance.now(), true);
@@ -106,9 +102,22 @@ function KickFrames() {
         /* rAF-less kick is best-effort */
       } finally {
         busy.current = false;
+        lastRaf.current = performance.now();
       }
+    };
+    if (hangar) return () => {
+      if (g.__bayKick) delete g.__bayKick;
+    };
+    const id = window.setInterval(() => {
+      const now = performance.now();
+      const hidden = typeof document !== "undefined" && document.hidden;
+      if (!hidden && now - lastRaf.current < 80) return;
+      g.__bayKick?.();
     }, 20);
-    return () => window.clearInterval(id);
+    return () => {
+      window.clearInterval(id);
+      if (g.__bayKick) delete g.__bayKick;
+    };
   }, [advance, invalidate, hangar]);
   return null;
 }
