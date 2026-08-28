@@ -97,6 +97,38 @@ function TrackCam({
   return null;
 }
 
+function KickFrames() {
+  const hangar = useBay((s) => s.entities.some((e) => e.kind === "wheel"));
+  const advance = useThree((s) => s.advance);
+  const invalidate = useThree((s) => s.invalidate);
+  const lastRaf = useRef(performance.now());
+  const busy = useRef(false);
+  useFrame(() => {
+    lastRaf.current = performance.now();
+  });
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      if (busy.current) return;
+      if (typeof document !== "undefined" && document.hidden) return;
+      const now = performance.now();
+      const stall = hangar ? 220 : 80;
+      if (now - lastRaf.current < stall) return;
+      busy.current = true;
+      lastRaf.current = now;
+      try {
+        invalidate();
+        advance(performance.now(), true);
+      } catch {
+        /* rAF-less kick is best-effort */
+      } finally {
+        busy.current = false;
+      }
+    }, hangar ? 250 : 50);
+    return () => window.clearInterval(id);
+  }, [advance, invalidate, hangar]);
+  return null;
+}
+
 function FitGl() {
   const gl = useThree((s) => s.gl);
   const setSize = useThree((s) => s.setSize);
@@ -132,11 +164,14 @@ function BlastBus() {
       const { x, y, z, power } = (ev as CustomEvent<{ x: number; y: number; z: number; power: number }>).detail;
       world.forEachRigidBody((b) => {
         if (b.isFixed() || b.isKinematic()) return;
+        const mass = b.mass();
+        if (mass > 12) return;
         const p = b.translation();
         const dx = p.x - x;
         const dy = p.y - y;
         const dz = p.z - z;
         const dist = Math.max(0.22, Math.hypot(dx, dy, dz));
+        if (dist > 8) return;
         const nCol = b.numColliders();
         if (nCol > 0) {
           const membership = b.collider(0).collisionGroups() >>> 16;
@@ -195,7 +230,7 @@ function World() {
   const pgs = hangar ? 4 : 12;
 
   return (
-    <Physics key={stageN} gravity={[0, -9.81, 0]} timeStep={1 / 60} interpolate numSolverIterations={solver} numInternalPgsIterations={pgs}>
+    <Physics key={stageN} gravity={[0, -9.81, 0]} timeStep={1 / 60} interpolate={!hangar} numSolverIterations={solver} numInternalPgsIterations={pgs}>
       <TrackCam orbit={orbit} />
       <ProbeTick />
       <BlastBus />
@@ -207,18 +242,20 @@ function World() {
           <meshStandardMaterial color="#4c463f" roughness={0.94} metalness={0.06} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
         </mesh>
       </RigidBody>
-      <Grid
-        infiniteGrid
-        fadeDistance={34}
-        fadeStrength={2.4}
-        cellSize={20}
-        cellThickness={0.2}
-        cellColor="#5a544c"
-        sectionSize={40}
-        sectionThickness={1.05}
-        sectionColor="#8f8678"
-        position={[0, 0.012, 0]}
-      />
+      {hangar ? null : (
+        <Grid
+          infiniteGrid
+          fadeDistance={34}
+          fadeStrength={2.4}
+          cellSize={20}
+          cellThickness={0.2}
+          cellColor="#5a544c"
+          sectionSize={40}
+          sectionThickness={1.05}
+          sectionColor="#8f8678"
+          position={[0, 0.012, 0]}
+        />
+      )}
       {entities.map((e) =>
         e.kind === "can" ? (
           <AmmoCan key={e.id} id={e.id} pos={e.pos} />
@@ -271,6 +308,7 @@ function World() {
 export function BayCanvas() {
   const wrap = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
+  const hangar = useBay((s) => s.entities.some((e) => e.kind === "wheel"));
   useLayoutEffect(() => {
     const el = wrap.current;
     if (!el) return;
@@ -298,11 +336,11 @@ export function BayCanvas() {
           className="block h-full w-full touch-none"
           style={{ position: "absolute", inset: 0, width: box.w, height: box.h }}
           dpr={1}
-          shadows
+          shadows={!hangar}
           frameloop="always"
           camera={{ position: [3.4, 1.7, 3.6], fov: 42, near: 0.08, far: 2500 }}
           gl={{
-            antialias: true,
+            antialias: !hangar,
             alpha: false,
             preserveDrawingBuffer: true,
             powerPreference: "default",
@@ -313,13 +351,14 @@ export function BayCanvas() {
             gl.toneMapping = THREE.ACESFilmicToneMapping;
             gl.toneMappingExposure = 1.42;
             gl.outputColorSpace = THREE.SRGBColorSpace;
-            gl.shadowMap.enabled = true;
+            gl.shadowMap.enabled = !hangar;
             gl.shadowMap.type = THREE.PCFSoftShadowMap;
             gl.setClearColor("#8a7c6a", 1);
             state.setSize(box.w, box.h);
           }}
         >
           <FitGl />
+          <KickFrames />
           <color attach="background" args={["#8a7c6a"]} />
           <fog attach="fog" args={["#8a7c6a", 90, 1400]} />
           <LabLook />

@@ -3,7 +3,7 @@ import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import type { Cook } from "@/lib/bay/cook";
 
-const N = 460;
+const N = 96;
 const dummy = new THREE.Object3D();
 const color = new THREE.Color();
 
@@ -49,7 +49,7 @@ export function JetFire({ cook, map }: { cook: () => Cook | undefined; map: THRE
     const frag = c.chem === "frag";
     if (c.phase === "boom" && lastPhase.current !== "boom") {
       boomFlash.current = frag ? 1.4 : 1;
-      const burst = frag ? 70 : 90;
+      const burst = frag ? 24 : 36;
       for (let i = 0; i < burst; i++) {
         const p = pool[cur.current++ % N];
         p.alive = true;
