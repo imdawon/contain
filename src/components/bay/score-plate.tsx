@@ -25,7 +25,8 @@ export function ScorePlate() {
   const camera = useThree((s) => s.camera);
 
   useFrame(() => {
-    const { score, snaps } = dummyScore(dummyId ?? undefined);
+    if (!dummyId) return;
+    const { score, snaps } = dummyScore(dummyId);
     if (score !== last.current) {
       last.current = score;
       const ctx = canvas.getContext("2d");
@@ -49,6 +50,8 @@ export function ScorePlate() {
     const dir = new THREE.Vector3(0, -0.38, -1.8).applyQuaternion(camera.quaternion);
     m.position.copy(camera.position).add(dir);
   });
+
+  if (!dummyId) return null;
 
   return (
     <mesh ref={mesh} renderOrder={20} frustumCulled={false}>

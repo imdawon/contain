@@ -8,8 +8,10 @@ import { useBay } from "@/store/bay-store";
 const INK = "labInk4";
 
 function injectInk(shader: { fragmentShader: string }) {
-  if (shader.fragmentShader.includes(INK)) return;
-  shader.fragmentShader = shader.fragmentShader
+  const src = shader.fragmentShader;
+  if (src.includes(INK)) return;
+  if (!src.includes("#include <normal_fragment_maps>") || !src.includes("#include <opaque_fragment>")) return;
+  shader.fragmentShader = src
     .replace(
       "#include <normal_fragment_maps>",
       `#include <normal_fragment_maps>
@@ -63,12 +65,13 @@ export function LabLook() {
     const prevCompile = proto.onBeforeCompile;
     const prevKey = proto.customProgramCacheKey;
     proto.onBeforeCompile = function (shader, renderer) {
-      prevCompile.call(this, shader, renderer);
+      if (typeof prevCompile === "function") prevCompile.call(this, shader, renderer);
       if (this.userData?.labSkip) return;
       injectInk(shader);
     };
     proto.customProgramCacheKey = function () {
-      return prevKey.call(this) + (this.userData?.labSkip ? "|lab-skip" : `|${INK}`);
+      const base = typeof prevKey === "function" ? prevKey.call(this) : "";
+      return base + (this.userData?.labSkip ? "|lab-skip" : `|${INK}`);
     };
     return () => {
       proto.onBeforeCompile = prevCompile;
@@ -80,7 +83,7 @@ export function LabLook() {
   const stageN = useBay((s) => s.stageN);
   const nEnt = useBay((s) => s.entities.length);
   useLayoutEffect(() => {
-    gl.shadowMap.enabled = true;
+    gl.shadowMap.enabled = false;
     scene.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (!mesh.isMesh) return;
@@ -91,53 +94,18 @@ export function LabLook() {
       }
       if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
       const span = (mesh.geometry.boundingSphere?.radius ?? 1) * 2 * Math.max(mesh.scale.x, mesh.scale.y, mesh.scale.z);
-      mesh.castShadow = span < 10;
-      mesh.receiveShadow = true;
+      // 800 m hangar floor receiving 2048² PCF shadows is what kills Chromium WebGL.
+      mesh.castShadow = span < 8;
+      mesh.receiveShadow = span < 16;
     });
   }, [scene, stageN, nEnt, gl]);
 
   const theme = useBay((s) => sceneTheme(s.scene));
   return (
     <>
-      <LabSky theme={theme} />
       {theme ? null : <HangarLamps />}
       <LabLights theme={theme} />
     </>
-  );
-}
-
-function LabSky({ theme }: { theme: ArenaTheme | null }) {
-  const geo = useMemo(() => {
-    const g = new THREE.SphereGeometry(420, 32, 20);
-    const n = g.attributes.position.count;
-    const col = new Float32Array(n * 3);
-    const pos = g.attributes.position;
-    const pal = theme ? ARENA_LOOK[theme] : null;
-    const nadir = pal ? pal.nadir : [0.28, 0.25, 0.22];
-    const horizon = pal ? pal.horizon : [0.62, 0.55, 0.46];
-    const zenith = pal ? pal.zenith : [0.86, 0.8, 0.7];
-    for (let i = 0; i < n; i++) {
-      const h = THREE.MathUtils.clamp((pos.getY(i) / 420) * 0.5 + 0.5, 0, 1);
-      const a = h < 0.46 ? h / 0.46 : (h - 0.46) / 0.54;
-      const from = h < 0.46 ? nadir : horizon;
-      const to = h < 0.46 ? horizon : zenith;
-      col[i * 3] = from[0] + (to[0] - from[0]) * a;
-      col[i * 3 + 1] = from[1] + (to[1] - from[1]) * a;
-      col[i * 3 + 2] = from[2] + (to[2] - from[2]) * a;
-    }
-    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
-    return g;
-  }, [theme]);
-  useLayoutEffect(
-    () => () => {
-      geo.dispose();
-    },
-    [geo],
-  );
-  return (
-    <mesh geometry={geo} frustumCulled={false} userData={{ labSkip: true }}>
-      <meshBasicMaterial vertexColors side={THREE.BackSide} depthWrite={false} depthTest={false} fog={false} toneMapped={false} />
-    </mesh>
   );
 }
 
@@ -188,8 +156,7 @@ function LabLights({ theme }: { theme: ArenaTheme | null }) {
         ref={light}
         intensity={theme ? ARENA_LOOK[theme].sunI : 3.4}
         color={theme ? ARENA_LOOK[theme].sunC : "#fff6e4"}
-        castShadow
-        shadow-mapSize={[2048, 2048]}
+        castShadow={false}
         shadow-bias={-0.00018}
         shadow-normalBias={0.03}
         shadow-camera-near={8}

@@ -146,10 +146,16 @@ export function useGrab(body: RefObject<RapierRigidBody | null>, id: string) {
     last.current.y += dy;
     last.current.z += dz;
     for (const m of crew.current) {
-      const rb = m.id === id ? b : listSamplers().get(m.id)?.getBody?.();
+      const rec = listSamplers().get(m.id);
+      const rb = m.id === id ? b : rec?.getBody?.();
       if (!rb) continue;
       const p = rb.translation();
-      rb.setNextKinematicTranslation({ x: p.x + dx, y: p.y + dy, z: p.z + dz });
+      const nx = p.x + dx;
+      const ny = p.y + dy;
+      const nz = p.z + dz;
+      rb.setNextKinematicTranslation({ x: nx, y: ny, z: nz });
+      const obj = rec?.getMesh?.()?.parent;
+      if (obj) obj.position.set(nx, ny, nz);
     }
   }
 

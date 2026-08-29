@@ -4,11 +4,14 @@ import { ensureFuseClock, tickFuse } from "@/lib/bay/blast";
 import { getLevel, levelCard } from "@/lib/bay/level";
 import { getRun, runCard } from "@/lib/bay/run";
 import { cooks } from "@/lib/bay/cook";
-import { loopLevels, playSlowMo } from "@/lib/contain/audio";
+import { loopLevels, playSlowMo, unlockAudio } from "@/lib/contain/audio";
+import { SFX } from "@/lib/contain/sfx";
+import { analyzePath } from "@/lib/bay/ride-stats";
 import {
   applyActor,
   assemblyMembers,
   listSamplers,
+  clearLog,
   log,
   note,
   probeTime,
@@ -17,10 +20,11 @@ import {
   type ProbeObject,
 } from "@/lib/bay/probe";
 import { useBay } from "@/store/bay-store";
+import * as THREE from "three";
 
 /** Pose log at 30 Hz (every other 60 Hz physics tick). 30s × 30 Hz × ~20 bodies is small. */
 const HZ = 30;
-const KEEP = 30;
+const KEEP = 90;
 const MAX_FRAMES = HZ * KEEP + 30;
 
 export type PoseSample = {
@@ -60,7 +64,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 66;
+const PIPE_GEN = 82;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -327,6 +331,76 @@ function dragTo(id: string, dest: { x?: number; y?: number; z?: number }, second
   return { ok: true, id, n: members.length, to: { x: x1, y: y1, z: z1 } };
 }
 
+function distStats(samples: { t: number; x: number; y: number; z: number }[]) {
+  const steps: number[] = [];
+  const dts: number[] = [];
+  for (let i = 1; i < samples.length; i++) {
+    const a = samples[i - 1]!;
+    const b = samples[i]!;
+    dts.push((b.t - a.t) / 1000);
+    steps.push(Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z));
+  }
+  const sorted = steps.slice().sort((a, b) => a - b);
+  const mid = sorted[Math.floor(sorted.length / 2)] ?? 0;
+  const mean = steps.length ? steps.reduce((s, n) => s + n, 0) / steps.length : 0;
+  const big = steps.filter((n) => n > mean * 2.5 && n > 0.04).length;
+  return {
+    n: samples.length,
+    meanDt: dts.length ? dts.reduce((s, n) => s + n, 0) / dts.length : 0,
+    meanStep: mean,
+    medianStep: mid,
+    maxStep: sorted.at(-1) ?? 0,
+    jumps: big,
+  };
+}
+
+/** rAF xyz while a kinematic drag runs. Physics vs interpolated mesh. */
+async function traceDrag(id: string, dest: { x?: number; y?: number; z?: number }, seconds = 0.8) {
+  const started = dragTo(id, dest, seconds);
+  const t0 = performance.now();
+  const physics: { t: number; x: number; y: number; z: number }[] = [];
+  const mesh: { t: number; x: number; y: number; z: number }[] = [];
+  const cam: { t: number; x: number; y: number; z: number }[] = [];
+  const rec = listSamplers().get(id);
+  await new Promise<void>((resolve) => {
+    const tick = () => {
+      try {
+        (window as unknown as { __bayKick?: () => void }).__bayKick?.();
+      } catch {
+        /* hidden tab */
+      }
+      const now = performance.now() - t0;
+      const b = rec?.getBody?.();
+      const p = b?.translation();
+      if (p) physics.push({ t: now, x: p.x, y: p.y, z: p.z });
+      const obj = rec?.getMesh?.();
+      if (obj) {
+        obj.updateWorldMatrix(true, false);
+        const wp = obj.getWorldPosition(new THREE.Vector3());
+        mesh.push({ t: now, x: wp.x, y: wp.y, z: wp.z });
+      }
+      const c = snapshot().camera;
+      if (c) cam.push({ t: now, x: c.x, y: c.y, z: c.z });
+      if (now >= seconds * 1000 + 80) {
+        clearInterval(iv);
+        resolve();
+      }
+    };
+    const iv = window.setInterval(tick, 16);
+    tick();
+  });
+  return {
+    started,
+    physics: distStats(physics),
+    mesh: distStats(mesh),
+    cam: distStats(cam),
+    sample: {
+      phys: physics.filter((_, i) => i % 4 === 0).slice(0, 20),
+      mesh: mesh.filter((_, i) => i % 4 === 0).slice(0, 20),
+    },
+  };
+}
+
 function nudge(id: string, d: { x?: number; y?: number; z?: number }) {
   const now = pose(id);
   if (!now) return { ok: false, reason: "no-body" as const, id };
@@ -373,6 +447,21 @@ export function effects(id: string, seconds = KEEP) {
   };
 }
 
+export function analyze(id?: string, seconds = KEEP) {
+  const storeId = id && id.length ? id : peek().objects.find((o) => o.kind === "wheel")?.id;
+  if (!storeId) return { id: null, samples: 0, anomalies: [{ t: 0, kind: "nan" as const, detail: "no-body" }] };
+  const path = history(seconds)
+    .filter((f) => f.o[storeId])
+    .map((f) => ({ t: f.t, ...f.o[storeId]! }));
+  const report = analyzePath(storeId, path);
+  const since = probeTime() - seconds;
+  const events = log()
+    .filter((e) => e.t >= since && (e.data.id === storeId || e.type === "contact"))
+    .slice(-80)
+    .map((e) => ({ t: e.t, type: e.type, ...e.data }));
+  return { ...report, events };
+}
+
 export function peek() {
   const store = useBay.getState();
   const s = snapshot();
@@ -399,6 +488,7 @@ export function peek() {
     spin: number;
     meshRim: string | number | boolean | null;
     dish: string | number | boolean | null;
+    grounded: string | number | boolean | null;
     mass: number | null;
     Iy: number | null;
     wx: number;
@@ -454,6 +544,7 @@ export function peek() {
       rim: p.state?.rim ?? null,
       meshRim: p.state?.meshRim ?? null,
       dish: p.state?.dish ?? null,
+      grounded: p.state?.grounded ?? null,
       kin,
       spin,
       mass,
@@ -618,17 +709,14 @@ async function tape(scene?: unknown, ms = 0) {
       /* kick is best-effort */
     }
   };
-  const grab = () => {
-    const c = liveCanvas() ?? (document.querySelector("canvas") instanceof HTMLCanvasElement ? (document.querySelector("canvas") as HTMLCanvasElement) : null);
-    if (!c) return;
-    try {
-      const gl = c.getContext("webgl2") || c.getContext("webgl");
-      gl?.finish();
-      const data = c.toDataURL("image/jpeg", 0.52);
-      if (data.startsWith("data:image")) frames.push(data);
-    } catch {
-      /* context lost */
-    }
+  const grab = async () => {
+    const w = window as unknown as { __bayWantGrab?: boolean; __bayGrabData?: string | null };
+    w.__bayGrabData = null;
+    w.__bayWantGrab = true;
+    kick();
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    const data = w.__bayGrabData;
+    if (data && data.startsWith("data:image")) frames.push(data);
   };
   const yieldPaint = () =>
     new Promise<void>((resolve) => {
@@ -644,11 +732,17 @@ async function tape(scene?: unknown, ms = 0) {
       requestAnimationFrame(() => finish());
     });
   clearHist();
+  clearLog();
   const staged = scene != null && scene !== "" ? await restageScene(scene) : { ok: true, id: null };
+  try {
+    unlockAudio();
+  } catch {
+    /* hidden tab */
+  }
   await waitFrames(350);
   kick();
   await yieldPaint();
-  grab();
+  await grab();
   const setSlow = (on: boolean) => {
     if (useBay.getState().slowMo === on) return;
     useBay.getState().toggleSlowMo();
@@ -664,14 +758,38 @@ async function tape(scene?: unknown, ms = 0) {
   let floorAt = 0;
   let slowAt = 0;
   let slowOff = 0;
+  let contactN = 0;
+  const contacts: { tMs: number; impulse: number; closing: number; id: string | null; otherMass: number | null }[] = [];
+  const speedHz: number[] = [];
+  const groundedHz: number[] = [];
   const hangar = Boolean(useBay.getState().entities.some((e) => e.kind === "ramp"));
   const cap = hangar ? hard : Math.min(hard, 14000);
+  const t0Probe = probeTime();
   while (performance.now() - t0 < cap) {
     const tick0 = performance.now();
     kick();
     await yieldPaint();
-    grab();
+    await grab();
     const snap = peek();
+    const wheel = snap.objects.find((o) => o.kind === "wheel");
+    speedHz.push(wheel ? wheel.speed : 0);
+    groundedHz.push(wheel && Number(wheel.grounded) > 0 ? 1 : 0);
+    const cons = log().filter((e) => e.type === "contact");
+    if (cons.length > contactN) {
+      const tHit = Math.round(performance.now() - t0);
+      for (let i = contactN; i < cons.length && contacts.length < SFX.hit.max; i++) {
+        const e = cons[i]!;
+        const eventMs = typeof e.t === "number" ? Math.round((e.t - t0Probe) * 1000) : tHit;
+        contacts.push({
+          tMs: Math.max(0, eventMs),
+          impulse: typeof e.data.impulse === "number" ? e.data.impulse : 0,
+          closing: typeof e.data.closing === "number" ? e.data.closing : 0,
+          id: typeof e.data.id === "string" ? e.data.id : null,
+          otherMass: typeof e.data.otherMass === "number" ? e.data.otherMass : null,
+        });
+      }
+      contactN = cons.length;
+    }
     if (hangar) {
       const w = snap.objects.find((o) => o.kind === "wheel");
       const onFloor = Boolean(w && w.z > 1480 && w.y < 8);
@@ -701,7 +819,7 @@ async function tape(scene?: unknown, ms = 0) {
   setSlow(false);
   kick();
   await yieldPaint();
-  grab();
+  await grab();
   return {
     ok: frames.length > 2,
     w: W,
@@ -711,6 +829,11 @@ async function tape(scene?: unknown, ms = 0) {
     restage: staged,
     slowAtMs: slowAt || null,
     slowOffMs: slowOff || null,
+    contacts,
+    speedHz,
+    groundedHz,
+    hitsMs: contacts.map((c) => c.tMs),
+    durationMs: Math.round(performance.now() - t0),
     frames,
   };
 }
@@ -720,8 +843,9 @@ export function help() {
     peek: "compact stage: objects xyz/speed + recent events + toy hinge loads",
     snapshot: "full probe snap",
     log: "event list",
-    history: "(seconds=30) pose+velocity ring at 30Hz (every other 60Hz tick); events ride on the same frames",
-    effects: "(id, seconds=30) path + events for one body",
+    history: "(seconds=90) pose+velocity ring at 30Hz; events ride on the same frames",
+    effects: "(id, seconds=90) path + events for one body",
+    analyze: "(id?) 30Hz mean/median/stdev + teleport/spin flags for a body (default wheel)",
     ui: "DOM controls with data-bay",
     click: "(name, value?) click [data-bay=name]; selects need a value (track id, solid shape)",
     camera: "snapshot().camera xyz + look",
@@ -745,6 +869,7 @@ export function help() {
     apply: "(id, patch)",
     hold: "(id) kinematic grab in place",
     drag: "(id, {x,y,z}, seconds=0.35)",
+    traceDrag: "(id, {x,y,z}, seconds=0.8) rAF xyz of physics vs mesh vs camera",
     nudge: "(id, {x,y,z}) relative",
     fling: "(id, {x,y,z}) set velocity",
     drop: "(id) dynamic",
@@ -767,6 +892,7 @@ export function harnessApi() {
     dump: () => JSON.stringify(snapshot()),
     history,
     effects,
+    analyze,
     ui: listUi,
     click: clickUi,
     camera: () => snapshot().camera,
@@ -810,23 +936,38 @@ export function harnessApi() {
     apply: applyActor,
     hold,
     drag: dragTo,
+    traceDrag,
     nudge,
     fling,
     drop,
     until,
     wait: waitFrames,
     note,
-    shot: () => {
-      const canvas = document.querySelector("canvas");
-      if (!(canvas instanceof HTMLCanvasElement) || canvas.width < 8 || canvas.height < 8) {
-        return { ok: false, reason: "no-canvas" };
+    shot: async () => {
+      const all = [...document.querySelectorAll("canvas")].filter(
+        (el): el is HTMLCanvasElement => el instanceof HTMLCanvasElement && el.width >= 64 && el.height >= 64,
+      );
+      all.sort((a, b) => b.width * b.height - a.width * a.height);
+      const canvas = all[0];
+      if (!canvas) return { ok: false, reason: "no-canvas" };
+      const w = window as unknown as { __bayWantGrab?: boolean; __bayGrabData?: string | null };
+      w.__bayGrabData = null;
+      w.__bayWantGrab = true;
+      try {
+        (window as unknown as { __bayKick?: () => void }).__bayKick?.();
+      } catch {
+        /* kick */
       }
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       return {
         ok: true,
         w: canvas.width,
         h: canvas.height,
+        cw: canvas.clientWidth,
+        ch: canvas.clientHeight,
+        n: all.length,
         mime: "image/jpeg",
-        data: canvas.toDataURL("image/jpeg", 0.62),
+        data: w.__bayGrabData ?? "",
       };
     },
     tape,
