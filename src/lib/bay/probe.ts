@@ -1,4 +1,5 @@
 import type { RapierRigidBody } from "@react-three/rapier";
+import type { Object3D } from "three";
 import { coilInertia, drumInertia } from "./parts";
 
 export type Vec3 = [number, number, number];
@@ -80,6 +81,7 @@ type Actor = {
   kind: string;
   sample: Sampler;
   getBody?: () => RapierRigidBody | null | undefined;
+  getMesh?: () => Object3D | null | undefined;
 };
 
 const g = globalThis as unknown as {
@@ -128,12 +130,17 @@ export function registerBody(
   kind: string,
   sample: Sampler,
   getBody?: () => RapierRigidBody | null | undefined,
+  getMesh?: () => Object3D | null | undefined,
 ) {
-  actors.set(id, { kind, sample, getBody });
+  actors.set(id, { kind, sample, getBody, getMesh });
 }
 
 export function unregisterBody(id: string) {
   actors.delete(id);
+}
+
+export function actorMesh(id: string) {
+  return actors.get(id)?.getMesh?.() ?? null;
 }
 
 export function findActorBody(kind: string) {

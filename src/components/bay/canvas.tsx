@@ -24,11 +24,13 @@ import { isSolid } from "@/store/bay-store";
 import { ProbeTick } from "@/components/bay/probe-tick";
 import { FLOOR } from "@/lib/bay/parts";
 import { CRATE_G, DUMMY_G, WAGON_G, WORLD_G } from "@/lib/bay/groups";
-import { listSamplers } from "@/lib/bay/probe";
+import { actorMesh, listSamplers } from "@/lib/bay/probe";
 import { useBay } from "@/store/bay-store";
 import { LabLook } from "@/components/bay/look";
 import { Arena, ArenaLook } from "@/components/bay/arena";
 import { sceneGravity, sceneTheme } from "@/lib/bay/arena";
+
+const _trackP = new THREE.Vector3();
 
 function TrackCam({
   orbit,
@@ -46,6 +48,7 @@ function TrackCam({
   useEffect(() => {
     primed.current = false;
   }, [trackId, stageN]);
+  // After Rapier interpolate (priority 0). Raw translation() at -1 is one physics tick and skips.
   useFrame(() => {
     if (fov && "fov" in camera && camera.fov !== fov) {
       camera.fov = fov;
@@ -61,23 +64,44 @@ function TrackCam({
     const rec = listSamplers().get(trackId);
     const ent = rec ? null : useBay.getState().entities.find((e) => e.id === trackId);
     if (!rec && !ent) return;
-    const p = rec ? rec.sample() : { x: ent!.pos[0], y: ent!.pos[1], z: ent!.pos[2] };
+    const mesh = rec ? actorMesh(trackId) : null;
+    let x: number;
+    let y: number;
+    let z: number;
+    if (mesh) {
+      mesh.getWorldPosition(_trackP);
+      x = _trackP.x;
+      y = _trackP.y;
+      z = _trackP.z;
+    } else {
+      const p = rec ? rec.sample() : { x: ent!.pos[0], y: ent!.pos[1], z: ent!.pos[2] };
+      x = p.x;
+      y = p.y;
+      z = p.z;
+    }
     const controls = orbit.current;
     if (!controls) return;
     const t = controls.target;
     if (!primed.current) {
-      t.set(p.x, p.y, p.z);
-      if (offset) camera.position.set(p.x + offset[0], p.y + offset[1], p.z + offset[2]);
+      t.set(x, y, z);
+      if (offset) camera.position.set(x + offset[0], y + offset[1], z + offset[2]);
       primed.current = true;
       camera.updateMatrixWorld();
       return;
     }
-    camera.position.x += p.x - t.x;
-    camera.position.y += p.y - t.y;
-    camera.position.z += p.z - t.z;
-    t.set(p.x, p.y, p.z);
+    camera.position.x += x - t.x;
+    camera.position.y += y - t.y;
+    camera.position.z += z - t.z;
+    t.set(x, y, z);
     camera.updateMatrixWorld();
-  }, -1);
+  }, 1);
+  return null;
+}
+
+function Present() {
+  useFrame(({ gl, scene, camera }) => {
+    gl.render(scene, camera);
+  }, 10);
   return null;
 }
 
@@ -105,15 +129,13 @@ function KickFrames() {
         lastRaf.current = performance.now();
       }
     };
-    if (hangar) return () => {
-      if (g.__bayKick) delete g.__bayKick;
-    };
     const id = window.setInterval(() => {
       const now = performance.now();
       const hidden = typeof document !== "undefined" && document.hidden;
-      if (!hidden && now - lastRaf.current < 80) return;
+      if (!hidden) return;
+      if (now - lastRaf.current < 80) return;
       g.__bayKick?.();
-    }, 20);
+    }, 50);
     return () => {
       window.clearInterval(id);
       if (g.__bayKick) delete g.__bayKick;
@@ -132,6 +154,46 @@ function SlowMoDriver() {
   return null;
 }
 
+
+type GrabWin = Window & {
+  __bayWantGrab?: boolean;
+  __bayGrabData?: string | null;
+};
+
+function GlHooks({ onLost }: { onLost: () => void }) {
+  const gl = useThree((s) => s.gl);
+  const lostRef = useRef(onLost);
+  lostRef.current = onLost;
+  useLayoutEffect(() => {
+    const canvas = gl.domElement;
+    const g = gl as THREE.WebGLRenderer & { __bayGrabWrap?: boolean };
+    if (!g.__bayGrabWrap) {
+      g.__bayGrabWrap = true;
+      const orig = g.render.bind(g);
+      g.render = ((scene: THREE.Object3D, camera: THREE.Camera) => {
+        orig(scene, camera);
+        const w = window as GrabWin;
+        if (!w.__bayWantGrab) return;
+        try {
+          w.__bayGrabData = canvas.toDataURL("image/jpeg", 0.52);
+        } catch {
+          w.__bayGrabData = null;
+        }
+        w.__bayWantGrab = false;
+      }) as typeof g.render;
+    }
+    const lost = (ev: Event) => {
+      ev.preventDefault();
+      lostRef.current();
+    };
+    canvas.addEventListener("webglcontextlost", lost, false);
+    return () => {
+      canvas.removeEventListener("webglcontextlost", lost, false);
+    };
+  }, [gl]);
+  return null;
+}
+
 function FitGl() {
   const gl = useThree((s) => s.gl);
   const setSize = useThree((s) => s.setSize);
@@ -143,7 +205,7 @@ function FitGl() {
       const w = parent.clientWidth;
       const h = parent.clientHeight;
       if (w < 2 || h < 2) return;
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      const dpr = 1;
       if (canvas.width === Math.floor(w * dpr) && canvas.height === Math.floor(h * dpr)) return;
       gl.setPixelRatio(dpr);
       setSize(w, h);
@@ -151,10 +213,8 @@ function FitGl() {
     apply();
     const ro = new ResizeObserver(apply);
     ro.observe(parent);
-    const iv = window.setInterval(apply, 250);
     return () => {
       ro.disconnect();
-      window.clearInterval(iv);
     };
   }, [gl, setSize]);
   return null;
@@ -237,13 +297,14 @@ function World() {
     <Physics key={stageN} gravity={sceneGravity(scene)} timeStep={slowMo ? "vary" : 1 / 60} paused={slowMo} interpolate numSolverIterations={24} numInternalPgsIterations={12} maxCcdSubsteps={1}>
       <SlowMoDriver />
       <TrackCam orbit={orbit} />
+      <Present />
       <ProbeTick />
       <BlastBus />
       {scene ? <SceneRig key={`${scene.id}-${stageN}`} scene={scene} /> : null}
       <RigidBody type="fixed" colliders={false} friction={0.95} restitution={0}>
         <CuboidCollider args={[FLOOR.half, 0.25, FLOOR.half]} position={[0, -0.25, 0]} collisionGroups={interactionGroups([WORLD_G], [WORLD_G, DUMMY_G, CRATE_G, WAGON_G])} />
         {garden ? null : (
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow={false} castShadow={false}>
             <planeGeometry args={[FLOOR.half * 2, FLOOR.half * 2]} />
             <meshStandardMaterial color="#4c463f" roughness={0.94} metalness={0.06} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
           </mesh>
@@ -307,7 +368,7 @@ function World() {
         maxDistance={hangar ? 2500 : 80}
         maxPolarAngle={1.48}
         target={[0, 0.7, 0.55]}
-        enableDamping
+        enableDamping={!tracking}
         dampingFactor={0.08}
       />
     </Physics>
@@ -318,6 +379,8 @@ function World() {
 export function BayCanvas() {
   const wrap = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ w: 1800, h: 1280 });
+  const [glGen, setGlGen] = useState(0);
+  const lastLost = useRef(0);
   useLayoutEffect(() => {
     const el = wrap.current;
     if (!el) return;
@@ -329,10 +392,8 @@ export function BayCanvas() {
     mark();
     const ro = new ResizeObserver(mark);
     ro.observe(el);
-    const iv = window.setInterval(mark, 250);
     return () => {
       ro.disconnect();
-      window.clearInterval(iv);
     };
   }, []);
   const ready = box.w > 8 && box.h > 8;
@@ -341,16 +402,17 @@ export function BayCanvas() {
     <div ref={wrap} className="lab-stage absolute inset-0 h-full w-full">
       {ready ? (
         <Canvas
+          key={glGen}
           className="block h-full w-full touch-none"
           style={{ position: "absolute", inset: 0, width: box.w, height: box.h }}
-          dpr={[1, 1.5]}
-          shadows
+          dpr={1}
+          shadows={false}
           frameloop="always"
           camera={{ position: [3.4, 1.7, 3.6], fov: 42, near: 0.08, far: 2500 }}
           gl={{
-            antialias: true,
+            antialias: false,
             alpha: false,
-            preserveDrawingBuffer: true,
+            preserveDrawingBuffer: false,
             powerPreference: "default",
             failIfMajorPerformanceCaveat: false,
           }}
@@ -359,12 +421,19 @@ export function BayCanvas() {
             gl.toneMapping = THREE.ACESFilmicToneMapping;
             gl.toneMappingExposure = 1.42;
             gl.outputColorSpace = THREE.SRGBColorSpace;
-            gl.shadowMap.enabled = true;
-            gl.shadowMap.type = THREE.PCFSoftShadowMap;
+            gl.shadowMap.enabled = false;
             gl.setClearColor("#8a7c6a", 1);
             state.setSize(box.w, box.h);
           }}
         >
+          <GlHooks
+            onLost={() => {
+              const now = performance.now();
+              if (now - lastLost.current < 2500) return;
+              lastLost.current = now;
+              setGlGen((n) => n + 1);
+            }}
+          />
           <FitGl />
           <KickFrames />
           <ArenaLook />

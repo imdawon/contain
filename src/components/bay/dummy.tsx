@@ -182,6 +182,7 @@ function Bone({
           kinematic: r.current ? r.current.isKinematic() : true,
         }),
       () => r.current,
+      () => mesh.current,
     );
     return () => unregisterBody(id);
   }, [id, r]);
@@ -198,7 +199,7 @@ function Bone({
     if (snap && mat.current && isSnapped(dummyId, snap)) {
       mat.current.color.setHex(snappedCol);
     }
-  });
+  }, 1);
 
   const [sx, sy, sz] = size;
   return (
