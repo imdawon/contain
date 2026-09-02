@@ -1,13 +1,17 @@
 /**
- * A nade locked onto the same wagon as the dummy is a carried charge.
- * Floor vs-runs still use planar range (dummy.tsx / blast.ts). This module
- * is only the ride: the seat holds him unless he is in the hang.
+ * Seat glue: dummy bones (or anything else) stay locked to a lead body
+ * until the dummy is hurt. Hang is only a pose hint, not the unglue gate.
  */
 const held = new Set<string>();
 let peakY = 0;
 
 export function holdRide(dummyId: string) {
   held.add(dummyId);
+}
+
+export function letGoRide(dummyId?: string) {
+  if (dummyId) held.delete(dummyId);
+  else held.clear();
 }
 
 export function resetRide() {

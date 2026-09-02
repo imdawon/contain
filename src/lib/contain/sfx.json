@@ -1,0 +1,31 @@
+{
+  "sr": 44100,
+  "roll": {
+    "dead": 0.35,
+    "full": 36,
+    "hiss": 0.04,
+    "tone": 0.07,
+    "lp": 0.03,
+    "liveHiss": 0.01,
+    "liveRoar": 0.26
+  },
+  "hit": {
+    "minImpulse": 0.01,
+    "minClosing": 0.5,
+    "slamClosing": 8,
+    "refImpulse": 800,
+    "refClosing": 14,
+    "debounceMs": 70,
+    "max": 80
+  },
+  "bang": {
+    "dur": 0.24,
+    "durTap": 0.07,
+    "f0": 32,
+    "f1": 54,
+    "fTap": 92,
+    "fTapHi": 170,
+    "noise": 0.04,
+    "gain": 0.42
+  }
+}

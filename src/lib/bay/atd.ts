@@ -1,4 +1,5 @@
 import { note, probeTime } from "@/lib/bay/probe";
+import { useBay } from "@/store/bay-store";
 
 /**
  * Toy Hybrid III 50th names mapped onto the 1-axis hinges we already have.
@@ -49,16 +50,18 @@ export const SNAP_N: Record<HingeId, number> = {
 type Peak = { mag: number; n: number; noted: boolean };
 
 const g = globalThis as unknown as {
-  __bayLoads?: { peaks: Map<string, Peak>; until: number; snaps: Set<string>; snapAt: Map<string, number> };
+  __bayLoads?: { peaks: Map<string, Peak>; until: number; snaps: Set<string>; snapAt: Map<string, number>; hurt: Set<string> };
 };
 const store = (g.__bayLoads ??= {
   peaks: new Map<string, Peak>(),
   until: 0,
   snaps: new Set<string>(),
   snapAt: new Map<string, number>(),
+  hurt: new Set<string>(),
 });
 if (!store.snaps) store.snaps = new Set<string>();
 if (!store.snapAt) store.snapAt = new Map<string, number>();
+if (!store.hurt) store.hurt = new Set<string>();
 
 function key(dummyId: string, hinge: string) {
   return `${dummyId}:${hinge}`;
@@ -81,6 +84,7 @@ export function resetAllInjury() {
   store.peaks.clear();
   store.snaps.clear();
   store.snapAt.clear();
+  store.hurt.clear();
   store.until = 0;
 }
 
@@ -88,6 +92,7 @@ export function resetInjury(dummyId: string) {
   resetLoads(dummyId);
   for (const id of HINGE_IDS) store.snaps.delete(key(dummyId, id));
   store.snapAt.delete(dummyId);
+  store.hurt.delete(dummyId);
 }
 
 /** Ignore spawn-frame joint spikes. Snap after this many seconds. */
@@ -131,6 +136,7 @@ export function toyJointImpulse(joint: JointLike): number {
 }
 
 export function sampleHinge(dummyId: string, hinge: HingeId, mag: number) {
+  if (!useBay.getState().playing) return;
   if (!Number.isFinite(mag) || mag <= 0) return;
   const k = key(dummyId, hinge);
   const prev = store.peaks.get(k) ?? { mag: 0, n: 0, noted: false };
@@ -167,12 +173,29 @@ export function sampleContact(dummyId: string, hinge: HingeId, mag: number) {
 }
 
 export function sampleImpact(dummyId: string, mag: number) {
+  if (!useBay.getState().playing) return;
   if (!Number.isFinite(mag) || mag <= 0.4) return;
   const k = key(dummyId, "impact");
   const prev = store.peaks.get(k) ?? { mag: 0, n: 0, noted: false };
   prev.n += 1;
   if (mag > prev.mag) prev.mag = mag;
   store.peaks.set(k, prev);
+  if (mag >= 18) markHurt(dummyId);
+}
+
+export function isHurt(dummyId: string) {
+  return store.hurt.has(dummyId);
+}
+
+/** First real injury after the spawn gate. Seat glue listens to this. */
+export function markHurt(dummyId: string) {
+  if (!useBay.getState().playing) return false;
+  const gated = store.snapAt.get(dummyId);
+  if (gated == null || probeTime() < gated) return false;
+  if (store.hurt.has(dummyId)) return false;
+  store.hurt.add(dummyId);
+  note("dummy-hurt", { id: dummyId });
+  return true;
 }
 
 export function isSnapped(dummyId: string, hinge: HingeId) {
@@ -181,12 +204,14 @@ export function isSnapped(dummyId: string, hinge: HingeId) {
 
 /** First frame the load clears the toy snap line. */
 export function takeSnap(dummyId: string, hinge: HingeId, mag: number) {
+  if (!useBay.getState().playing) return false;
   const gated = store.snapAt.get(dummyId);
   if (gated == null || probeTime() < gated) return false;
   if (!Number.isFinite(mag) || mag < SNAP_N[hinge]) return false;
   const k = key(dummyId, hinge);
   if (store.snaps.has(k)) return false;
   store.snaps.add(k);
+  markHurt(dummyId);
   note("joint-snap", {
     id: dummyId,
     hinge,

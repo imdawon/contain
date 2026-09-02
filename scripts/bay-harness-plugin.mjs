@@ -47,20 +47,45 @@ export function bayHarnessPlugin() {
       }
 
       function rank(t) {
-        return (t.paint ? 10000 : 0) + (t.bot ? -8000 : 0) + (t.vis === "visible" ? 1000 : 0) + (t.nobj || 0);
+        return (t.paint ? 10000 : 0) + (t.bot ? -8000 : 0) + (t.vis === "visible" ? 1000 : 0) + (Number(t.gen) || 0) * 50 + (t.nobj || 0);
       }
 
-      function pickBest(replies) {
+      let lastScene = null;
+
+      function sceneOf(r) {
+        const v = r && r.value ? r.value : r;
+        return (v && (v.scene && v.scene.id || v.scene || v.id || (v.level && v.level.id) || v.levelId)) || null;
+      }
+
+      function wantedScene(job) {
+        if (!job) return lastScene;
+        if (job.fn === "restage") {
+          const a = job.args && job.args[0];
+          if (typeof a === "string" && a.length) return a;
+          if (a && typeof a === "object" && a.id) return a.id;
+        }
+        if (job.fn === "run" || job.fn === "load") {
+          const a = job.args && job.args[0];
+          if (typeof a === "string" && a.length) return a;
+        }
+        return lastScene;
+      }
+
+      function pickBest(replies, prefer) {
         const live = (replies || []).filter((r) => r && !r.skipped);
         if (!live.length) return replies?.[0] ?? { error: "no-taker", value: null };
         live.sort((a, b) => {
+          const sa = sceneOf(a);
+          const sb = sceneOf(b);
+          const ma = prefer && sa === prefer ? 1 : 0;
+          const mb = prefer && sb === prefer ? 1 : 0;
           const pa = a.paint || a.value?.paint ? 1 : 0;
           const pb = b.paint || b.value?.paint ? 1 : 0;
           const na = Number(a.nobj ?? a.value?.objects?.length ?? a.value?.n ?? 0);
           const nb = Number(b.nobj ?? b.value?.objects?.length ?? b.value?.n ?? 0);
           const oa = a.error ? 0 : 1;
           const ob = b.error ? 0 : 1;
-          return ob - oa || pb - pa || nb - na;
+          return mb - ma || ob - oa || pb - pa || nb - na;
         });
         return live[0];
       }
@@ -70,8 +95,11 @@ export function bayHarnessPlugin() {
         job.status = "done";
         jobs.delete(job.id);
         clearTimeout(job.timer);
+        const prefer = wantedScene(job);
         let payload =
-          job.expect > 1 ? pickBest(job.replies) : job.replies[0] || fallback || { error: "timeout", value: null };
+          job.expect > 1 ? pickBest(job.replies, prefer) : job.replies[0] || fallback || { error: "timeout", value: null };
+        const sid = sceneOf(payload);
+        if ((job.fn === "restage" || job.fn === "run" || job.fn === "load") && sid) lastScene = sid;
         if (job.expect > 1 && job.fn === "peek") {
           const all = (job.replies || []).map((r) => {
             const v = r && r.value ? r.value : r;
@@ -115,7 +143,8 @@ export function bayHarnessPlugin() {
             continue;
           }
           const painted = takers.filter((t) => t.paint || t.vis === "visible");
-          const pool = painted.length ? painted : takers;
+          const fresh = takers.filter((t) => (Number(t.gen) || 0) >= 90);
+          const pool = painted.length ? painted : fresh.length ? fresh : takers;
           pool.sort((a, b) => rank(b) - rank(a));
           const best = pool[0];
           const i = takers.indexOf(best);
@@ -224,7 +253,7 @@ export function bayHarnessPlugin() {
               }
               const args = Array.isArray(body.args) ? body.args : [];
               const waitMs = Math.min(240000, Number(body.waitMs) || 20000);
-              const id = `c${++seq}`;
+              const id = `c${Date.now().toString(36)}${++seq}`;
               const payload = await new Promise((resolve) => {
                 const timer = setTimeout(() => {
                   const job = jobs.get(id);
@@ -257,7 +286,7 @@ export function bayHarnessPlugin() {
   };
 }
 
-const FANOUT = new Set(["restage", "run", "load", "reset", "next", "peek"]);
+const FANOUT = new Set(["restage", "run", "load", "reset", "next", "peek", "boot", "reload"]);
 
 /** @typedef {{ id: string, fn: string, args: unknown[], waitMs?: number, status: "open" | "out" | "done", resolve: (v: { value?: unknown, error?: string | null }) => void, timer: NodeJS.Timeout, replies: unknown[], expect: number }} Job */
 /** @typedef {{ res: import("node:http").ServerResponse, timer: NodeJS.Timeout, vis: string, nobj: number, paint: boolean, bot: boolean }} Taker */
@@ -308,6 +337,37 @@ if (!(g.__bayPipeCtl && !g.__bayPipeCtl.signal.aborted)) {
   };
   const run = async (fn, args) => {
     const api = g.__bay;
+    if (fn === "orbit") {
+      const canvas = [...document.querySelectorAll("canvas")].find((el) => el.width >= 64 && el.height >= 64);
+      if (!canvas) return { error: "no-canvas" };
+      const dx = Number((args && args[0]) != null ? args[0] : 320) || 320;
+      const dy = Number((args && args[1]) != null ? args[1] : 40) || 0;
+      const r = canvas.getBoundingClientRect();
+      const x0 = (r.width > 8 ? r.left + r.width * 0.5 : canvas.width * 0.5);
+      const y0 = (r.height > 8 ? r.top + r.height * 0.42 : canvas.height * 0.42);
+      const fire = (type, x, y, target, up) => {
+        const common = { bubbles: true, cancelable: true, composed: true, view: window, clientX: x, clientY: y, screenX: x, screenY: y, button: 0, buttons: up ? 0 : 1 };
+        target.dispatchEvent(new PointerEvent(type, { ...common, pointerId: 1, pointerType: "mouse", isPrimary: true }));
+        const mouseType = type === "pointerdown" ? "mousedown" : type === "pointerup" ? "mouseup" : type === "pointermove" ? "mousemove" : null;
+        if (mouseType) target.dispatchEvent(new MouseEvent(mouseType, common));
+      };
+      const before = api && typeof api.camera === "function" ? api.camera() : null;
+      fire("pointerdown", x0, y0, canvas, false);
+      for (let i = 1; i <= 12; i++) {
+        const mx = x0 + (dx * i) / 12;
+        const my = y0 + (dy * i) / 12;
+        fire("pointermove", mx, my, canvas, false);
+        fire("pointermove", mx, my, document, false);
+      }
+      fire("pointerup", x0 + dx, y0 + dy, document, true);
+      try { g.__bayKick && g.__bayKick(); } catch (e) {}
+      const after = api && typeof api.camera === "function" ? api.camera() : null;
+      return { value: { ok: true, dx, dy, before, after } };
+    }
+    if (fn === "boot") {
+      location.reload();
+      return { value: { ok: true, boot: true } };
+    }
     if (!api || typeof api[fn] !== "function") return { error: "no-fn:" + fn };
     try {
       const value = await api[fn](...(args || []));
@@ -329,14 +389,15 @@ if (!(g.__bayPipeCtl && !g.__bayPipeCtl.signal.aborted)) {
         const msg = await r.json();
         if (!msg?.id) continue;
         const jobs = (g.__bayJobs ??= new Map());
-        let pending = jobs.get(msg.id);
+        const jobKey = String(msg.id) + ":" + String(msg.fn ?? "");
+        let pending = jobs.get(jobKey);
         if (!pending) {
           const cap = Math.min(240000, Number(msg.waitMs) || 16000);
           pending = Promise.race([
             run(String(msg.fn ?? ""), Array.isArray(msg.args) ? msg.args : []),
             new Promise((res) => setTimeout(() => res({ error: "run-timeout" }), cap)),
           ]);
-          jobs.set(msg.id, pending);
+          jobs.set(jobKey, pending);
           if (jobs.size > 80) {
             const first = jobs.keys().next().value;
             if (first && first !== msg.id) jobs.delete(first);
@@ -347,7 +408,7 @@ if (!(g.__bayPipeCtl && !g.__bayPipeCtl.signal.aborted)) {
         await fetch("/__bay/done", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ id: msg.id, ...out, paint: after.paint, nobj: after.nobj }),
+          body: JSON.stringify({ id: msg.id, ...out, paint: after.paint, nobj: after.nobj, gen: after.gen }),
         });
       } catch {
         if (ctl.signal.aborted) return;

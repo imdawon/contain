@@ -165,6 +165,8 @@ export function unregisterAssembly(group: string) {
 }
 
 export function assemblyMembers(id: string): string[] {
+  const direct = assemblies.get(id);
+  if (direct && direct.length) return direct;
   const group = memberOf.get(id);
   if (!group) return [id];
   return assemblies.get(group) ?? [id];
@@ -239,6 +241,30 @@ function placeBody(b: RapierRigidBody, x: number, y: number, z: number) {
     b.setNextKinematicTranslation({ x, y, z });
   }
   b.setTranslation({ x, y, z }, true);
+}
+
+/** Move every body in an assembly by a world delta (studio gizmo / axis grab). */
+export function translateAssembly(id: string, dx: number, dy: number, dz: number) {
+  if (dx === 0 && dy === 0 && dz === 0) return 0;
+  const crew = assemblyMembers(id);
+  let n = 0;
+  for (const mid of crew) {
+    const rec = actors.get(mid);
+    const b = rec?.getBody?.();
+    if (!b) continue;
+    const p = b.translation();
+    const nx = p.x + dx;
+    const ny = p.y + dy;
+    const nz = p.z + dz;
+    placeBody(b, nx, ny, nz);
+    b.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    b.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    const mesh = rec?.getMesh?.();
+    const obj = mesh?.parent ?? null;
+    if (obj) obj.position.set(nx, ny, nz);
+    n += 1;
+  }
+  return n;
 }
 
 export function applyActor(id: string, patch: ActorPatch) {

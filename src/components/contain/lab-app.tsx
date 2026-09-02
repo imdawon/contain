@@ -2,6 +2,7 @@ import { Component, lazy, Suspense, useEffect, useState, type ErrorInfo, type Re
 import { Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Inspector } from "@/components/contain/inspector";
+import { Studio } from "@/components/contain/studio";
 import { bindHarnessPipe, bindHarnessWindow, resetStage } from "@/lib/bay/harness";
 import { ensureFuseClock } from "@/lib/bay/blast";
 import { loadBay, loadRun, nextTrial, restageScene, saveBay } from "@/lib/bay/actions";
@@ -58,6 +59,10 @@ export function LabApp() {
   const scene = useBay((s) => s.scene);
   const stageN = useBay((s) => s.stageN);
   const inspect = useBay((s) => s.inspect);
+  const studio = useBay((s) => s.studio);
+  const setStudio = useBay((s) => s.setStudio);
+  const playing = useBay((s) => s.playing);
+  const setPlaying = useBay((s) => s.setPlaying);
   const run = runId ? getRun(runId) : null;
   const runLive = run ? runCard(run, trial) : null;
 
@@ -163,6 +168,7 @@ export function LabApp() {
       </section>
 
       {client && inspect ? <Inspector /> : null}
+      {client && studio ? <Studio /> : null}
 
       {runLive ? (
         <div className="pointer-events-none absolute inset-x-0 top-[5.5rem] z-10 px-4 text-center md:top-28">
@@ -195,6 +201,24 @@ export function LabApp() {
           >
             {latch}
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              const next = !studio;
+              setStudio(next);
+              if (next) {
+                setPlaying(false);
+                void import("@/lib/bay/studio").then((m) => useBay.getState().stampBlueprint(m.captureScene()));
+              }
+            }}
+            className={cn(
+              "grid h-11 place-items-center rounded-[var(--radius-sm)] border px-3 font-mono text-[11px] uppercase tracking-[0.14em]",
+              studio ? "border-fg bg-raised text-fg" : "border-border bg-surface text-muted hover:text-fg",
+            )}
+            data-bay="studio"
+          >
+            Studio
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -404,6 +428,18 @@ export function LabApp() {
             }}
           >
             {nadeOn ? "PULL PIN" : "PUNCTURE"}
+          </Button>
+          <Button
+            className="h-11 font-display text-lg tracking-[0.12em]"
+            data-bay="play"
+            disabled={playing}
+            onClick={() => {
+              void import("@/lib/bay/studio").then((m) => useBay.getState().stampBlueprint(m.captureScene()));
+              setPlaying(true);
+              note("play", { n: useBay.getState().entities.length });
+            }}
+          >
+            {playing ? "Playing" : "Play"}
           </Button>
           <button
             type="button"

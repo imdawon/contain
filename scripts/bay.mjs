@@ -3,6 +3,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
+import { writeScoreWav } from "./sfx-score.mjs";
 
 const base = (process.env.BAY_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
 const fn = process.argv[2];
@@ -81,8 +82,10 @@ if (fn === "reload") {
 let waitMs = 20000;
 if (fn === "until") waitMs = Math.max(waitMs, Number(args[1] || 8000) + 4000);
 if (fn === "tape") waitMs = 200000;
+let pipeFn = fn;
 let pipeArgs = args;
 let tapeDest = null;
+let writeDest = null;
 if (fn === "tape") {
   const scene = args[0];
   const maybeDest = typeof args[1] === "string" && /\.(webm|mp4)$/i.test(args[1]) ? args[1] : null;
@@ -90,10 +93,19 @@ if (fn === "tape") {
   tapeDest = maybeDest || "screenshots/bay-tape.webm";
   pipeArgs = [scene, ms].filter((x) => x !== undefined);
 }
+if (fn === "writeScene") {
+  const a0 = args[0];
+  const a1 = args[1];
+  const destArg = typeof a0 === "string" && /\.json$/i.test(a0) ? a0 : typeof a1 === "string" && /\.json$/i.test(a1) ? a1 : null;
+  const nameArg = destArg === a0 ? undefined : a0;
+  pipeFn = "exportScene";
+  pipeArgs = nameArg != null && nameArg !== "" ? [nameArg] : [];
+  writeDest = destArg;
+}
 const r = await fetch(`${base}/__bay`, {
   method: "POST",
   headers: { "content-type": "application/json" },
-  body: JSON.stringify({ fn, args: pipeArgs, waitMs }),
+  body: JSON.stringify({ fn: pipeFn, args: pipeArgs, waitMs }),
 });
 const text = await r.text();
 let out = text;
@@ -116,6 +128,7 @@ if (fn === "shot") {
     /* keep raw */
   }
 }
+
 
 function writeWhooshWav(path, reverse) {
   const sr = 44100;
@@ -191,6 +204,27 @@ if (fn === "tape") {
       );
       const slowAt = Number(val?.slowAtMs);
       const slowOff = Number(val?.slowOffMs);
+      const contacts = Array.isArray(val?.contacts)
+        ? val.contacts
+        : (Array.isArray(val?.hitsMs) ? val.hitsMs.map((n) => ({ tMs: Number(n), impulse: 800, closing: 12 })) : []);
+      const speedHz = Array.isArray(val?.speedHz) ? val.speedHz.map((n) => Number(n) || 0) : [];
+      const durationSec = Number(val?.durationMs) > 0 ? Number(val.durationMs) / 1000 : frames.length / 30;
+      const wantSteel = ff.status === 0 && !(Number.isFinite(slowAt) && slowAt > 0) && durationSec > 2;
+      if (wantSteel) {
+        const bed = join(dir, "steel-bed.wav");
+        const mixed = mp4.replace(/\.mp4$/i, ".a.mp4");
+        const groundedHz = Array.isArray(val?.groundedHz) ? val.groundedHz.map((n) => Number(n) > 0) : undefined;
+        writeScoreWav(bed, durationSec, speedHz, contacts, groundedHz);
+        const mix = spawnSync("ffmpeg", ["-y", "-i", mp4, "-i", bed, "-filter_complex", "[1:a]apad[a]", "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "128k", "-shortest", "-movflags", "+faststart", mixed], { encoding: "utf8" });
+        if (mix.status === 0 && existsSync(mixed)) {
+          writeFileSync(mp4, readFileSync(mixed));
+          rmSync(mixed, { force: true });
+          val.audio = true;
+        } else {
+          val.audio = false;
+          val.audioErr = (mix.stderr || mix.stdout || "").slice(-400);
+        }
+      }
       if (ff.status === 0 && Number.isFinite(slowAt) && slowAt > 0) {
         const inn = join(dir, "whoosh-in.wav");
         const outw = join(dir, "whoosh-out.wav");
@@ -230,6 +264,26 @@ if (fn === "tape") {
       val.n = frames.length;
       parsed.value = val;
       parsed.ok = false;
+      out = `${JSON.stringify(parsed)}\n`;
+    }
+  } catch {
+    /* keep raw */
+  }
+}
+if (fn === "writeScene") {
+  try {
+    const parsed = JSON.parse(out);
+    const val = parsed.value && typeof parsed.value === "object" ? parsed.value : parsed;
+    const scene = val && val.scene && typeof val.scene === "object" ? val.scene : null;
+    if (scene && typeof scene.id === "string") {
+      const dest = resolve(writeDest || `public/scenes/${scene.id}.json`);
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(dest, `${JSON.stringify(scene, null, 2)}\n`);
+      val.file = dest;
+      val.n = Array.isArray(scene.entities) ? scene.entities.length : 0;
+      delete val.json;
+      parsed.value = val;
+      parsed.ok = parsed.ok !== false;
       out = `${JSON.stringify(parsed)}\n`;
     }
   } catch {

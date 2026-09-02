@@ -1,0 +1,207 @@
+{
+  "id": "dismount",
+  "name": "Dismount",
+  "blurb": "Dummy glued to a wagon. Hill, lip, boom, ragdoll into drums. POINTS is the sport.",
+  "file": "scenes/dismount.json",
+  "select": "grenade",
+  "inspect": false,
+  "track": {
+    "ref": "dummy-chest"
+  },
+  "cam": {
+    "offset": [
+      0.0,
+      1.55,
+      -4.6
+    ],
+    "look": [
+      0.0,
+      0.15,
+      2.2
+    ],
+    "fov": 52
+  },
+  "airborne": {
+    "minY": 2.0,
+    "minZ": 8.0
+  },
+  "entities": [
+    {
+      "name": "ramp",
+      "kind": "ramp",
+      "pos": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        8.0,
+        8.0,
+        22.0
+      ],
+      "fixed": true,
+      "grip": 0.08
+    },
+    {
+      "name": "wagon",
+      "kind": "wagon",
+      "pos": [
+        0.0,
+        6.9,
+        -8.8
+      ],
+      "rot": [
+        0.55,
+        0,
+        0
+      ],
+      "vel": [
+        0.0,
+        0.0,
+        7.0
+      ],
+      "grip": 0.06,
+      "bounce": 0.0
+    },
+    {
+      "name": "dummy",
+      "kind": "dummy",
+      "pos": [
+        -0.02,
+        6.93,
+        -8.84
+      ],
+      "rot": [
+        0.55,
+        0,
+        0
+      ],
+      "vel": [
+        0.0,
+        0.0,
+        7.0
+      ],
+      "live": false
+    },
+    {
+      "name": "nade",
+      "kind": "grenade",
+      "pos": [
+        0.24,
+        7.03,
+        -8.48
+      ],
+      "rot": [
+        0.55,
+        0,
+        0
+      ],
+      "vel": [
+        0.0,
+        0.0,
+        7.0
+      ],
+      "grip": 0.8,
+      "fuse": 1.55
+    },
+    {
+      "name": "drum-b0",
+      "kind": "drum",
+      "pos": [
+        -1.2,
+        0.64,
+        36.2
+      ],
+      "grip": 0.12,
+      "bounce": 0.02,
+      "mass": 80
+    },
+    {
+      "name": "drum-b1",
+      "kind": "drum",
+      "pos": [
+        0.0,
+        0.64,
+        36.2
+      ],
+      "grip": 0.12,
+      "bounce": 0.02,
+      "mass": 80
+    },
+    {
+      "name": "drum-b2",
+      "kind": "drum",
+      "pos": [
+        1.2,
+        0.64,
+        36.2
+      ],
+      "grip": 0.12,
+      "bounce": 0.02,
+      "mass": 80
+    },
+    {
+      "name": "drum-m0",
+      "kind": "drum",
+      "pos": [
+        -0.6,
+        1.96,
+        36.2
+      ],
+      "grip": 0.12,
+      "bounce": 0.02,
+      "mass": 80
+    },
+    {
+      "name": "drum-m1",
+      "kind": "drum",
+      "pos": [
+        1.2,
+        1.96,
+        36.2
+      ],
+      "grip": 0.12,
+      "bounce": 0.02,
+      "mass": 80
+    },
+    {
+      "name": "drum-top",
+      "kind": "drum",
+      "pos": [
+        0.0,
+        3.28,
+        36.2
+      ],
+      "grip": 0.12,
+      "bounce": 0.02,
+      "mass": 80
+    }
+  ],
+  "ties": [
+    {
+      "a": "dummy-hips",
+      "b": "wagon"
+    },
+    {
+      "a": "dummy-chest",
+      "b": "wagon"
+    },
+    {
+      "a": "dummy-shin-l",
+      "b": "wagon"
+    },
+    {
+      "a": "dummy-shin-r",
+      "b": "wagon"
+    },
+    {
+      "a": "nade",
+      "b": "wagon"
+    }
+  ]
+}

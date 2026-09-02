@@ -30,10 +30,11 @@ export function punctureId(id?: string | null) {
   const store = useBay.getState();
   const wanted = id ?? store.selected;
   const hit = store.entities.find((e) => e.id === wanted);
-  if (hit?.kind === "pack") {
+    if (hit?.kind === "pack") {
     store.select(hit.id);
     arm(hit);
     playEvent("puncture", "nmc");
+    store.setPlaying(true);
     note("puncture", { id: hit.id, kind: "pack" });
     return { ok: true, id: hit.id, kind: hit.kind, n: 1 };
   }
@@ -48,12 +49,14 @@ export function punctureId(id?: string | null) {
     store.select(fuse.id);
     arm(fuse);
     playEvent("puncture", "nmc");
+    useBay.getState().setPlaying(true);
     note("puncture", { id: fuse.id, kind: fuse.kind });
     return { ok: true, id: fuse.id, kind: fuse.kind, n: 1 };
   }
-  store.select(list[0]!.id);
+    store.select(list[0]!.id);
   for (const ent of list) arm(ent);
   playEvent("puncture", "nmc");
+  useBay.getState().setPlaying(true);
   note("puncture", { id: list[0]!.id, kind: "grenade", n: list.length });
   return { ok: true, id: list[0]!.id, kind: "grenade" as const, n: list.length };
 }

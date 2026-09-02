@@ -3,7 +3,9 @@ import { test } from "node:test";
 import {
   armSnaps,
   dummyScore,
+  isHurt,
   isSnapped,
+  markHurt,
   resetInjury,
   sampleHinge,
   sampleImpact,
@@ -39,4 +41,17 @@ test("armSnaps holds the first 0.4s", () => {
   sampleHinge("d3", "upper-neck", 40);
   assert.equal(takeSnap("d3", "upper-neck", 40), false);
   assert.equal(isSnapped("d3", "upper-neck"), false);
+});
+
+test("spawn hinge load is not hurt; first snap after the gate is", () => {
+  resetInjury("d4");
+  armSnaps("d4", 10);
+  sampleHinge("d4", "lumbar", 40);
+  assert.equal(takeSnap("d4", "lumbar", 40), false);
+  assert.equal(isHurt("d4"), false);
+  resetInjury("d4");
+  armSnaps("d4", -1);
+  assert.equal(markHurt("d4"), true);
+  assert.equal(isHurt("d4"), true);
+  assert.equal(markHurt("d4"), false);
 });

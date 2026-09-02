@@ -425,7 +425,7 @@ function yieldBody(world: RapierWorld, b: RapierBody, shell: SteelShell, kind: S
   if (kind === "drum" && added > 0) {
     const col = b.collider(0) as { setHalfHeight?: (h: number) => void; setRadius?: (r: number) => void; setRestitution?: (v: number) => void };
     const ext = steelExtents(shell);
-    col.setHalfHeight?.(Math.max(0.18, ext.halfH));
+    col.setHalfHeight?.(Math.max(0.028, ext.halfH));
     col.setRadius?.(Math.max(0.16, ext.radius));
     col.setRestitution?.(0);
   }

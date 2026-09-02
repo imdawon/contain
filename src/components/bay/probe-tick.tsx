@@ -44,8 +44,8 @@ export function ProbeTick() {
     markPerf(fpsEma.current, dt * 1000);
     tickDrags(cap);
     tickFuse(cap);
-    sampleAcc.current += dt;
-    if (sampleAcc.current < 0.1) return;
+    sampleAcc.current += Math.max(dt, 1 / 60);
+    if (sampleAcc.current < 1 / 30) return;
     sampleAcc.current = 0;
     _proj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     _frustum.setFromProjectionMatrix(_proj);
@@ -120,11 +120,15 @@ export function ProbeTick() {
       objects,
       inView,
     });
-    recordHistory(objects, probeTime(), {
-      x: round(camera.position.x),
-      y: round(camera.position.y),
-      z: round(camera.position.z),
-    });
+    recordHistory(
+      objects.filter((o) => o.kind === "wheel" || o.kind === "dummy" || o.id === trackId),
+      probeTime(),
+      {
+        x: round(camera.position.x),
+        y: round(camera.position.y),
+        z: round(camera.position.z),
+      },
+    );
   });
 
   return null;

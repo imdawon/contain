@@ -12,3 +12,6 @@ attachments/
 .env
 .env.*
 .grok/
+
+# Axiom source clips live on disk; stills + catalog are in git.
+docs/axioms/refs/*.mp4

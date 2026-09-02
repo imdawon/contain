@@ -26,12 +26,11 @@ import {
 } from "@/lib/bay/atd";
 import { cooks } from "@/lib/bay/cook";
 import { lineOccluded } from "@/lib/bay/cover";
-import { COVER_G, CRATE_G, DUMMY_G, WHEEL_G, WORLD_G } from "@/lib/bay/groups";
+import { COVER_G, CRATE_G, DUMMY_G, WAGON_G, WHEEL_G, WORLD_G } from "@/lib/bay/groups";
 import { DUMMY } from "@/lib/bay/parts";
 import { note, registerAssembly, registerBody, setBodyMass, setColliderGroups, unregisterAssembly, unregisterBody } from "@/lib/bay/probe";
 import { poseOf } from "@/lib/bay/sample";
 import { useBay } from "@/store/bay-store";
-import { carriedHang, onRide, ridePeakY } from "@/lib/bay/ride";
 
 /** World 0, dummy 1, crate 2, cover 14. Unique 3–13 let non-adjacent bones hit each other. */
 const BONE_G = {
@@ -52,7 +51,7 @@ const ALL_BONES = Object.values(BONE_G);
 function dummyGroups(self: number, skip: number[]) {
   const blocked = new Set([self, ...skip]);
   const others = ALL_BONES.filter((g) => !blocked.has(g));
-  return interactionGroups([DUMMY_G, self], [WORLD_G, CRATE_G, COVER_G, WHEEL_G, ...others]);
+  return interactionGroups([DUMMY_G, self], [WORLD_G, CRATE_G, COVER_G, WHEEL_G, WAGON_G, ...others]);
 }
 
 const GROUPS = {
@@ -68,6 +67,17 @@ const GROUPS = {
   larmL: dummyGroups(BONE_G.larmL, [BONE_G.uarmL]),
   larmR: dummyGroups(BONE_G.larmR, [BONE_G.uarmR]),
 };
+
+const _boneE = new THREE.Euler();
+const _boneQ = new THREE.Quaternion();
+const _boneP = new THREE.Vector3();
+
+function boneWorld(local: [number, number, number], origin: [number, number, number], rot?: [number, number, number]): [number, number, number] {
+  _boneE.set(rot?.[0] ?? 0, rot?.[1] ?? 0, rot?.[2] ?? 0, "XYZ");
+  _boneQ.setFromEuler(_boneE);
+  _boneP.set(local[0], local[1], local[2]).applyQuaternion(_boneQ);
+  return [origin[0] + _boneP.x, origin[1] + _boneP.y, origin[2] + _boneP.z];
+}
 
 const bone = 0xc4b8a8;
 const jointCol = 0x6a5348;
@@ -140,6 +150,7 @@ function Bone({
   id,
   dummyId,
   pos,
+  rot,
   size,
   mass,
   type,
@@ -155,6 +166,7 @@ function Bone({
   id: string;
   dummyId: string;
   pos: [number, number, number];
+  rot?: [number, number, number];
   size: [number, number, number];
   mass: number;
   type: BodyType;
@@ -206,6 +218,7 @@ function Bone({
     <RigidBody
       ref={r}
       position={pos}
+      rotation={rot ?? [0, 0, 0]}
       colliders={false}
       type={type}
       mass={mass}
@@ -224,7 +237,7 @@ function Bone({
           if (contact) sampleContact(dummyId, contact, p.totalForceMagnitude);
         }}
       />
-      <mesh ref={mesh} onPointerDown={grab.down}>
+      <mesh ref={mesh} onPointerDown={grab.down} frustumCulled={false}>
         <boxGeometry args={size} />
         <meshStandardMaterial
           ref={mat}
@@ -377,10 +390,6 @@ export function Dummy({
       const already = blasted.current;
       blasted.current = true;
       const p = h.translation();
-      if (onRide(id)) {
-        const vy = h.linvel().y;
-        if (!carriedHang(p.y, vy, ridePeakY())) return;
-      }
       const dist = Math.hypot(p.x - x, p.z - z);
       const blast = { x, y, z };
       const hipsBlock = lineOccluded(world, rapier, blast, p);
@@ -486,7 +495,7 @@ export function Dummy({
       sampleHinge(id, "upper-neck", load * 0.72);
       sampleHinge(id, "femur-l", load * 0.9);
       sampleHinge(id, "femur-r", load * 0.9);
-      if (first && n > 0) note("dummy-flop", { id, n, x: p.x, z: p.z });
+      if (n > 0) note("dummy-flop", { id, n, x: p.x, z: p.z });
     };
     window.addEventListener("bay-blast", onBlast);
     return () => window.removeEventListener("bay-blast", onBlast);
@@ -494,19 +503,20 @@ export function Dummy({
 
   const boneProps = { dummyId: id, type: "kinematicPosition" as BodyType, linearDamping: 3.2, angularDamping: 8 };
 
+  const r0 = rot ?? [0, 0, 0];
   return (
-    <group position={pos} rotation={rot ?? [0, 0, 0]}>
-      <Bone r={hips} id={`${id}-hips`} pos={[0, 0.74, 0]} size={[0.3, 0.16, 0.18]} mass={DUMMY.hipMass} groups={GROUPS.hips} {...boneProps} />
-      <Bone r={chest} id={`${id}-chest`} pos={[0, 1.0, 0]} size={[0.28, 0.34, 0.16]} mass={DUMMY.chestMass} groups={GROUPS.chest} snap="lumbar" {...boneProps} />
-      <Bone r={head} id={`${id}-head`} pos={[0, 1.28, 0]} size={[0.16, 0.16, 0.16]} mass={DUMMY.headMass} color={jointCol} groups={GROUPS.head} snap="upper-neck" {...boneProps} />
-      <Bone r={thighL} id={`${id}-thigh-l`} pos={[-0.08, 0.5, 0]} size={[0.1, 0.32, 0.1]} mass={DUMMY.thighMass} groups={GROUPS.thighL} contact="femur-l" snap="femur-l" {...boneProps} />
-      <Bone r={thighR} id={`${id}-thigh-r`} pos={[0.08, 0.5, 0]} size={[0.1, 0.32, 0.1]} mass={DUMMY.thighMass} groups={GROUPS.thighR} contact="femur-r" snap="femur-r" {...boneProps} />
-      <Bone r={shinL} id={`${id}-shin-l`} pos={[-0.08, 0.17, 0]} size={[0.09, 0.32, 0.09]} mass={DUMMY.shinMass} groups={GROUPS.shinL} snap="knee-l" {...boneProps} />
-      <Bone r={shinR} id={`${id}-shin-r`} pos={[0.08, 0.17, 0]} size={[0.09, 0.32, 0.09]} mass={DUMMY.shinMass} groups={GROUPS.shinR} snap="knee-r" {...boneProps} />
-      <Bone r={uarmL} id={`${id}-uarm-l`} pos={[-0.28, 1.08, 0]} size={[0.26, 0.08, 0.08]} mass={DUMMY.uarmMass} groups={GROUPS.uarmL} contact="humerus-lower-l" snap="shoulder-l" {...boneProps} />
-      <Bone r={uarmR} id={`${id}-uarm-r`} pos={[0.28, 1.08, 0]} size={[0.26, 0.08, 0.08]} mass={DUMMY.uarmMass} groups={GROUPS.uarmR} contact="humerus-lower-r" snap="shoulder-r" {...boneProps} />
-      <Bone r={larmL} id={`${id}-larm-l`} pos={[-0.52, 1.08, 0]} size={[0.22, 0.07, 0.07]} mass={DUMMY.larmMass} groups={GROUPS.larmL} snap="humerus-lower-l" {...boneProps} />
-      <Bone r={larmR} id={`${id}-larm-r`} pos={[0.52, 1.08, 0]} size={[0.22, 0.07, 0.07]} mass={DUMMY.larmMass} groups={GROUPS.larmR} snap="humerus-lower-r" {...boneProps} />
+    <group>
+      <Bone r={hips} id={`${id}-hips`} pos={boneWorld([0, 0.74, 0], pos, r0)} rot={r0} size={[0.3, 0.16, 0.18]} mass={DUMMY.hipMass} groups={GROUPS.hips} {...boneProps} />
+      <Bone r={chest} id={`${id}-chest`} pos={boneWorld([0, 1.0, 0], pos, r0)} rot={r0} size={[0.28, 0.34, 0.16]} mass={DUMMY.chestMass} groups={GROUPS.chest} snap="lumbar" {...boneProps} />
+      <Bone r={head} id={`${id}-head`} pos={boneWorld([0, 1.28, 0], pos, r0)} rot={r0} size={[0.16, 0.16, 0.16]} mass={DUMMY.headMass} color={jointCol} groups={GROUPS.head} snap="upper-neck" {...boneProps} />
+      <Bone r={thighL} id={`${id}-thigh-l`} pos={boneWorld([-0.08, 0.5, 0], pos, r0)} rot={r0} size={[0.1, 0.32, 0.1]} mass={DUMMY.thighMass} groups={GROUPS.thighL} contact="femur-l" snap="femur-l" {...boneProps} />
+      <Bone r={thighR} id={`${id}-thigh-r`} pos={boneWorld([0.08, 0.5, 0], pos, r0)} rot={r0} size={[0.1, 0.32, 0.1]} mass={DUMMY.thighMass} groups={GROUPS.thighR} contact="femur-r" snap="femur-r" {...boneProps} />
+      <Bone r={shinL} id={`${id}-shin-l`} pos={boneWorld([-0.08, 0.17, 0], pos, r0)} rot={r0} size={[0.09, 0.32, 0.09]} mass={DUMMY.shinMass} groups={GROUPS.shinL} snap="knee-l" {...boneProps} />
+      <Bone r={shinR} id={`${id}-shin-r`} pos={boneWorld([0.08, 0.17, 0], pos, r0)} rot={r0} size={[0.09, 0.32, 0.09]} mass={DUMMY.shinMass} groups={GROUPS.shinR} snap="knee-r" {...boneProps} />
+      <Bone r={uarmL} id={`${id}-uarm-l`} pos={boneWorld([-0.28, 1.08, 0], pos, r0)} rot={r0} size={[0.26, 0.08, 0.08]} mass={DUMMY.uarmMass} groups={GROUPS.uarmL} contact="humerus-lower-l" snap="shoulder-l" {...boneProps} />
+      <Bone r={uarmR} id={`${id}-uarm-r`} pos={boneWorld([0.28, 1.08, 0], pos, r0)} rot={r0} size={[0.26, 0.08, 0.08]} mass={DUMMY.uarmMass} groups={GROUPS.uarmR} contact="humerus-lower-r" snap="shoulder-r" {...boneProps} />
+      <Bone r={larmL} id={`${id}-larm-l`} pos={boneWorld([-0.52, 1.08, 0], pos, r0)} rot={r0} size={[0.22, 0.07, 0.07]} mass={DUMMY.larmMass} groups={GROUPS.larmL} snap="humerus-lower-l" {...boneProps} />
+      <Bone r={larmR} id={`${id}-larm-r`} pos={boneWorld([0.52, 1.08, 0], pos, r0)} rot={r0} size={[0.22, 0.07, 0.07]} mass={DUMMY.larmMass} groups={GROUPS.larmR} snap="humerus-lower-r" {...boneProps} />
 
       <Hinge dummyId={id} label="lumbar" a={hips} b={chest} pa={[0, 0.08, 0]} pb={[0, -0.17, 0]} axis={[1, 0, 0]} lim={[-1.15, 0.5]} />
       <Hinge dummyId={id} label="upper-neck" a={chest} b={head} pa={[0, 0.17, 0]} pb={[0, -0.08, 0]} axis={[1, 0, 0]} lim={[-0.75, 0.55]} />

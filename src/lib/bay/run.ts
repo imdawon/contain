@@ -246,7 +246,7 @@ export function trialLevel(run: Run, trial: Trial): Level {
     name: `${trial.threat} vs ${trial.victim}`,
     blurb: run.blurb,
     select: "grenade",
-    track: { kind: "dummy", part: "hips" },
+    track: { kind: "dummy", part: "chest" },
     entities: trial.entities,
     builtin: true,
   };
