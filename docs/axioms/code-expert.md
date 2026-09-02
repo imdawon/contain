@@ -13,9 +13,13 @@ Iterate JSON scene files (`public/scenes/*.json`). Do not hardcode trials in `ru
 
 ## How to drive the sim
 
-Only `node scripts/bay.mjs` against `window.__bay`. Never the browser. Never Playwright. Never a Chrome watch. If paints is 0, say so and stop. Named miss: `omp-browser-harness`.
+Only `node scripts/bay.mjs` against `window.__bay`. Never the browser. Never Playwright. Never a Chrome watch. If paints is 0, say so and stop. Named miss: `omp-browser-harness`. The Grok 4.6 high seat spawns specialist `contain-bay` (Grok 4.6 medium) for every restage/peek/tape; high does not burn tokens sitting in the harness.
 
 Health: one taker, one paint. Peek first. Leftover wreck is FAIL. Tape only after peek shows a fresh spawn. Recorder already rolling, then restage. If restage is not in the file, discard it.
+
+## Share by tables, not systems
+
+New gags (roll rumble, contact hits, 30 Hz motion flags) go in a frozen number table plus a loop. Not a SoundManager. Not a one-off mixer per clip. See `blow-complexity.md`. Tune `src/lib/contain/sfx.ts` / `sfx.json` together. `window.__bay.analyze()` is the 30 Hz ride report.
 
 ## How to change code
 

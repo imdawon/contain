@@ -8,6 +8,7 @@ import { loopLevels, playSlowMo, unlockAudio } from "@/lib/contain/audio";
 import { SFX } from "@/lib/contain/sfx";
 import { analyzePath } from "@/lib/bay/ride-stats";
 import {
+  actorMesh,
   applyActor,
   assemblyMembers,
   listSamplers,
@@ -16,9 +17,11 @@ import {
   note,
   probeTime,
   snapshot,
+  translateAssembly,
   type ProbeEvent,
   type ProbeObject,
 } from "@/lib/bay/probe";
+import { placeActor } from "@/lib/bay/studio";
 import { useBay } from "@/store/bay-store";
 import * as THREE from "three";
 
@@ -64,7 +67,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 82;
+const PIPE_GEN = 142;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -141,11 +144,11 @@ export function tickDrags(dt: number) {
       const b = listSamplers().get(m.id)?.getBody?.();
       if (!b) continue;
       b.setBodyType(2, true);
-      b.setNextKinematicTranslation({
-        x: m.x0 + job.dx * u,
-        y: m.y0 + job.dy * u + yLift,
-        z: m.z0 + job.dz * u,
-      });
+      const nx = m.x0 + job.dx * u;
+      const ny = m.y0 + job.dy * u + yLift;
+      const nz = m.z0 + job.dz * u;
+      b.setNextKinematicTranslation({ x: nx, y: ny, z: nz });
+      b.setTranslation({ x: nx, y: ny, z: nz }, true);
       b.setLinvel({ x: 0, y: 0, z: 0 }, true);
     }
     if (u >= 1) {
@@ -407,6 +410,95 @@ function nudge(id: string, d: { x?: number; y?: number; z?: number }) {
   return dragTo(id, { x: now.x + (d.x ?? 0), y: now.y + (d.y ?? 0), z: now.z + (d.z ?? 0) }, 0.2);
 }
 
+function spreadOf(ids: string[]) {
+  const pts = ids
+    .map((mid) => {
+      const p = listSamplers().get(mid)?.sample();
+      return p && !p.state?.missing ? { id: mid, x: p.x, y: p.y, z: p.z } : null;
+    })
+    .filter((p): p is { id: string; x: number; y: number; z: number } => Boolean(p));
+  let span = 0;
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      const a = pts[i]!;
+      const b = pts[j]!;
+      span = Math.max(span, Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z));
+    }
+  }
+  return { n: pts.length, span: round(span), pts };
+}
+
+function gizmoMove(id: string, axis: string, meters = 0.5) {
+  const ax = axis === "y" || axis === "z" ? axis : "x";
+  const m = Number(meters);
+  if (!Number.isFinite(m)) return { ok: false as const, reason: "bad-meters" as const, id };
+  const crew = assemblyMembers(id);
+  const before = spreadOf(crew);
+  const n = translateAssembly(id, ax === "x" ? m : 0, ax === "y" ? m : 0, ax === "z" ? m : 0);
+  const after = spreadOf(crew);
+  const root = useBay.getState().entities.find((e) => e.id === id || id.startsWith(`${e.id}-`));
+  if (root) {
+    const hips = listSamplers().get(`${root.id}-hips`)?.sample();
+    const p = hips && !hips.state?.missing ? hips : after.pts[0];
+    if (p) {
+      const y = root.kind === "dummy" ? Math.max(0, p.y - 0.74) : p.y;
+      useBay.getState().patchEntity(root.id, { pos: [p.x, y, p.z] });
+    }
+  }
+  note("gizmo", { id, axis: ax, m, n });
+  return { ok: true as const, id, axis: ax, m, moved: n, before, after, dSpan: round(after.span - before.span) };
+}
+
+const _meshP = new THREE.Vector3();
+function meshSpread(ids: string[]) {
+  const pts = ids
+    .map((mid) => {
+      const mesh = actorMesh(mid);
+      if (!mesh) return null;
+      mesh.updateWorldMatrix(true, false);
+      mesh.getWorldPosition(_meshP);
+      return { id: mid, x: _meshP.x, y: _meshP.y, z: _meshP.z };
+    })
+    .filter((p): p is { id: string; x: number; y: number; z: number } => Boolean(p));
+  let span = 0;
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      const a = pts[i]!;
+      const b = pts[j]!;
+      span = Math.max(span, Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z));
+    }
+  }
+  return { n: pts.length, span: round(span), pts };
+}
+
+async function dragGizmo(id: string, axis: string, pixels = 40, camDist?: number) {
+  useBay.getState().setPlaying(false);
+  useBay.getState().select(id);
+  await waitFrames(120);
+  const api = (window as unknown as { __bayGizmo?: { drag: (a: string, p?: number, d?: number) => Record<string, unknown> } }).__bayGizmo;
+  if (!api?.drag) return { ok: false as const, reason: "no-gizmo-api" as const, id };
+  const crew = assemblyMembers(id);
+  const before = spreadOf(crew);
+  const meshBefore = meshSpread(crew);
+  const r = api.drag(axis, Number(pixels), camDist != null ? Number(camDist) : undefined);
+  const after = spreadOf(crew);
+  const meshAfter = meshSpread(crew);
+  note("gizmo-drag", { id, axis, pixels: Number(pixels), m: Number(r.meters ?? 0) });
+  return {
+    ok: Boolean(r.ok),
+    id,
+    axis,
+    pixels: Number(pixels),
+    ...r,
+    before,
+    after,
+    dSpan: round(after.span - before.span),
+    meshBefore,
+    meshAfter,
+    dMesh: round(meshAfter.span - meshBefore.span),
+  };
+}
+
 function fling(id: string, v: { x?: number; y?: number; z?: number }) {
   return { ok: applyActor(id, { vx: v.x ?? 0, vy: v.y ?? 0, vz: v.z ?? 0 }), id };
 }
@@ -599,6 +691,8 @@ export function peek() {
     loads: hingeSnapshot(),
     score: dummyScore(store.entities.find((e) => e.kind === "dummy")?.id),
     inspect: store.inspect,
+    studio: store.studio,
+    playing: store.playing,
     slowMo: store.slowMo,
     paint: typeof document !== "undefined" && document.visibilityState === "visible",
     hidden: typeof document !== "undefined" && document.hidden,
@@ -715,8 +809,8 @@ async function tape(scene?: unknown, ms = 0) {
     w.__bayWantGrab = true;
     kick();
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    const data = w.__bayGrabData;
-    if (data && data.startsWith("data:image")) frames.push(data);
+    const data: unknown = w.__bayGrabData;
+    if (typeof data === "string" && data.startsWith("data:image")) frames.push(data);
   };
   const yieldPaint = () =>
     new Promise<void>((resolve) => {
@@ -734,6 +828,7 @@ async function tape(scene?: unknown, ms = 0) {
   clearHist();
   clearLog();
   const staged = scene != null && scene !== "" ? await restageScene(scene) : { ok: true, id: null };
+  useBay.getState().setPlaying(true);
   try {
     unlockAudio();
   } catch {
@@ -852,7 +947,11 @@ export function help() {
     spawn: "(kind) grenade|pack|can|crate|dummy|grass|wall|doorway|cube|...",
     solid: "(shape)",
     puncture: "(id?) pull grenade pin or cook pack",
-    reset: "restage the current trial or clip",
+    reset: "restore the stamped stage (edit layout), then pause",
+    play: "start physics/damage from the current stage",
+    pause: "freeze physics (edit mode)",
+    studio: "(on?) open/close studio; pauses the stage",
+    place: "(kind, x?, y?, z?) drop an actor and stamp the layout",
     levels: "builtin + saved clips",
     runs: "vs ladders",
     run: "(id, lv=1) restage a vs trial",
@@ -871,6 +970,8 @@ export function help() {
     drag: "(id, {x,y,z}, seconds=0.35)",
     traceDrag: "(id, {x,y,z}, seconds=0.8) rAF xyz of physics vs mesh vs camera",
     nudge: "(id, {x,y,z}) relative",
+    gizmo: "(id, axis, meters) move the whole assembly on x|y|z",
+    dragGizmo: "(id, axis, pixels) real screen-space arrow drag",
     fling: "(id, {x,y,z}) set velocity",
     drop: "(id) dynamic",
     until: "(eventType, timeoutMs) promise",
@@ -911,10 +1012,34 @@ export function harnessApi() {
       return nextTrial();
     },
     load: loadClip,
-    restage: (input?: unknown) => {
+    restage: async (input?: unknown) => {
       clearHist();
-      return restageScene(input ?? "v1");
+      const r = await restageScene(input ?? "v1");
+      useBay.getState().setPlaying(true);
+      return r;
     },
+    play: () => {
+      useBay.getState().setPlaying(true);
+      note("play", { n: useBay.getState().entities.length });
+      return { ok: true, playing: true };
+    },
+    pause: () => {
+      useBay.getState().setPlaying(false);
+      note("pause", {});
+      return { ok: true, playing: false };
+    },
+    studio: (on?: boolean) => {
+      const bay = useBay.getState();
+      const next = typeof on === "boolean" ? on : !bay.studio;
+      bay.setStudio(next);
+      if (next) {
+        bay.setPlaying(false);
+        void import("@/lib/bay/studio").then((m) => bay.stampBlueprint(m.captureScene()));
+      }
+      note("studio", { on: next });
+      return { ok: true, studio: next, playing: useBay.getState().playing };
+    },
+    place: (kind: string, x?: number, y?: number, z?: number) => placeActor(kind, x, y, z),
     scenes: listBayScenes,
     save: saveBay,
     forget: forgetBay,
@@ -938,6 +1063,8 @@ export function harnessApi() {
     drag: dragTo,
     traceDrag,
     nudge,
+    gizmo: gizmoMove,
+    dragGizmo,
     fling,
     drop,
     until,

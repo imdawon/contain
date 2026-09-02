@@ -6,19 +6,20 @@
   "select": "grenade",
   "inspect": false,
   "track": {
-    "ref": "dummy-hips"
+    "ref": "dummy-chest"
   },
   "cam": {
     "offset": [
-      9.0,
-      1.8,
-      -1.0
+      0.0,
+      1.85,
+      -4.6
     ],
     "look": [
       0.0,
-      0.4,
-      2.2
-    ]
+      0.15,
+      1.35
+    ],
+    "fov": 48
   },
   "airborne": {
     "minY": 2.0,

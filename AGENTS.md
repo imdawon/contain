@@ -49,7 +49,17 @@ This is CONTAIN, not a Grok App Builder sandbox. App Builder QA later in this fi
 
 Validate and restage only with `node scripts/bay.mjs` against `window.__bay`. Do not open Chrome. Do not click RUN or RESET. Do not watch the canvas. Named miss: `omp-browser-harness`.
 
-See `.cursor/rules/contain-bay.mdc`.
+**Done means validated:** look at the work before you tell dawon it is done. Never skip that. Do not invent a test suite as a substitute. Run `node scripts/bay.mjs` (`health`, restage, `peek`, `camera`, `shot`) and inspect the shot JPEG. Peek xyz is not a picture. If the still is missing the dummy, wagon, score, orbit-usable chase, or whatever you just claimed, it is not done — keep fixing. A timeout, black frame, vanished HUD, or `nobj=0` is a failed fix. Do not narrate success from code you wrote. The hangar is often a hidden tab; if `shot` cannot grab, that is your bug.
+
+**Do not regress:** TrackCam is sticky follow (translate with the target). Do not overwrite camera pose every frame or orbit dies. Keep `OrbitControls` enabled while tracking. Dummy default track is chest. Keep `World` `stageN` — deleting it unmounts the canvas. Score HUD stays small and high so Grenades vs Dummy is not clipped by the bottom bar.
+
+**Who runs the sim:** spawn `contain-bay` for routine restage/peek/tape. Visual-claim checks are the exception: the primary **must** run `bay.mjs` and inspect the shot before telling dawon it is fixed. Spawn the project specialist `contain-bay` (`.omp/agents/contain-bay.md`, model `cursor/cursor-grok-4.6:medium`). It restages, peeks, tapes, inspects stills, and hands back pass/fail. High writes physics/scene code from that verdict. Do not pass `model:` on that spawn — the agent file already selects medium.
+
+**Who researches the web:** spawn `researcher` (`.omp/agents/researcher.md` and `~/.omp/agent/agents/researcher.md`, Grok 4.6 medium). High does not sit in `web_search` loops. Search order is Exa → DuckDuckGo → Startpage (`providers.webSearchOrder` in `~/.omp/agent/config.yml`). No `EXA_API_KEY` yet: Exa uses the public MCP until rate-limited, then the chain falls through. Do not pass `model:` on that spawn.
+
+See `.omp/agents/contain-bay.md` and `.omp/agents/researcher.md`.
+
+Share new gags as a frozen table of numbers plus a loop (`src/lib/contain/sfx.ts`, `window.__bay.analyze`), not a class hierarchy and not a one-off mixer per clip. Axioms: `docs/axioms/blow-complexity.md`.
 
 ---
 

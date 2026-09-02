@@ -1,0 +1,6 @@
+# CONTAIN project roles. High stays on the primary.
+# contain-bay owns every bay.mjs restage/peek/tape.
+# researcher owns web research (Exa first).
+modelRoles:
+  contain-bay: cursor/cursor-grok-4.6:medium
+  researcher: cursor/cursor-grok-4.6:medium

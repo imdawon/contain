@@ -71,7 +71,20 @@ interface BayState {
   scene: Scene | null;
   stageN: number;
   inspect: boolean;
+  studio: boolean;
+  playing: boolean;
+  blueprint: Scene | null;
+  placeKind: Kind | null;
+  moveAxis: "x" | "y" | "z" | null;
   spawn: (kind: Kind) => void;
+  patchEntity: (id: string, patch: Partial<Entity>) => void;
+  removeEntity: (id: string) => void;
+  setSceneMeta: (patch: Partial<Scene>) => void;
+  setStudio: (on: boolean) => void;
+  setPlaying: (on: boolean) => void;
+  stampBlueprint: (scene: Scene) => void;
+  setPlaceKind: (kind: Kind | null) => void;
+  setMoveAxis: (axis: "x" | "y" | "z" | null) => void;
   clear: () => void;
   reset: () => void;
   loadLevel: (id: string) => { ok: boolean; id: string; n: number; name: string };
@@ -124,59 +137,141 @@ export const useBay = create<BayState>((set, get) => ({
   cutaway: false,
   slowMo: false,
   inspect: true,
+  studio: false,
+  playing: false,
+  blueprint: null,
+  placeKind: null,
+  moveAxis: null,
   spawn: (kind) => {
     if (kind === "charge") kind = "grenade";
     const r = () => (Math.random() - 0.5) * 1.4;
     const pos: [number, number, number] =
-      kind === "can" ||
-      kind === "crate" ||
-      kind === "grass" ||
-      kind === "dummy" ||
-      kind === "wall" ||
-      kind === "doorway" ||
-      kind === "wagon" ||
-      kind === "hill" ||
-      kind === "ramp" ||
-      kind === "wheel" ||
-      kind === "drum"
-        ? [r(), 0, r()]
-        : kind === "pack" || kind === "grenade"
-          ? [r() * 0.6, 1.15, r() * 0.6]
-          : [0.95 + r() * 0.4, 1.05, r() * 0.5];
-    const e = { id: nid(), kind, pos };
+      kind === "cannon"
+        ? [0, 0, -6]
+        : kind === "wagon"
+          ? [r(), 0.35, r()]
+          : kind === "wheel"
+            ? [r(), 1.05, r()]
+            : kind === "drum"
+              ? [r(), 0.64, r()]
+              : kind === "ramp" || kind === "hill"
+                ? [0, 0, 0]
+                : kind === "can" || kind === "crate" || kind === "grass" || kind === "dummy" || kind === "wall" || kind === "doorway"
+                  ? [r(), 0, r()]
+                  : kind === "pack" || kind === "grenade"
+                    ? [r() * 0.6, 1.15, r() * 0.6]
+                    : [0.95 + r() * 0.4, 1.05, r() * 0.5];
+    const e: Entity = { id: nid(), kind, pos, name: kind };
+    if (kind === "ramp" || kind === "hill") {
+      e.size = [8, 8, 22];
+      e.fixed = true;
+      e.grip = 0.08;
+    }
+    if (kind === "cannon") e.size = [1.4, 1.6, 3.2];
+    if (kind === "wagon") e.vel = [0, 0, 4];
+    if (kind === "wheel") {
+      e.mass = 100_000;
+      e.vel = [0, 0, 8];
+    }
+    if (kind === "drum") e.mass = 80;
+    if (kind === "grenade") e.fuse = 1.7;
     const trackId =
       kind === "dummy"
-        ? `${e.id}-hips`
+        ? `${e.id}-chest`
         : kind === "crate"
           ? `${e.id}-lid`
           : kind === "doorway"
             ? `${e.id}-panel`
             : e.id;
     set({ entities: [...get().entities, e], selected: e.id, trackId });
+    if (!get().playing) {
+      void import("@/lib/bay/studio").then((m) => get().stampBlueprint(m.captureScene()));
+    }
   },
+  patchEntity: (id, patch) => {
+    set({
+      entities: get().entities.map((e) => (e.id === id ? { ...e, ...patch, id: e.id, kind: patch.kind ?? e.kind } : e)),
+    });
+  },
+  removeEntity: (id) => {
+    const s = get();
+    const entities = s.entities.filter((e) => e.id !== id);
+    set({
+      entities,
+      selected: s.selected === id ? (entities[0]?.id ?? null) : s.selected,
+      trackId: s.trackId === id || s.trackId?.startsWith(`${id}-`) ? (entities[0]?.id ?? null) : s.trackId,
+    });
+  },
+  setSceneMeta: (patch) => {
+    const scene = get().scene;
+    if (!scene) {
+      const blank: Scene = {
+        id: `studio-${Date.now().toString(36)}`,
+        name: "Studio",
+        blurb: "Studio scene.",
+        entities: [],
+        ties: [],
+        inspect: true,
+        ...patch,
+      };
+      set({ scene: blank });
+      return;
+    }
+    set({ scene: { ...scene, ...patch } });
+  },
+  setStudio: (studio) => set({ studio, inspect: studio ? true : get().inspect, playing: studio ? false : get().playing }),
+  setPlaying: (playing) => set({ playing, slowMo: playing ? get().slowMo : false }),
+  stampBlueprint: (scene) => set({ blueprint: scene, scene: { ...(get().scene ?? scene), ...scene, entities: scene.entities, ties: scene.ties } }),
+  setPlaceKind: (placeKind) => set({ placeKind }),
+  setMoveAxis: (moveAxis) => set({ moveAxis }),
   clear: () => set({ entities: [], selected: null, trackId: null, latch: "sealed" }),
   reset: () => {
     const s = get();
-    if (s.scene) {
-      set({ ...materializeScene(s.scene, nid), dragging: false, latch: "sealed", stageN: s.stageN + 1, slowMo: false });
+    const stage = s.blueprint ?? s.scene;
+    if (stage) {
+      set({
+        ...materializeScene(stage, nid),
+        dragging: false,
+        latch: "sealed",
+        stageN: s.stageN + 1,
+        slowMo: false,
+        playing: false,
+        studio: s.studio,
+        inspect: s.inspect,
+        blueprint: stage,
+        placeKind: null,
+        moveAxis: null,
+      });
       return;
     }
     const run = getRun(s.runId);
     if (run) {
-      set({ ...stageRun(run, s.trial), dragging: false, latch: "sealed" });
+      set({ ...stageRun(run, s.trial), dragging: false, latch: "sealed", playing: false, blueprint: null });
       return;
     }
-    set({ ...stageLevel(s.levelId), dragging: false });
+    set({ ...stageLevel(s.levelId), dragging: false, playing: false, blueprint: null });
   },
   loadLevel: (id) => {
     const staged = stageLevel(id);
-    set({ ...staged, dragging: false, inspect: true });
+    set({ ...staged, dragging: false, inspect: true, playing: false, blueprint: null });
     const level = getLevel(staged.levelId)!;
     return { ok: true, id: staged.levelId, n: staged.entities.length, name: level.name };
   },
   loadScene: (scene) => {
     const staged = materializeScene(scene, nid);
-    set({ ...staged, dragging: false, latch: "sealed", inspect: false, tool: "grab", stageN: get().stageN + 1 });
+    const inspect = scene.inspect === true || get().studio;
+    set({
+      ...staged,
+      dragging: false,
+      latch: "sealed",
+      inspect,
+      tool: "grab",
+      stageN: get().stageN + 1,
+      placeKind: null,
+      playing: false,
+      blueprint: scene,
+      moveAxis: null,
+    });
     return {
       ok: true,
       id: scene.id,
@@ -189,7 +284,7 @@ export const useBay = create<BayState>((set, get) => ({
     const run = getRun(id);
     if (!run) return { ok: false, id, lv: 0, n: 0, name: id };
     const staged = stageRun(run, lv);
-    set({ ...staged, dragging: false, inspect: true });
+    set({ ...staged, dragging: false, inspect: true, playing: false, blueprint: null });
     return { ok: true, id: run.id, lv: staged.trial, n: staged.entities.length, name: run.name };
   },
   nextTrial: () => {
@@ -199,7 +294,7 @@ export const useBay = create<BayState>((set, get) => ({
     const last = run.trials[run.trials.length - 1]!;
     if (s.trial >= last.lv) return { ok: true, id: run.id, lv: s.trial, n: s.entities.length, name: run.name, last: true };
     const staged = stageRun(run, s.trial + 1);
-    set({ ...staged, dragging: false });
+    set({ ...staged, dragging: false, playing: false, blueprint: null });
     return { ok: true, id: run.id, lv: staged.trial, n: staged.entities.length, name: run.name, last: staged.trial >= last.lv };
   },
   saveLevel: (name) => {

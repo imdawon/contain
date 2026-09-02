@@ -18,6 +18,7 @@ export function useGrab(body: RefObject<RapierRigidBody | null>, id: string) {
   const offset = useRef(new THREE.Vector3());
   const crew = useRef<Member[]>([]);
   const mode = useRef<Mode>("solo");
+  const axis = useRef<"x" | "y" | "z" | null>(null);
 
   useEffect(() => {
     const up = () => release();
@@ -27,11 +28,22 @@ export function useGrab(body: RefObject<RapierRigidBody | null>, id: string) {
       const delta = Math.sign(e.deltaY) * Math.min(0.35, Math.abs(e.deltaY) * 0.002);
       dist.current = Math.min(16, Math.max(0.4, dist.current + delta));
     };
+    const key = (e: KeyboardEvent) => {
+      if (!grabbing.current) return;
+      const k = e.key.toLowerCase();
+      if (k === "x" || k === "y" || k === "z") {
+        e.preventDefault();
+        axis.current = axis.current === k ? null : k;
+        useBay.getState().setMoveAxis(axis.current);
+      }
+    };
     window.addEventListener("pointerup", up);
     window.addEventListener("wheel", wheel, { passive: false });
+    window.addEventListener("keydown", key);
     return () => {
       window.removeEventListener("pointerup", up);
       window.removeEventListener("wheel", wheel);
+      window.removeEventListener("keydown", key);
     };
   }, []);
 
@@ -54,12 +66,14 @@ export function useGrab(body: RefObject<RapierRigidBody | null>, id: string) {
     if (!b) return;
     grabbing.current = true;
     useBay.getState().setDragging(true);
+    axis.current = useBay.getState().moveAxis;
     const t = b.translation();
     last.current.set(t.x, t.y, t.z);
     dist.current = Math.max(0.4, e.distance);
     offset.current.set(t.x - e.point.x, t.y - e.point.y, t.z - e.point.z);
+    const editing = !useBay.getState().playing;
     const bone = listSamplers().get(id)?.kind === "dummy-bone";
-    if (bone) {
+    if (bone && !editing) {
       awakenRagdoll(id);
       mode.current = "spring";
       crew.current = [{ id, kinematic: false }];
@@ -83,6 +97,30 @@ export function useGrab(body: RefObject<RapierRigidBody | null>, id: string) {
     grabbing.current = false;
     useBay.getState().setDragging(false);
     dist.current = -1;
+    const editing = !useBay.getState().playing;
+    if (editing) {
+      for (const m of crew.current) {
+        const rb = m.id === id ? body.current : listSamplers().get(m.id)?.getBody?.();
+        if (!rb) continue;
+        rb.setBodyType(m.kinematic ? 2 : 0, true);
+        rb.setLinvel({ x: 0, y: 0, z: 0 }, true);
+        rb.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      }
+      const root = useBay.getState().entities.find((e) => e.id === id || id.startsWith(`${e.id}-`));
+      if (root && body.current) {
+        const p = body.current.translation();
+        const hips = listSamplers().get(`${root.id}-hips`)?.getBody?.()?.translation();
+        const q = hips ?? p;
+        useBay.getState().patchEntity(root.id, {
+          pos: [q.x, root.kind === "dummy" ? Math.max(0, q.y - 0.74) : q.y, q.z],
+        });
+      }
+      void import("@/lib/bay/studio").then((m) => useBay.getState().stampBlueprint(m.captureScene()));
+      note("ungrab", { id, edit: true });
+      crew.current = [];
+      mode.current = "solo";
+      return;
+    }
     if (mode.current === "spring") {
       const rb = body.current;
       if (rb) {
@@ -118,6 +156,17 @@ export function useGrab(body: RefObject<RapierRigidBody | null>, id: string) {
     ray.at(dist.current, _hit);
     _hit.add(offset.current);
     _hit.y = Math.max(0.06, _hit.y);
+    const lock = axis.current ?? useBay.getState().moveAxis;
+    if (lock === "x") {
+      _hit.y = last.current.y;
+      _hit.z = last.current.z;
+    } else if (lock === "y") {
+      _hit.x = last.current.x;
+      _hit.z = last.current.z;
+    } else if (lock === "z") {
+      _hit.x = last.current.x;
+      _hit.y = last.current.y;
+    }
     if (mode.current === "spring") {
       const p = b.translation();
       const k = 14;
@@ -154,6 +203,7 @@ export function useGrab(body: RefObject<RapierRigidBody | null>, id: string) {
       const ny = p.y + dy;
       const nz = p.z + dz;
       rb.setNextKinematicTranslation({ x: nx, y: ny, z: nz });
+      rb.setTranslation({ x: nx, y: ny, z: nz }, true);
       const obj = rec?.getMesh?.()?.parent;
       if (obj) obj.position.set(nx, ny, nz);
     }

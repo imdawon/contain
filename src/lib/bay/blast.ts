@@ -72,6 +72,7 @@ function ensureDummyOutcome(x: number, y: number, z: number, power: number) {
 
 export function tickFuse(dt = 0.05) {
   if (typeof window === "undefined") return;
+  if (!useBay.getState().playing) return;
   for (const bang of stepAllCooks(dt)) {
     const p = bangPos(bang.id, bang.pos);
     note("grenade-boom", { id: bang.id, x: p.x, y: p.y, z: p.z, boom: bang.boom });

@@ -17,6 +17,8 @@ import { SceneRig } from "@/components/bay/scene-rig";
 import { Solid } from "@/components/bay/solid";
 import { Cannon } from "@/components/bay/cannon";
 import { ScorePlate } from "@/components/bay/score-plate";
+import { StudioPlace } from "@/components/bay/studio-place";
+import { MoveGizmo } from "@/components/bay/move-gizmo";
 import { Drum, Wheel } from "@/components/bay/steel";
 import { Wagon } from "@/components/bay/wagon";
 import { Wall } from "@/components/bay/wall";
@@ -54,7 +56,7 @@ function TrackCam({
       camera.fov = fov;
       camera.updateProjectionMatrix();
     }
-    if (eye && look) {
+    if (eye && look && !trackId) {
       camera.position.set(eye[0], eye[1], eye[2]);
       camera.lookAt(look[0], look[1], look[2]);
       camera.updateMatrixWorld();
@@ -148,7 +150,7 @@ function SlowMoDriver() {
   const slowMo = useBay((s) => s.slowMo);
   const { step } = useRapier();
   useFrame((_, dt) => {
-    if (!slowMo) return;
+    if (!slowMo || !useBay.getState().playing) return;
     step(Math.min(dt, 0.05) * 0.25);
   });
   return null;
@@ -290,11 +292,12 @@ function World() {
   const orbit = useRef<{ target: THREE.Vector3 } | null>(null);
   const fire = useFireMap();
   const hangar = Boolean(scene?.cam?.offset || scene?.cam?.eye);
-  const tracking = Boolean(useBay((s) => s.trackId));
+  const placing = Boolean(useBay((s) => s.placeKind));
+  const playing = useBay((s) => s.playing);
   const garden = Boolean(sceneTheme(scene));
 
   return (
-    <Physics key={stageN} gravity={sceneGravity(scene)} timeStep={slowMo ? "vary" : 1 / 60} paused={slowMo} interpolate numSolverIterations={24} numInternalPgsIterations={12} maxCcdSubsteps={1}>
+    <Physics key={stageN} gravity={sceneGravity(scene)} timeStep={slowMo ? "vary" : 1 / 60} paused={!playing || slowMo} interpolate numSolverIterations={24} numInternalPgsIterations={12} maxCcdSubsteps={1}>
       <SlowMoDriver />
       <TrackCam orbit={orbit} />
       <Present />
@@ -360,15 +363,16 @@ function World() {
           orbit.current = el;
         }}
         makeDefault
-        enabled={!dragging}
-        enablePan={!tracking}
+        enabled={!dragging && !placing}
+        enablePan
         enableZoom
         zoomSpeed={hangar ? 1.35 : 1}
         minDistance={hangar ? 2 : 0.5}
         maxDistance={hangar ? 2500 : 80}
-        maxPolarAngle={1.48}
+        minPolarAngle={0.08}
+        maxPolarAngle={Math.PI - 0.12}
         target={[0, 0.7, 0.55]}
-        enableDamping={!tracking}
+        enableDamping={false}
         dampingFactor={0.08}
       />
     </Physics>
@@ -412,7 +416,7 @@ export function BayCanvas() {
           gl={{
             antialias: false,
             alpha: false,
-            preserveDrawingBuffer: false,
+            preserveDrawingBuffer: true,
             powerPreference: "default",
             failIfMajorPerformanceCaveat: false,
           }}
@@ -439,6 +443,8 @@ export function BayCanvas() {
           <ArenaLook />
           <LabLook />
           <World />
+          <StudioPlace />
+          <MoveGizmo />
           <ScorePlate />
         </Canvas>
       ) : null}

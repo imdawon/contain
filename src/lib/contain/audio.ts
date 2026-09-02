@@ -1,3 +1,5 @@
+import { SFX, hitVoice, rollGain } from "./sfx";
+
 type Bus = {
   ctx: AudioContext;
   master: GainNode;
@@ -32,10 +34,10 @@ export function unlockAudio() {
     const hissFilter = ctx.createBiquadFilter();
     const roarFilter = ctx.createBiquadFilter();
     hissFilter.type = "bandpass";
-    hissFilter.frequency.value = 1800;
-    hissFilter.Q.value = 0.7;
+    hissFilter.frequency.value = 280;
+    hissFilter.Q.value = 0.55;
     roarFilter.type = "lowpass";
-    roarFilter.frequency.value = 420;
+    roarFilter.frequency.value = 180;
     hiss.gain.value = 0;
     roar.gain.value = 0;
     sfx.gain.value = 0.9;
@@ -126,9 +128,36 @@ export function reportFire(id: string, smoke: number, flame: number) {
   mixFire();
 }
 
+
+/** Coil/drum slam. Voice (pitch/length) follows closing speed. Same table as the tape mux. */
+export function playSteelHit(kind: "wheel" | "drum" = "wheel", impulse = 0, closing = 12) {
+  unlockAudio();
+  if (!bus || muted) return;
+  const voice = hitVoice(impulse, closing);
+  if (!voice) return;
+  const f0 = kind === "drum" ? voice.f0 * 1.12 : voice.f0;
+  beep(f0, voice.dur, voice.gain * 0.85, "sine");
+  beep(voice.f1, voice.dur * 0.5, voice.gain * 0.32, "triangle");
+}
+
+/** Roll bed from speed (m/s). Silent in air, and at/below SFX.roll.dead. */
+export function setRollRumble(speed: number, grounded = true) {
+  unlockAudio();
+  if (!bus || muted) return;
+  const g = rollGain(speed, grounded);
+  if (g <= 0) {
+    setLoop(0, 0, 0);
+    return;
+  }
+  setLoop(g * SFX.roll.liveHiss, g * SFX.roll.liveRoar, 0);
+}
+
 export function playEvent(type: string, chem: "nmc" | "lfp") {
   if (!bus) return;
   switch (type) {
+    case "clang":
+      playSteelHit("wheel");
+      return;
     case "puncture":
       beep(180, 0.08, 0.16, "sawtooth");
       beep(920, 0.04, 0.08, "square");

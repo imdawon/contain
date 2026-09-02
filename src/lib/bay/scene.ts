@@ -47,6 +47,7 @@ export type Scene = {
 };
 
 export const SCENE_INDEX = [
+  { id: "dismount", file: "scenes/dismount.json", name: "Dismount" },
   { id: "v1", file: "scenes/v1.json", name: "Wagon hill" },
   { id: "v1-miss", file: "scenes/v1-miss.json", name: "Wagon miss" },
   { id: "v1-tight", file: "scenes/v1-tight.json", name: "Wagon tight" },
@@ -283,7 +284,7 @@ export function materializeScene(scene: Scene, nextId: () => string): {
     if (e) trackId = scene.track.part ? `${e.id}-${scene.track.part}` : e.id;
   } else {
     const dummy = entities.find((e) => e.kind === "dummy");
-    if (dummy) trackId = `${dummy.id}-hips`;
+    if (dummy) trackId = `${dummy.id}-chest`;
   }
   return {
     entities,
@@ -318,7 +319,7 @@ export async function resolveScene(input: unknown): Promise<Scene | null> {
   if (!id.includes("/") && !id.endsWith(".json")) urls.push(`/scenes/${id}.json`);
   for (const url of urls) {
     try {
-      const r = await fetch(url);
+      const r = await fetch(url, { cache: "no-store" });
       if (!r.ok) continue;
       const scene = coerceScene(await r.json());
       if (!scene) continue;

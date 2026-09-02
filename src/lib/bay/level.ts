@@ -35,7 +35,7 @@ export const BUILTIN_LEVELS: Level[] = [
     name: "Pin-pull",
     blurb: "Grenade on the crate. Dummy in front. Pull the pin.",
     select: "grenade",
-    track: { kind: "dummy", part: "hips" },
+    track: { kind: "dummy", part: "chest" },
     entities: [
       actor("crate", 0, 0, 0),
       actor("grenade", 0, 0.64, 0),
@@ -49,7 +49,7 @@ export const BUILTIN_LEVELS: Level[] = [
     name: "Shoes",
     blurb: "Grenade at the dummy's feet. No crate in the way.",
     select: "grenade",
-    track: { kind: "dummy", part: "hips" },
+    track: { kind: "dummy", part: "chest" },
     entities: [
       actor("dummy", 0, 0, 0),
       actor("grenade", 0, 0.09, 0.22),
@@ -62,7 +62,7 @@ export const BUILTIN_LEVELS: Level[] = [
     name: "Roost",
     blurb: "Dummy on the crate. Blast yanks the box out from under it.",
     select: "grenade",
-    track: { kind: "dummy", part: "hips" },
+    track: { kind: "dummy", part: "chest" },
     entities: [
       actor("crate", 0, 0, 0),
       actor("dummy", 0, 0.58, 0),
@@ -76,7 +76,7 @@ export const BUILTIN_LEVELS: Level[] = [
     name: "Can pop",
     blurb: "Grenade on the ammo can. Dummy watches the lid.",
     select: "grenade",
-    track: { kind: "dummy", part: "hips" },
+    track: { kind: "dummy", part: "chest" },
     entities: [
       actor("can", 0, 0, 0),
       actor("grenade", 0, 0.62, 0),
@@ -90,7 +90,7 @@ export const BUILTIN_LEVELS: Level[] = [
     name: "Twins",
     blurb: "Two dummies, one crate, one bang.",
     select: "grenade",
-    track: { kind: "dummy", part: "hips" },
+    track: { kind: "dummy", part: "chest" },
     entities: [
       actor("crate", 0, 0, 0),
       actor("grenade", 0, 0.64, 0),
@@ -105,7 +105,7 @@ export const BUILTIN_LEVELS: Level[] = [
     name: "Jenga",
     blurb: "Cube stack, dummy beside, bang at the base.",
     select: "grenade",
-    track: { kind: "dummy", part: "hips" },
+    track: { kind: "dummy", part: "chest" },
     entities: [
       actor("cube", 0, 0.16, 0),
       actor("cube", 0, 0.48, 0),
@@ -122,7 +122,7 @@ export const BUILTIN_LEVELS: Level[] = [
     name: "Pins",
     blurb: "Line of balls, dummy as the last pin, grenade as the ball.",
     select: "grenade",
-    track: { kind: "dummy", part: "hips" },
+    track: { kind: "dummy", part: "chest" },
     entities: [
       actor("grenade", 0, 0.09, -0.35),
       actor("ball", 0, 0.16, 0.15),
@@ -267,7 +267,7 @@ export function materialize(level: Level, nextId: () => string): {
     if (e) trackId = level.track.part ? `${e.id}-${level.track.part}` : e.id;
   } else {
     const dummy = entities.find((e) => e.kind === "dummy");
-    if (dummy) trackId = `${dummy.id}-hips`;
+    if (dummy) trackId = `${dummy.id}-chest`;
   }
   return { entities, selected, trackId, latch: "sealed", tool: "grab" };
 }

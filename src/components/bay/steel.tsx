@@ -16,10 +16,11 @@ import { CRATE_G, DRUM_G, DUMMY_G, WHEEL_G, WORLD_G } from "@/lib/bay/groups";
 import { DRUM, WHEEL } from "@/lib/bay/parts";
 import { findActorBody, note, registerBody, setBodyMass, unregisterBody } from "@/lib/bay/probe";
 import { poseOf } from "@/lib/bay/sample";
+import { playSteelHit, setRollRumble } from "@/lib/contain/audio";
+import { SFX, contactAudible } from "@/lib/contain/sfx";
 import { useBay } from "@/store/bay-store";
 import {
   applySteelHits,
-  crumpleDrum,
   makeSteelShell,
   pushSteelHulls,
   refreshSteelMesh,
@@ -34,9 +35,12 @@ import {
 } from "@/lib/bay/yield";
 
 const WHEEL_GROUPS = interactionGroups([WHEEL_G], [WORLD_G, DRUM_G, CRATE_G, DUMMY_G]);
-const DRUM_SHEET_GROUPS = interactionGroups([DRUM_G], [WORLD_G, DRUM_G]);
+const DRUM_SHEET_GROUPS = interactionGroups([DRUM_G], [WORLD_G, DRUM_G, WHEEL_G]);
+const DRUM_FLAT_GROUPS = interactionGroups([DRUM_G], [WORLD_G, DRUM_G]);
 const WHEEL_MEMBER = 1 << WHEEL_G;
 let lastWheelZ = 0;
+let lastWheelGrounded = 0;
+const lastContactAt = new Map<string, number>();
 
 type CrushCol = RapierCollider & {
   raw?: () => CrushCol;
@@ -46,14 +50,15 @@ type CrushCol = RapierCollider & {
   setCollisionGroups?: (g: number) => void;
 };
 
-function crushDrumCollider(col: RapierCollider | null, halfH: number, radius: number) {
+function crushDrumCollider(col: RapierCollider | null, halfH: number, radius: number, flat: boolean) {
   if (!col) return;
   const wrapped = col as CrushCol;
   const raw = wrapped.raw?.() ?? wrapped;
   try {
-    raw.setHalfHeight?.(Math.max(0.22, halfH));
-    raw.setRadius?.(Math.max(0.22, radius));
+    raw.setHalfHeight?.(Math.max(0.028, halfH));
+    raw.setRadius?.(Math.max(0.16, radius));
     raw.setRestitution?.(0);
+    if (flat) raw.setCollisionGroups?.(DRUM_FLAT_GROUPS);
   } catch {
     /* shape lock */
   }
@@ -110,6 +115,7 @@ function SteelBody({
           rim: Math.round(steelRim(shell) * 1000) / 1000,
           meshRim: Math.round(steelMeshRim(geo, shell) * 1000) / 1000,
           dish: Math.round(steelDish(shell) * 1000) / 1000,
+          grounded: kind === "wheel" ? lastWheelGrounded : 0,
           yield: true,
           spin: (() => {
             const w = body.current?.angvel();
@@ -118,6 +124,7 @@ function SteelBody({
           Iy: Math.round(body.current?.principalInertia()?.y ?? 0),
         }),
       () => body.current,
+      () => mesh.current,
     );
     note("spawn", { kind, id });
     return () => unregisterBody(id);
@@ -162,11 +169,12 @@ function SteelBody({
   });
 
   useAfterPhysicsStep(() => {
-    if (kind !== "wheel") return;
     const b = body.current;
     if (!b || b.numColliders() === 0) return;
-    if (kind === "wheel" && hangarTrack) {
+    if (kind === "wheel") {
       lastWheelZ = b.translation().z;
+    }
+    if (kind === "wheel" && hangarTrack) {
       const w = b.angvel();
       const v = b.linvel();
       const q = b.rotation();
@@ -206,36 +214,8 @@ function SteelBody({
       } catch {
         /* ray missed */
       }
-    } else if (kind === "wheel") {
-      lastWheelZ = b.translation().z;
     }
     let added = 0;
-    if (kind === "drum") {
-      const p = b.translation();
-      if (Math.abs(p.z - lastWheelZ) > 18) return;
-      const wheel = findActorBody("wheel");
-      if (!wheel) return;
-      const wp = wheel.translation();
-      const dx = wp.x - p.x;
-      const dz = wp.z - p.z;
-      if (dx * dx + dz * dz > 64) return;
-      if (shell.maxTaken < 0.25) {
-        const horiz = WHEEL.radius + DRUM.radius + 1.1;
-        if (dx * dx + dz * dz < horiz * horiz && p.z < wp.z + 1.2) {
-          added += crumpleDrum(shell, {
-            x: dx,
-            y: 0,
-            z: dz,
-            nx: dx,
-            ny: 0,
-            nz: dz || 1,
-            impulse: 1_000_000,
-            closing: 30,
-            otherMass: 1_000_000,
-          });
-        }
-      }
-    }
     if (kind === "wheel") {
       let raw: ReturnType<typeof collectHits> = [];
       try {
@@ -243,9 +223,36 @@ function SteelBody({
       } catch {
         return;
       }
-      if (raw.length > 0) {
+      const grounded = raw.length > 0;
+      lastWheelGrounded = grounded ? 1 : 0;
+      const speed = Math.hypot(b.linvel().x, b.linvel().y, b.linvel().z);
+      setRollRumble(speed, grounded);
+      const now = performance.now();
+      for (const h of raw) {
+        if (!contactAudible(h.impulse, h.closing, h.otherMass)) continue;
+        const key = `${id}:${h.otherHandle}`;
+        if (now - (lastContactAt.get(key) ?? 0) < SFX.hit.debounceMs) continue;
+        lastContactAt.set(key, now);
+        note("contact", {
+          id,
+          kind,
+          impulse: Math.round(h.impulse * 1000) / 1000,
+          closing: Math.round(h.closing * 1000) / 1000,
+          otherMass: Number.isFinite(h.otherMass) ? Math.round(h.otherMass) : -1,
+          otherFixed: !Number.isFinite(h.otherMass),
+        });
+        try {
+          playSteelHit(kind === "drum" ? "drum" : "wheel", h.impulse, h.closing);
+        } catch {
+          /* hidden tab / no audio */
+        }
+      }
+      const forYield = raw.filter(
+        (h) => h.closing >= SFX.hit.minClosing && (h.otherMass >= 4000 || !Number.isFinite(h.otherMass)),
+      );
+      if (forYield.length > 0) {
         const reach = WHEEL.radius * 1.7 + WHEEL.thick;
-        const local = raw.some((h) => Math.hypot(h.x, h.y, h.z) > reach) ? worldHitsToLocal(b, raw) : raw;
+        const local = forYield.some((h) => Math.hypot(h.x, h.y, h.z) > reach) ? worldHitsToLocal(b, forYield) : forYield;
         added += applySteelHits(shell, local);
       }
     }
@@ -262,10 +269,7 @@ function SteelBody({
       setBodyMass(b, kg, kind);
     } else {
       const ext = steelExtents(shell);
-      crushDrumCollider(hulls.current[0] ?? null, ext.halfH, ext.radius);
-      const lv = b.linvel();
-      b.setLinvel({ x: lv.x * 0.15, y: Math.min(0, lv.y), z: lv.z * 0.15 }, true);
-      b.setAngvel({ x: 0, y: 0, z: 0 }, true);
+      crushDrumCollider(hulls.current[0] ?? null, ext.halfH, ext.radius, shell.maxTaken >= 0.4);
     }
     b.wakeUp();
     const mark = shell.kind === "wheel" ? 0.012 : 0.02;
@@ -326,16 +330,18 @@ function SteelBody({
               restitution={0}
             />
           )}
-      <mesh geometry={geo} scale={kind === "wheel" ? 1.055 : 1.05} frustumCulled={false} userData={{ labSkip: true }}>
-        <meshBasicMaterial color="#000000" side={THREE.FrontSide} toneMapped={false} fog={false} />
-      </mesh>
+      {kind === "wheel" ? (
+        <mesh geometry={geo} scale={1.055} frustumCulled={false} userData={{ labSkip: true }}>
+          <meshBasicMaterial color="#000000" side={THREE.FrontSide} toneMapped={false} fog={false} />
+        </mesh>
+      ) : null}
       <mesh ref={mesh} geometry={geo} onPointerDown={grab.down} castShadow receiveShadow frustumCulled={false}>
         <meshStandardMaterial
           color={color}
           vertexColors
-          flatShading
-          metalness={kind === "wheel" ? 0.42 : 0.32}
-          roughness={kind === "wheel" ? 0.5 : 0.58}
+          flatShading={kind === "wheel"}
+          metalness={kind === "wheel" ? 0.42 : 0.55}
+          roughness={kind === "wheel" ? 0.5 : 0.38}
           side={THREE.DoubleSide}
         />
       </mesh>
@@ -345,7 +351,7 @@ function SteelBody({
 }
 
 function collectHits(world: { contactPairsWith: Function; contactPair: Function }, b: RapierRigidBody, kind: SteelKind) {
-  const hits: { x: number; y: number; z: number; nx: number; ny: number; nz: number; impulse: number; closing: number; otherMass: number }[] = [];
+  const hits: { x: number; y: number; z: number; nx: number; ny: number; nz: number; impulse: number; closing: number; otherMass: number; otherHandle: number }[] = [];
   const n = b.numColliders();
   const seen = new Set<number>();
   const v = b.linvel();
@@ -364,7 +370,6 @@ function collectHits(world: { contactPairsWith: Function; contactPair: Function 
         if ((mem & WHEEL_MEMBER) === 0) return;
       }
       const otherMass = otherFixed ? Number.POSITIVE_INFINITY : ob.mass();
-      if (kind === "wheel" && !otherFixed && otherMass < 4000) return;
       const ov = otherFixed ? { x: 0, y: 0, z: 0 } : ob.linvel();
       const relx = v.x - ov.x;
       const rely = v.y - ov.y;
@@ -400,7 +405,7 @@ function collectHits(world: { contactPairsWith: Function; contactPair: Function 
               const count = manifold.numContacts();
               for (let k = 0; k < count; k++) {
                 const impulse = Math.abs(manifold.contactImpulse(k));
-                if (impulse < 0.02) continue;
+                if (impulse < 1e-4) continue;
                 const lp = flipped ? manifold.localContactPoint2(k) : manifold.localContactPoint1(k);
                 const ln = flipped ? manifold.localNormal2() : manifold.localNormal1();
                 if (!lp) continue;
@@ -416,19 +421,17 @@ function collectHits(world: { contactPairsWith: Function; contactPair: Function 
           );
         }
       }
-      if (sum < 0.08) return;
+      if (sum <= 0) return;
       const inv = 1 / sum;
       const nl = Math.hypot(nx, ny, nz) || 1;
       const nnx = nx / nl;
       const nny = ny / nl;
       const nnz = nz / nl;
       const closing = Math.max(0, -(relx * nnx + rely * nny + relz * nnz));
-      if (kind === "wheel") {
-        if (closing < 3.2) return;
-      } else if (closing < 0.12 && sum < 0.55) {
+      if (kind !== "wheel" && closing < 0.12 && sum < 0.55) {
         return;
       }
-      hits.push({ x: cx * inv, y: cy * inv, z: cz * inv, nx: nnx, ny: nny, nz: nnz, impulse: sum, closing, otherMass });
+      hits.push({ x: cx * inv, y: cy * inv, z: cz * inv, nx: nnx, ny: nny, nz: nnz, impulse: sum, closing, otherMass, otherHandle: ob.handle });
     });
   }
   return hits;
