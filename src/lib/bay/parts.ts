@@ -97,7 +97,7 @@ export const WHEEL = {
   segs: 24,
   /** Default 100 t. Rapier is kg. Scene files may 10x this. */
   mass: 100_000,
-  /** Slam bruise. Rolling contact is gated by closing speed, not this. */
+  /** Slam yield. Rolling pipe contact bruises without this gate. */
   yieldJ: 400_000,
   stiff: 6e5,
   maxDent: 0.42,

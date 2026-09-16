@@ -327,28 +327,34 @@ export function applySteelHits(shell: SteelShell, hits: SteelHit[]) {
   let added = 0;
   for (const hit of hits) {
     let j = hit.impulse;
+    let rolling = false;
     if (kind === "wheel") {
       if (hit.otherMass != null && Number.isFinite(hit.otherMass) && hit.otherMass < 4000) continue;
       const m = hit.otherMass != null && Number.isFinite(hit.otherMass) ? hit.otherMass : 100_000;
       const closing = hit.closing ?? 0;
-      const kinetic = 0.5 * Math.min(100_000, Math.max(0, m)) * closing * closing;
-      j = Math.max(hit.impulse, kinetic);
+      const pipe = !Number.isFinite(hit.otherMass);
+      if (pipe && closing < 8) {
+        rolling = true;
+      } else {
+        const kinetic = 0.5 * Math.min(100_000, Math.max(0, m)) * closing * closing;
+        j = Math.max(hit.impulse, kinetic);
+      }
     }
-    const excess = j - yieldJ;
+    const excess = rolling ? 1 : j - yieldJ;
     if (excess <= 0) continue;
     const crater = craterOnShell(shell, hit);
     if (!crater) continue;
     const onEdge = kind === "wheel" && Math.abs(crater.y) > halfH * 0.62;
-    if (kind === "wheel") {
+    if (kind === "wheel" && !rolling) {
       const need = onEdge ? 8 : 12;
       if (hit.closing != null && hit.closing < need) continue;
     }
-    const hitCap = kind === "wheel" ? (onEdge ? 0.08 : 0.05) : cap;
-    const sigR = kind === "wheel" ? (onEdge ? 0.26 : 0.34) : sigma;
+    const hitCap = rolling ? 0.16 : kind === "wheel" ? (onEdge ? 0.08 : 0.05) : cap;
+    const sigR = kind === "wheel" ? (rolling ? 0.32 : onEdge ? 0.26 : 0.34) : sigma;
     const sigY = kind === "wheel" ? halfH * 0.55 : sigma;
     const twoR = 2 * sigR * sigR;
     const twoY = 2 * sigY * sigY;
-    const depth = Math.min(hitCap, maxDent, excess / Math.max(0.5, stiff));
+    const depth = rolling ? 0.026 : Math.min(hitCap, maxDent, excess / Math.max(0.5, stiff));
     if (kind !== "drum" && depth < 0.002) continue;
 
     if (kind === "drum") {
@@ -401,7 +407,10 @@ export function applySteelHits(shell: SteelShell, hits: SteelHit[]) {
           : -(dx * dx + dz * dz) / twoR - (dy * dy) / twoY,
       );
       if (w < 0.04) continue;
-      const room = maxDent - dent[i]!;
+      const restR = Math.hypot(rx, rz);
+      // Rolling bruises the outer tread. Inner rings must not snap out to floorR.
+      if (rolling && restR < shell.radius * 0.9) continue;
+      const room = (rolling ? 0.16 : maxDent) - dent[i]!;
       if (room <= 0.0004) continue;
       const take = Math.min(room, depth * w);
       if (take < 0.0002) continue;
@@ -413,7 +422,7 @@ export function applySteelHits(shell: SteelShell, hits: SteelHit[]) {
       if (vertEdge) py += uy * take;
       pz += uz * take;
       let rad = Math.hypot(px, pz);
-      if (rad < floorR && rad > 1e-4) {
+      if (rad < floorR && rad > 1e-4 && restR >= floorR) {
         const s = floorR / rad;
         px *= s;
         pz *= s;
@@ -426,7 +435,7 @@ export function applySteelHits(shell: SteelShell, hits: SteelHit[]) {
       live[o] = px;
       live[o + 1] = py;
       live[o + 2] = pz;
-      dent[i] = Math.min(maxDent, dent[i]! + pushed);
+      dent[i] = Math.min(rolling ? 0.16 : maxDent, dent[i]! + pushed);
       bruise(shell, i);
       added += pushed;
     }
