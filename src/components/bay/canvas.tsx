@@ -177,6 +177,80 @@ function pushEyeOutOfDump(eye: THREE.Vector3, dumpZ: number) {
 }
 
 
+const CAM_OFF_DEF: [number, number, number] = [0, 2.2, -8];
+const CAM_LOOK_DEF: [number, number, number] = [0, -0.3, 14];
+const CAM_FOV_DEF = 48;
+const PIPE_HALF_X = 10.6;
+const PIPE_LIP_Y = 12;
+const CAM_EYE_Y_MAX = 13.2;
+const CAM_EYE_Y_MIN = 3.4;
+const CAM_CLOSE_Z = -5;
+
+function camTriple(src: number[] | undefined, fallback: [number, number, number]): [number, number, number] {
+  const a = src?.[0];
+  const b = src?.[1];
+  const c = src?.[2];
+  if (Number.isFinite(a) && Number.isFinite(b) && Number.isFinite(c)) return [a as number, b as number, c as number];
+  return fallback;
+}
+
+function sampleTrackPos(id: string | undefined): boolean {
+  if (!id) return false;
+  const rec = listSamplers().get(id);
+  const mesh = rec ? actorMesh(id) : null;
+  if (mesh) {
+    try {
+      mesh.getWorldPosition(_trackP);
+      if (Number.isFinite(_trackP.x) && Number.isFinite(_trackP.y) && Number.isFinite(_trackP.z)) return true;
+    } catch {
+      /* */
+    }
+  }
+  if (rec) {
+    const p = rec.sample();
+    if (Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z)) {
+      _trackP.set(p.x, p.y, p.z);
+      return true;
+    }
+  }
+  const ent = useBay.getState().entities.find((e) => e.id === id);
+  if (ent) {
+    _trackP.set(ent.pos[0], ent.pos[1], ent.pos[2]);
+    return Number.isFinite(_trackP.x) && Number.isFinite(_trackP.y) && Number.isFinite(_trackP.z);
+  }
+  return false;
+}
+
+function coilTrackId(trackId: string | undefined, ents: { id: string; kind: string; name?: string }[]): string | undefined {
+  if (trackId) return trackId;
+  const hit = ents.find((e) => {
+    const n = String(e.name ?? e.id ?? "").toLowerCase();
+    return e.kind === "wheel" || e.kind === "coil" || n === "coil" || n === "wheel";
+  });
+  return hit?.id;
+}
+
+/** Keep chase eye with the U-pipe: no tan-void flyaway when the coil is airborne or wide. */
+function pipeStayCam(ox: number, oy: number, oz: number, lx: number, ly: number, lz: number) {
+  const tx = _trackP.x;
+  const ty = _trackP.y;
+  const tz = _trackP.z;
+  let mix = 0;
+  const air = ty - PIPE_LIP_Y;
+  if (air > 0) mix = Math.min(1, air / 7);
+  const out = Math.abs(tx + ox) - PIPE_HALF_X;
+  if (out > 0) mix = Math.max(mix, Math.min(1, out / 5));
+  const ozUse = oz + (CAM_CLOSE_Z - oz) * mix;
+  const lyUse = ly + (0 - ly) * mix;
+  let ex = tx + ox;
+  if (Math.abs(ex) > PIPE_HALF_X) ex = Math.sign(ex || 1) * PIPE_HALF_X;
+  let ey = ty + oy;
+  if (mix > 0) ey = ey * (1 - mix) + (PIPE_LIP_Y + 1.6) * mix;
+  ey = Math.min(CAM_EYE_Y_MAX, Math.max(CAM_EYE_Y_MIN, ey));
+  _desEye.set(ex, ey, tz + ozUse);
+  _desLook.set(tx + lx, ty + lyUse, tz + lz);
+}
+
 function TrackCam({
   orbit,
 }: {
@@ -213,6 +287,35 @@ function TrackCam({
         String(tracked?.name ?? "").toLowerCase() === "coil" ||
         String(tracked?.name ?? "").toLowerCase() === "wheel";
       const chaseDump = !followCoil && (bake || Boolean(dumpEnt));
+      if (followCoil) {
+        const wantFov = fov || CAM_FOV_DEF;
+        if ("fov" in camera && camera.fov !== wantFov) {
+          camera.fov = wantFov;
+          camera.updateProjectionMatrix();
+        }
+        const id = coilTrackId(trackId, ents);
+        if (sampleTrackPos(id)) {
+          const [ox, oy, oz] = camTriple(offset, CAM_OFF_DEF);
+          const [lx, ly, lz] = camTriple(look, CAM_LOOK_DEF);
+          pipeStayCam(ox, oy, oz, lx, ly, lz);
+          if (
+            Number.isFinite(_desEye.x) &&
+            Number.isFinite(_desEye.y) &&
+            Number.isFinite(_desEye.z) &&
+            Number.isFinite(_desLook.x) &&
+            Number.isFinite(_desLook.y) &&
+            Number.isFinite(_desLook.z)
+          ) {
+            camera.position.copy(_desEye);
+            const controls = orbit.current;
+            if (controls) controls.target.copy(_desLook);
+            camera.lookAt(_desLook);
+            camera.updateMatrixWorld();
+            primed.current = true;
+          }
+        }
+        return;
+      }
       if (chaseDump && "fov" in camera) {
         const wantFov = bake ? 46 : fov || 48;
         if (camera.fov !== wantFov) {

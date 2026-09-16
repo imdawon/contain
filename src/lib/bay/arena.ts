@@ -120,7 +120,7 @@ export function sceneTheme(scene?: Pick<Scene, "id" | "theme"> | null): ArenaThe
   if (raw.includes("beach")) return "beach";
   if (raw.includes("forest") || raw.includes("grove")) return "forest";
   if (raw.includes("space") || raw.includes("mare") || raw.includes("moon")) return "space";
-  if (raw.includes("golf") || raw.includes("cannon")) return "golf";
+  if (raw.includes("golf") || raw.includes("cannon") || raw.includes("halfpipe")) return "golf";
   return null;
 }
 

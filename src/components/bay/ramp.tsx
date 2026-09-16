@@ -9,7 +9,7 @@ import { useBay } from "@/store/bay-store";
 const GROUPS = interactionGroups([WORLD_G], [WORLD_G, DUMMY_G, CRATE_G, WAGON_G]);
 const dirt = 0xb7aea0;
 const dirtHi = 0xe2c47a;
-const concrete = 0x8b8d88;
+const concrete = 0xa39e94;
 const grass = 0x4d7a3e;
 const railCol = 0x3a3c3a;
 const CUT = 0.75;
@@ -20,7 +20,7 @@ const LIP = 1.4;
 const PIPE_THICK = 1.2;
 const BERM = 9;
 const RAIL_H = 1.1;
-const RAIL_T = 0.14;
+const RAIL_T = 0.08;
 
 /** s in [0,1]. Vertex at s = 0.5/cut. cut=1 is a full U split at the center. */
 function parabolaY(s: number, h: number, cut: number) {

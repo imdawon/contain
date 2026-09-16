@@ -90,7 +90,7 @@ export const WAGON = {
 
 /** Machined steel wheel. Yields locally; Rapier still owns rigid motion. */
 export const WHEEL = {
-  radius: 1.0,
+  radius: 1.5,
   /** Coil face width. BeamNG 100 t roll is car-scale, not an 80 cm puck. */
   thick: 1.8,
   hub: 0.22,
