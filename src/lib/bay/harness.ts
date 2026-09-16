@@ -68,18 +68,19 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 179;
+const PIPE_GEN = 183;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
   __bayPipeCtl?: AbortController;
   __baySeen?: Set<string>;
-  __bayJobs?: Map<string, Promise<{ value?: unknown; error?: string }>>;
+  __bayJobs?: Map<string, Promise<{ value?: unknown; error?: string; skipped?: boolean }>>;
   __bayPipeGen?: number;
   __bayTakeBeat?: number;
   __bayWatch?: ReturnType<typeof setInterval>;
   __bayBake?: boolean;
   __bayClk?: Worker;
+  __bayTapeJob?: string;
 };
 const hist = (g.__bayHist ??= { frames: [], lastHistT: -1, lastEventN: 0 });
 const frames = hist.frames;
@@ -898,7 +899,10 @@ async function tapeInner(scene?: unknown, ms = 0) {
         finish();
       }
     });
+  let lastJpegAt = performance.now();
+  let stalled = false;
   const grab = async () => {
+    beat();
     wgrab.__bayGrabData = null;
     wgrab.__bayWantGrab = true;
     try {
@@ -909,15 +913,29 @@ async function tapeInner(scene?: unknown, ms = 0) {
       }
       await yieldPaint(80);
       let data: unknown = wgrab.__bayGrabData;
+      const el = liveCanvas();
       if (typeof data !== "string" || !data.startsWith("data:image")) {
         try {
-          const el = liveCanvas();
           if (el) data = el.toDataURL("image/jpeg", 0.85);
         } catch {
           data = null;
         }
       }
-      if (typeof data === "string" && data.startsWith("data:image")) frames.push(data);
+
+      if (typeof data === "string" && data.startsWith("data:image")) {
+        frames.push(data);
+        lastJpegAt = performance.now();
+        try {
+          void fetch("/__bay/progress", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            cache: "no-store",
+            body: JSON.stringify({ id: g.__bayTapeJob, jpegN: frames.length, frame: data }),
+          }).catch(() => {});
+        } catch {
+          /* progress is best-effort */
+        }
+      }
     } finally {
       wgrab.__bayWantGrab = false;
     }
@@ -974,11 +992,19 @@ async function tapeInner(scene?: unknown, ms = 0) {
   let spins = 0;
   while (frames.length < want && spins < want + 8) {
     spins += 1;
+    beat();
+    if (performance.now() - t0 >= 85000) break;
+    if (performance.now() - lastJpegAt > 20000) {
+      stalled = true;
+      break;
+    }
     const tick0 = performance.now();
     try {
-      kick();
-      await yieldPaint(80);
       await grab();
+      if (performance.now() - lastJpegAt > 20000) {
+        stalled = true;
+        break;
+      }
       let snap: ReturnType<typeof peek>;
       try {
         snap = peek();
@@ -1018,15 +1044,40 @@ async function tapeInner(scene?: unknown, ms = 0) {
       }
     }
   }
-  kick();
-  await yieldPaint(80);
-  await grab();
+  if (!stalled) {
+    kick();
+    await yieldPaint(80);
+    await grab();
+  }
+  const durationMs = Math.round(performance.now() - t0);
+  const jpegN = frames.length;
+  if (stalled) {
+    return {
+      ok: false,
+      aborted: true,
+      reason: "tape-stall" as const,
+      w: W,
+      h: H,
+      mime: "image/jpeg",
+      n: jpegN,
+      jpegN,
+      restage: staged,
+      slowAtMs: null,
+      slowOffMs: null,
+      contacts,
+      speedHz,
+      groundedHz,
+      hitsMs: contacts.map((c) => c.tMs),
+      durationMs,
+    };
+  }
   return {
-    ok: frames.length > 2,
+    ok: jpegN > 2,
     w: W,
     h: H,
     mime: "image/jpeg",
-    n: frames.length,
+    n: jpegN,
+    jpegN,
     restage: staged,
     slowAtMs: null,
     slowOffMs: null,
@@ -1034,8 +1085,7 @@ async function tapeInner(scene?: unknown, ms = 0) {
     speedHz,
     groundedHz,
     hitsMs: contacts.map((c) => c.tMs),
-    durationMs: Math.round(performance.now() - t0),
-    frames,
+    durationMs,
   };
 }
 
@@ -1260,16 +1310,31 @@ function startHarnessPipe() {
     g.__bayPipeCtl = undefined;
     g.__bayPipeGen = PIPE_GEN;
   }
-  const run = async (fn: string, args: unknown[], capMs = 16000) => {
+  const stripFrames = (out: { value?: unknown; error?: string; skipped?: boolean }) => {
+    const val = out?.value;
+    if (val && typeof val === "object" && val !== null && "frames" in val) {
+      delete (val as { frames?: unknown }).frames;
+    }
+    return out;
+  };
+  const run = async (fn: string, args: unknown[], capMs = 16000, id?: string) => {
+    if (g.__bayBake && fn === "tape" && id && id !== g.__bayTapeJob) return { skipped: true as const };
     const api = (window as unknown as { __bay?: Record<string, (...a: unknown[]) => unknown> }).__bay;
     if (!api || typeof api[fn] !== "function") return { error: `no-fn:${fn}` };
     try {
-      const cap = Math.max(4000, Math.min(240000, Number(capMs) || 16000));
+      const cap =
+        fn === "tape"
+          ? Math.min(90000, Number(capMs) || 90000)
+          : Math.max(4000, Math.min(240000, Number(capMs) || 16000));
       const value = await Promise.race([
         Promise.resolve(api[fn](...args)),
         new Promise((_, reject) => setTimeout(() => reject(new Error("run-timeout")), cap)),
       ]);
-      return { value: JSON.parse(JSON.stringify(value ?? null)) };
+      const cloned = JSON.parse(JSON.stringify(value ?? null));
+      if (cloned && typeof cloned === "object" && cloned !== null && "frames" in cloned) {
+        delete cloned.frames;
+      }
+      return { value: cloned };
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
     }
@@ -1279,7 +1344,7 @@ function startHarnessPipe() {
     if (!id) return { error: "no-id" };
     const hit = jobs.get(id);
     if (hit) return hit;
-    const p = run(fn, args, capMs);
+    const p = run(fn, args, capMs, id);
     jobs.set(id, p);
     if (jobs.size > 80) {
       const first = jobs.keys().next().value;
@@ -1321,20 +1386,39 @@ function startHarnessPipe() {
         }
         const msg = (await r.json()) as { id?: string; fn?: string; args?: unknown[]; waitMs?: number };
         if (!msg?.id) continue;
-        const cap = Math.min(240000, Number(msg.waitMs) || 16000);
-        const out = await handle(String(msg.id), String(msg.fn ?? ""), Array.isArray(msg.args) ? msg.args : [], cap);
+        const fnName = String(msg.fn ?? "");
+        const jobId = String(msg.id);
+        const wait = Number(msg.waitMs) || 16000;
+        const cap = fnName === "tape" ? Math.min(90000, wait) : Math.min(240000, wait);
+        const postDone = (out: { value?: unknown; error?: string; skipped?: boolean }) =>
+          fetch("/__bay/done", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              id: jobId,
+              ...stripFrames(out),
+              paint,
+              nobj: listSamplers().size,
+              owned,
+            }),
+          });
+        if (g.__bayBake && fnName === "tape" && jobId !== g.__bayTapeJob) {
+          await postDone({ skipped: true });
+          continue;
+        }
+        if (fnName === "tape") {
+          g.__bayTapeJob = jobId;
+          if (!jobs.has(jobId)) {
+            void handle(jobId, fnName, Array.isArray(msg.args) ? msg.args : [], cap).then((out) => {
+              beat();
+              return postDone(out);
+            });
+          }
+          continue;
+        }
+        const out = await handle(jobId, fnName, Array.isArray(msg.args) ? msg.args : [], cap);
         beat();
-        await fetch("/__bay/done", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            id: msg.id,
-            ...out,
-            paint,
-            nobj: listSamplers().size,
-            owned,
-          }),
-        });
+        await postDone(out);
       } catch {
         if (ctl.signal.aborted) return;
         await new Promise((res) => setTimeout(res, 500));
@@ -1356,5 +1440,10 @@ if (typeof window !== "undefined" && import.meta.env.DEV) {
 }
 
 if (import.meta.hot) {
-  import.meta.hot.dispose(() => stopHotListener());
+  import.meta.hot.accept();
+  import.meta.hot.dispose(() => {
+    const owned = typeof window !== "undefined" && Boolean((window as unknown as { __bayOwned?: boolean }).__bayOwned);
+    if (owned || g.__bayBake) return;
+    stopHotListener();
+  });
 }

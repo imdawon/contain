@@ -91,7 +91,7 @@ if (fn === "abort" || fn === "cancel") {
 let waitMs = 20000;
 if (fn === "until") waitMs = Math.max(waitMs, Number(args[1] || 8000) + 4000);
 if (fn === "restage" || fn === "load" || fn === "run") waitMs = 60000;
-if (fn === "tape") waitMs = 590000;
+if (fn === "tape") waitMs = 95000;
 let pipeFn = fn;
 let pipeArgs = args;
 let tapeDest = null;
@@ -295,16 +295,20 @@ if (fn === "tape") {
       val.fps = durationSec > 0 ? frames.length / durationSec : 30;
       val.framesPerSec = val.fps;
       val.bake = true;
+      if (val.aborted === true) val.aborted = true;
       parsed.value = val;
       parsed.ok = parsed.ok !== false && val.ok !== false && ff.status === 0;
+      if (val.aborted === true) parsed.ok = false;
       out = `${JSON.stringify(parsed)}\n`;
     } else if (val) {
-      val.jpegN = frames.length;
-      val.n = frames.length;
+      const jpegN = Number(val.jpegN) > 0 ? Number(val.jpegN) : frames.length;
+      val.jpegN = jpegN;
+      val.n = jpegN;
+      if (val.aborted === true) val.aborted = true;
       delete val.frames;
       if (Number(val.durationMs) > 0) val.durationSec = Number(val.durationMs) / 1000;
       else if (!(Number(val.durationSec) > 0)) val.durationSec = 0;
-      val.fps = Number(val.durationSec) > 0 ? frames.length / Number(val.durationSec) : 0;
+      val.fps = Number(val.durationSec) > 0 ? jpegN / Number(val.durationSec) : 0;
       val.framesPerSec = val.fps;
       val.bake = val.bake === true;
       parsed.value = val;

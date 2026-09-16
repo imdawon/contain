@@ -49,9 +49,56 @@ async function hold() {
   });
   await context.addInitScript(() => {
     window.__bayOwned = true;
+    if (window.__bayHmrFrozen) return;
+    window.__bayHmrFrozen = true;
+    const Native = window.WebSocket;
+    function FrozenWebSocket(url, protocols) {
+      const list = Array.isArray(protocols)
+        ? protocols
+        : protocols == null
+          ? []
+          : [protocols];
+      if (list.includes("vite-hmr") || list.includes("vite-ping")) {
+        const et = new EventTarget();
+        const sock = {
+          url,
+          protocol: "",
+          extensions: "",
+          binaryType: "blob",
+          bufferedAmount: 0,
+          readyState: 1,
+          CONNECTING: 0,
+          OPEN: 1,
+          CLOSING: 2,
+          CLOSED: 3,
+          send() {},
+          close() {},
+          addEventListener: et.addEventListener.bind(et),
+          removeEventListener: et.removeEventListener.bind(et),
+          dispatchEvent: et.dispatchEvent.bind(et),
+        };
+        queueMicrotask(() => {
+          sock.dispatchEvent(new Event("open"));
+          sock.dispatchEvent(
+            new MessageEvent("message", {
+              data: JSON.stringify({ type: "connected" }),
+            }),
+          );
+        });
+        return sock;
+      }
+      if (protocols === undefined) return new Native(url);
+      return new Native(url, protocols);
+    }
+    FrozenWebSocket.CONNECTING = Native.CONNECTING;
+    FrozenWebSocket.OPEN = Native.OPEN;
+    FrozenWebSocket.CLOSING = Native.CLOSING;
+    FrozenWebSocket.CLOSED = Native.CLOSED;
+    FrozenWebSocket.prototype = Native.prototype;
+    window.WebSocket = FrozenWebSocket;
   });
   const page = await context.newPage();
-  await page.goto(BASE, { waitUntil: "domcontentloaded", timeout: 60000 });
+  await page.goto(`${BASE}/?hmr=false`, { waitUntil: "domcontentloaded", timeout: 60000 });
   await page.waitForFunction(
     () => {
       const c = document.querySelector("canvas");
