@@ -38,9 +38,25 @@ import {
 const WHEEL_GROUPS = interactionGroups([WHEEL_G], [WORLD_G, DRUM_G, CRATE_G, DUMMY_G]);
 const DRUM_SHEET_GROUPS = interactionGroups([DRUM_G], [WORLD_G, DRUM_G, WHEEL_G]);
 const WHEEL_MEMBER = 1 << WHEEL_G;
+const ROT_ALL: [boolean, boolean, boolean] = [true, true, true];
+const ROT_HP: [boolean, boolean, boolean] = [false, true, false];
+const ROT_ZERO: [number, number, number] = [0, 0, 0];
 let lastWheelZ = 0;
 let lastWheelGrounded = 0;
 const lastContactAt = new Map<string, number>();
+
+type RapierBodyType = RapierRigidBody & {
+  setBodyType?: (t: number, wake: boolean) => void;
+};
+
+function asDynamic(b: RapierRigidBody) {
+  const rb = b as RapierBodyType;
+  try {
+    if (rb.isKinematic()) rb.setBodyType?.(0, true);
+  } catch {
+    /* restage */
+  }
+}
 
 type CrushCol = RapierCollider & {
   raw?: () => CrushCol;
@@ -103,6 +119,10 @@ function SteelBody({
   const geo = useMemo(() => steelGeometry(shell), [shell]);
   const parts = useMemo(() => shell.slices, [shell]);
   const hullArgs = useMemo(() => parts.map((p) => sliceHull(shell, p)), [parts, shell]);
+  const spawnPos = useMemo((): [number, number, number] => {
+    if (kind === "wheel" && hangarTrack) return [pos[0], pos[1] + 1.15, pos[2] + 1.4];
+    return pos;
+  }, [kind, hangarTrack, pos]);
 
   useEffect(() => {
     registerBody(
@@ -141,10 +161,11 @@ function SteelBody({
     const b = body.current;
     if (!b) return;
     try {
+      asDynamic(b);
       setBodyMass(b, kg, kind);
       b.wakeUp();
       if (kind === "wheel" && hangarTrack) {
-        b.setTranslation({ x: pos[0], y: pos[1] + 1.15, z: pos[2] + 1.4 }, true);
+        b.setTranslation({ x: spawnPos[0], y: spawnPos[1], z: spawnPos[2] }, true);
       }
       if (vel) {
         b.setLinvel({ x: vel[0], y: vel[1], z: vel[2] }, true);
@@ -154,14 +175,18 @@ function SteelBody({
     } catch {
       /* restage can leave a dead rapier handle */
     }
-  }, [kg, kind, stageN, vel, pos, hangarTrack]);
+  }, [kg, kind, stageN, vel, spawnPos, hangarTrack]);
 
   useFrame((state, dt) => {
     grab.tick(state.raycaster.ray, Math.min(dt, 0.05));
     const b = body.current;
     if (!b) return;
-    if (!pinned.current) {
+    const kin = b.isKinematic();
+    const light = kind === "wheel" && b.mass() < kg * 0.2;
+    if (kin) asDynamic(b);
+    if (!pinned.current || kin || light) {
       setBodyMass(b, kg, kind);
+      if ((kin || light) && vel) b.setLinvel({ x: vel[0], y: vel[1], z: vel[2] }, true);
       pinned.current = true;
     }
     if (!armed.current) {
@@ -235,6 +260,7 @@ function SteelBody({
       }
     }
     if (!halfpipe && kind === "wheel" && kg >= 90_000) {
+      asDynamic(b);
       const floorVz = kg >= 180_000 ? 12 : 8;
       const cap = 22;
       const g = globalThis as typeof globalThis & { __bayCoilKeepVz?: number; __bayCoilKeepUntil?: number };
@@ -248,6 +274,17 @@ function SteelBody({
       b.setLinvel({ x: cur.x * 0.15, y: Math.min(cur.y, 0.35), z: vz }, true);
       b.setAngvel({ x: -vz / Math.max(0.08, WHEEL.radius), y: 0, z: 0 }, true);
       b.wakeUp();
+    }
+    if (kind === "drum" && hangarTrack) {
+      const wheel = findActorBody("wheel");
+      if (wheel) {
+        const wp = wheel.translation();
+        const p = b.translation();
+        if (p.z > wp.z + 6) {
+          b.setLinvel({ x: 0, y: 0, z: 0 }, true);
+          b.setAngvel({ x: 0, y: 0, z: 0 }, true);
+        }
+      }
     }
     let added = 0;
     if (kind === "drum" && shell.maxTaken < 0.25) {
@@ -395,17 +432,19 @@ function SteelBody({
   return (
     <RigidBody
       ref={body}
-      position={pos}
-      rotation={rot ?? [0, 0, 0]}
+      type="dynamic"
+      position={spawnPos}
+      rotation={rot ?? ROT_ZERO}
       colliders={false}
       friction={mu}
       restitution={rest}
       linearDamping={kind === "wheel" ? (halfpipe ? 0 : 0.004) : 0.05}
       angularDamping={kind === "wheel" ? (halfpipe ? 0 : 0.08) : 0.12}
       collisionGroups={groups}
-      canSleep={false}
+      canSleep={kind !== "wheel"}
       ccd={kind === "wheel" || Boolean(vel)}
-      enabledRotations={halfpipe && kind === "wheel" ? [false, true, false] : [true, true, true]}
+      enabledRotations={halfpipe && kind === "wheel" ? ROT_HP : ROT_ALL}
+      {...(kind === "wheel" && vel ? { linearVelocity: vel } : {})}
     >
       {kind === "wheel"
         ? hullArgs.map((args, i) => (
