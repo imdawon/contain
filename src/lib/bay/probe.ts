@@ -234,7 +234,7 @@ export function setBodyMass(b: RapierRigidBody, kg: number, kind: InertiaKind = 
     const c = b.collider(i) as { setDensity?: (d: number) => void } | null;
     c?.setDensity?.(0);
   }
-  const I = principalOf(n <= 2 ? "drum" : kind, kg);
+  const I = principalOf(kind, kg);
   const ident = { x: 0, y: 0, z: 0, w: 1 };
   b.setAdditionalMassProperties(kg, { x: 0, y: 0, z: 0 }, I, ident, true);
   b.wakeUp();
