@@ -68,7 +68,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 225;
+const PIPE_GEN = 233;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -962,7 +962,7 @@ async function tapeInner(scene?: unknown, ms = 0) {
       gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pix);
       rawFrames.push(pix.slice(0, need));
       lastJpegAt = performance.now();
-      if (rawFrames.length === 1 || rawFrames.length % 24 === 0) {
+      if (rawFrames.length === 1 || rawFrames.length % 8 === 0) {
         try {
           void fetch("/__bay/progress", {
             method: "POST",
@@ -1111,10 +1111,24 @@ async function tapeInner(scene?: unknown, ms = 0) {
   }
   g.__bayPace = false;
   const durationMs = Math.round(performance.now() - t0);
+  const pingProgress = (n: number) => {
+    try {
+      void fetch("/__bay/progress", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ id: g.__bayTapeJob, jpegN: n }),
+      }).catch(() => {});
+    } catch {
+      /* progress is best-effort */
+    }
+  };
+  pingProgress(rawFrames.length);
   if (grabW > 0 && grabH > 0) {
-    for (const raw of rawFrames) {
-      const data = jpegFromRaw(raw, grabW, grabH);
+    for (let i = 0; i < rawFrames.length; i++) {
+      const data = jpegFromRaw(rawFrames[i]!, grabW, grabH);
       if (typeof data === "string" && data.startsWith("data:image")) frames.push(data);
+      if (i === 0 || (i + 1) % 40 === 0) pingProgress(frames.length);
     }
   }
   const jpegN = frames.length;
