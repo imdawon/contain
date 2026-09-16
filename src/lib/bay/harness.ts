@@ -68,7 +68,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 190;
+const PIPE_GEN = 205;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -79,6 +79,7 @@ const g = globalThis as unknown as {
   __bayTakeBeat?: number;
   __bayWatch?: ReturnType<typeof setInterval>;
   __bayBake?: boolean;
+  __bayPace?: boolean;
   __bayClk?: Worker;
   __bayTapeJob?: string;
 };
@@ -663,10 +664,30 @@ export function peek() {
   }
   const cam = s.camera;
   const histCam = frames.at(-1)?.cam ?? null;
+  const chase =
+    typeof window !== "undefined"
+      ? (window as unknown as {
+          __bayChase?: { clampedToTrough?: boolean; ox?: number; oy?: number; oz?: number; dist?: number };
+        }).__bayChase
+      : undefined;
+  const chaseBits =
+    chase && Number.isFinite(chase.dist) && Number.isFinite(chase.ox) && Number.isFinite(chase.oy) && Number.isFinite(chase.oz)
+      ? { dist: round(chase.dist as number), ox: round(chase.ox as number), oy: round(chase.oy as number), oz: round(chase.oz as number) }
+      : {};
   const camera = cam
-    ? { x: cam.x, y: cam.y, z: cam.z, lookX: cam.lookX, lookY: cam.lookY, lookZ: cam.lookZ, fov: cam.fov }
+    ? { ...cam, clampedToTrough: Boolean(chase?.clampedToTrough), ...chaseBits }
     : histCam
-      ? { x: histCam.x, y: histCam.y, z: histCam.z, lookX: histCam.x, lookY: histCam.y, lookZ: histCam.z, fov: 42 }
+      ? {
+          x: histCam.x,
+          y: histCam.y,
+          z: histCam.z,
+          lookX: histCam.x,
+          lookY: histCam.y,
+          lookZ: histCam.z,
+          fov: 42,
+          clampedToTrough: Boolean(chase?.clampedToTrough),
+          ...chaseBits,
+        }
       : null;
   const level = getLevel(store.levelId);
   const run = getRun(store.runId);
@@ -901,24 +922,59 @@ async function tapeInner(scene?: unknown, ms = 0) {
     });
   let lastJpegAt = performance.now();
   let stalled = false;
+  let scratch: HTMLCanvasElement | null = null;
+  const jpegSmall = (el: HTMLCanvasElement) => {
+    const tw = 320;
+    const th = 200;
+    if (!scratch) scratch = document.createElement("canvas");
+    if (scratch.width !== tw || scratch.height !== th) {
+      scratch.width = tw;
+      scratch.height = th;
+    }
+    const ctx = scratch.getContext("2d");
+    const gl =
+      (window as unknown as { __bayWebgl?: WebGLRenderingContext | WebGL2RenderingContext }).__bayWebgl ||
+      el.getContext("webgl2") ||
+      el.getContext("webgl");
+    if (gl && ctx) {
+      const w = Math.min(tw, el.width);
+      const h = Math.min(th, el.height);
+      const x = Math.max(0, Math.floor((el.width - w) / 2));
+      const y = Math.max(0, Math.floor((el.height - h) / 2));
+      const pix = new Uint8Array(w * h * 4);
+      gl.readPixels(x, y, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pix);
+      const img = ctx.createImageData(w, h);
+      for (let row = 0; row < h; row++) {
+        const src = (h - 1 - row) * w * 4;
+        img.data.set(pix.subarray(src, src + w * 4), row * w * 4);
+      }
+      ctx.putImageData(img, 0, 0);
+      return scratch.toDataURL("image/jpeg", 0.62);
+    }
+    if (!ctx) return el.toDataURL("image/jpeg", 0.62);
+    ctx.drawImage(el, 0, 0, tw, th);
+    return scratch.toDataURL("image/jpeg", 0.62);
+  };
   const grab = async () => {
     beat();
-    wgrab.__bayGrabData = null;
-    wgrab.__bayWantGrab = true;
     try {
-      try {
-        kick();
-      } catch {
-        /* kick must not hang grab */
-      }
-      await yieldPaint(80);
-      let data: unknown = wgrab.__bayGrabData;
-      const el = liveCanvas();
-      if (typeof data !== "string" || !data.startsWith("data:image")) {
+      const wlast = window as unknown as { __bayLastJpeg?: string; __bayJpegAt?: number };
+      let data: unknown = wlast.__bayLastJpeg;
+      const nowGrab = performance.now();
+      const refresh =
+        typeof data !== "string" ||
+        !data.startsWith("data:image") ||
+        nowGrab - (wlast.__bayJpegAt || 0) > 700;
+      if (refresh) {
+        const el = liveCanvas();
         try {
-          if (el) data = el.toDataURL("image/jpeg", 0.85);
+          if (el) data = jpegSmall(el);
         } catch {
           data = null;
+        }
+        if (typeof data === "string" && data.startsWith("data:image")) {
+          wlast.__bayLastJpeg = data;
+          wlast.__bayJpegAt = nowGrab;
         }
       }
 
@@ -930,7 +986,7 @@ async function tapeInner(scene?: unknown, ms = 0) {
             method: "POST",
             headers: { "content-type": "application/json" },
             cache: "no-store",
-            body: JSON.stringify({ id: g.__bayTapeJob, jpegN: frames.length, frame: data }),
+            body: JSON.stringify({ id: g.__bayTapeJob, jpegN: frames.length }),
           }).catch(() => {});
         } catch {
           /* progress is best-effort */
@@ -963,7 +1019,7 @@ async function tapeInner(scene?: unknown, ms = 0) {
     }
   }
   await waitFrames(50);
-  {
+  if (useBay.getState().entities.some((e) => e.kind === "dumptruck")) {
     const ready0 = performance.now();
     while (performance.now() - ready0 < 2500) {
       kick();
@@ -983,6 +1039,7 @@ async function tapeInner(scene?: unknown, ms = 0) {
   await grab();
   const hard = Number(ms) > 400 ? Number(ms) : 14000;
   const want = Math.max(360, Math.round(hard / DT));
+  g.__bayPace = true;
   const t0 = performance.now();
   let contactN = 0;
   const contacts: { tMs: number; impulse: number; closing: number; id: string | null; otherMass: number | null }[] = [];
@@ -1005,15 +1062,25 @@ async function tapeInner(scene?: unknown, ms = 0) {
         stalled = true;
         break;
       }
-      let snap: ReturnType<typeof peek>;
+      let wheelSpeed = 0;
+      let wheelGrounded = 0;
       try {
-        snap = peek();
+        for (const rec of listSamplers().values()) {
+          if (rec.kind !== "wheel") continue;
+          const b = rec.getBody?.();
+          if (b) {
+            const lv = b.linvel();
+            wheelSpeed = Math.hypot(lv.x, lv.y, lv.z);
+          }
+          const st = rec.sample()?.state;
+          wheelGrounded = Number(st?.grounded) > 0 ? 1 : 0;
+          break;
+        }
       } catch {
-        snap = { objects: [] } as ReturnType<typeof peek>;
+        /* keep baking */
       }
-      const wheel = snap.objects.find((o) => o.kind === "wheel");
-      speedHz.push(wheel ? wheel.speed : 0);
-      groundedHz.push(wheel && Number(wheel.grounded) > 0 ? 1 : 0);
+      speedHz.push(wheelSpeed);
+      groundedHz.push(wheelGrounded);
       const cons = log().filter((e) => e.type === "contact");
       if (cons.length > contactN) {
         const tHit = Math.round(performance.now() - t0);
@@ -1034,13 +1101,10 @@ async function tapeInner(scene?: unknown, ms = 0) {
       /* keep baking */
     }
     const leftover = DT - (performance.now() - tick0);
-    if (leftover > 0) {
-      const extra0 = performance.now();
-      let extraN = 0;
-      while (performance.now() - tick0 < DT && extraN < 2) {
-        extraN += 1;
-        await yieldPaint(Math.min(80, leftover));
-        if (performance.now() - extra0 > 80) break;
+    if (leftover > 1) {
+      const until = performance.now() + leftover;
+      while (performance.now() < until) {
+        /* hidden-tab timers clamp to ~1s; spin keeps wall fps honest */
       }
     }
   }
@@ -1049,6 +1113,7 @@ async function tapeInner(scene?: unknown, ms = 0) {
     await yieldPaint(80);
     await grab();
   }
+  g.__bayPace = false;
   const durationMs = Math.round(performance.now() - t0);
   const jpegN = frames.length;
   if (stalled) {
@@ -1086,6 +1151,7 @@ async function tapeInner(scene?: unknown, ms = 0) {
     groundedHz,
     hitsMs: contacts.map((c) => c.tMs),
     durationMs,
+    frames,
   };
 }
 
@@ -1311,10 +1377,6 @@ function startHarnessPipe() {
     g.__bayPipeGen = PIPE_GEN;
   }
   const stripFrames = (out: { value?: unknown; error?: string; skipped?: boolean }) => {
-    const val = out?.value;
-    if (val && typeof val === "object" && val !== null && "frames" in val) {
-      delete (val as { frames?: unknown }).frames;
-    }
     return out;
   };
   const run = async (fn: string, args: unknown[], capMs = 16000, id?: string) => {
@@ -1330,9 +1392,15 @@ function startHarnessPipe() {
         Promise.resolve(api[fn](...args)),
         new Promise((_, reject) => setTimeout(() => reject(new Error("run-timeout")), cap)),
       ]);
-      const cloned = JSON.parse(JSON.stringify(value ?? null));
-      if (cloned && typeof cloned === "object" && cloned !== null && "frames" in cloned) {
-        delete cloned.frames;
+      const raw = value ?? null;
+      const frames =
+        raw && typeof raw === "object" && raw !== null && Array.isArray((raw as { frames?: unknown }).frames)
+          ? (raw as { frames: string[] }).frames
+          : null;
+      if (frames) delete (raw as { frames?: unknown }).frames;
+      const cloned = JSON.parse(JSON.stringify(raw));
+      if (cloned && typeof cloned === "object" && cloned !== null && frames && frames.length) {
+        (cloned as { frames: string[] }).frames = frames;
       }
       return { value: cloned };
     } catch (err) {

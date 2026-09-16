@@ -180,6 +180,10 @@ function pushEyeOutOfDump(eye: THREE.Vector3, dumpZ: number) {
 const CAM_OFF_DEF: [number, number, number] = [0, 2.2, -8];
 const CAM_LOOK_DEF: [number, number, number] = [0, -0.3, 14];
 const CAM_FOV_DEF = 48;
+/** Engine hangar chase — scene JSON offset [0,16,-24] fov 48 is far void around a 1.5 m coil. */
+const HANGAR_CAM_OFF: [number, number, number] = [0, 3.4, -9.2];
+const HANGAR_CAM_LOOK: [number, number, number] = [0, 0.35, 5];
+const HANGAR_CAM_FOV = 44;
 const PIPE_HALF_X = 10.6;
 const PIPE_LIP_Y = 12;
 const CAM_EYE_Y_MAX = 13.2;
@@ -302,14 +306,28 @@ function isHalfpipeTrack(sceneId: string | undefined, ents?: PipeEnt[], _followC
 }
 
 /** After offset: never sit under the trough floor; keep chase behind the coil. */
-function clampHalfpipeChase(ents: PipeEnt[]) {
-  if (!isHalfpipeTrack(useBay.getState().scene?.id, ents) || hangarHighCam(ents)) return;
+function clampHalfpipeChase(ents: PipeEnt[]): boolean {
+  if (!isHalfpipeTrack(useBay.getState().scene?.id, ents) || hangarHighCam(ents)) return false;
   const ty = _trackP.y;
   const minEye = Math.max(ty + TROUGH_CLEAR, troughFloorAtX(_desEye.x, ents) + TROUGH_CLEAR);
   const minLook = Math.max(ty + TROUGH_LOOK_CLEAR, troughFloorAtX(_desLook.x, ents) + TROUGH_LOOK_CLEAR);
   if (_desEye.y < minEye) _desEye.y = minEye;
   if (_desLook.y < minLook) _desLook.y = minLook;
   if (_desEye.z > _trackP.z - 1.2) _desEye.z = _trackP.z - 4;
+  return true;
+}
+
+type BayChaseDump = {
+  clampedToTrough: boolean;
+  hangar: boolean;
+  ox: number;
+  oy: number;
+  oz: number;
+  dist: number;
+};
+
+function dumpBayChase(dump: BayChaseDump) {
+  (window as unknown as { __bayChase?: BayChaseDump }).__bayChase = dump;
 }
 
 function liftEyeAbovePipe(scene: THREE.Scene) {
@@ -360,25 +378,41 @@ function TrackCam({
       if (followCoil) {
         const id = coilTrackId(trackId, ents);
         if (sampleTrackPos(id)) {
-          const [ox, oy, oz] = camTriple(offset, CAM_OFF_DEF);
-          const [lx, ly, lz] = camTriple(look, CAM_LOOK_DEF);
+          let ox: number;
+          let oy: number;
+          let oz: number;
+          let hangar = false;
+          let clampedToTrough = false;
           if (isHalfpipeTrack(bay.scene?.id, ents, true)) {
+            [ox, oy, oz] = camTriple(offset, CAM_OFF_DEF);
+            const [lx, ly, lz] = camTriple(look, CAM_LOOK_DEF);
             const wantFov = fov || CAM_FOV_DEF;
             if ("fov" in camera && camera.fov !== wantFov) {
               camera.fov = wantFov;
               camera.updateProjectionMatrix();
             }
             pipeStayCam(ox, oy, oz, lx, ly, lz);
-            clampHalfpipeChase(ents);
+            clampedToTrough = clampHalfpipeChase(ents);
             liftEyeAbovePipe(scene);
           } else {
-            if (fov && "fov" in camera && camera.fov !== fov) {
-              camera.fov = fov;
+            [ox, oy, oz] = HANGAR_CAM_OFF;
+            const [lx, ly, lz] = HANGAR_CAM_LOOK;
+            hangar = true;
+            if ("fov" in camera && camera.fov !== HANGAR_CAM_FOV) {
+              camera.fov = HANGAR_CAM_FOV;
               camera.updateProjectionMatrix();
             }
             _desEye.set(_trackP.x + ox, _trackP.y + oy, _trackP.z + oz);
             _desLook.set(_trackP.x + lx, _trackP.y + ly, _trackP.z + lz);
           }
+          dumpBayChase({
+            clampedToTrough,
+            hangar,
+            ox,
+            oy,
+            oz,
+            dist: _desEye.distanceTo(_trackP),
+          });
           if (
             Number.isFinite(_desEye.x) &&
             Number.isFinite(_desEye.y) &&
@@ -579,6 +613,24 @@ function Present() {
   return null;
 }
 
+function BakeFrameloop() {
+  const set = useThree((s) => s.set);
+  useEffect(() => {
+    let last: boolean | null = null;
+    const id = window.setInterval(() => {
+      const pace = Boolean((globalThis as { __bayPace?: boolean }).__bayPace);
+      if (pace === last) return;
+      last = pace;
+      set({ frameloop: pace ? "demand" : "always" });
+    }, 40);
+    return () => {
+      window.clearInterval(id);
+      set({ frameloop: "always" });
+    };
+  }, [set]);
+  return null;
+}
+
 function KickFrames() {
   const hangar = useBay((s) => s.entities.some((e) => e.kind === "ramp"));
   const advance = useThree((s) => s.advance);
@@ -606,10 +658,22 @@ function KickFrames() {
     const id = window.setInterval(() => {
       const now = performance.now();
       const hidden = typeof document !== "undefined" && document.hidden;
+      const bake = Boolean((globalThis as unknown as { __bayBake?: boolean }).__bayBake);
+      if (bake) {
+        const pace = Boolean((globalThis as { __bayPace?: boolean }).__bayPace);
+        if (pace) {
+          if (now - lastRaf.current < 500) return;
+          g.__bayKick?.();
+          return;
+        }
+        if (now - lastRaf.current < 16) return;
+        g.__bayKick?.();
+        return;
+      }
       if (!hidden) return;
       if (now - lastRaf.current < 80) return;
       g.__bayKick?.();
-    }, 50);
+    }, 16);
     return () => {
       window.clearInterval(id);
       if (g.__bayKick) delete g.__bayKick;
@@ -644,12 +708,13 @@ function GlHooks({ onLost }: { onLost: () => void }) {
     if (!g.__bayGrabWrap) {
       g.__bayGrabWrap = true;
       const orig = g.render.bind(g);
+      (window as GrabWin & { __bayWebgl?: WebGLRenderingContext | WebGL2RenderingContext }).__bayWebgl = gl.getContext();
       g.render = ((scene: THREE.Object3D, camera: THREE.Camera) => {
         orig(scene, camera);
-        const w = window as GrabWin;
+        const w = window as GrabWin & { __bayBake?: boolean; __bayLastJpeg?: string };
         if (!w.__bayWantGrab) return;
         try {
-          w.__bayGrabData = canvas.toDataURL("image/jpeg", 0.85);
+          w.__bayGrabData = w.__bayLastJpeg || canvas.toDataURL("image/jpeg", w.__bayBake ? 0.7 : 0.85);
         } catch {
           w.__bayGrabData = null;
         }
@@ -924,6 +989,7 @@ export function BayCanvas() {
             }}
           />
           <FitGl />
+          <BakeFrameloop />
           <KickFrames />
           <ArenaLook />
           <LabLook />
