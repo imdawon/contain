@@ -68,7 +68,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 210;
+const PIPE_GEN = 223;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -80,6 +80,7 @@ const g = globalThis as unknown as {
   __bayWatch?: ReturnType<typeof setInterval>;
   __bayBake?: boolean;
   __bayPace?: boolean;
+  __bayDemand?: boolean;
   __bayClk?: Worker;
   __bayTapeJob?: string;
 };
@@ -828,6 +829,7 @@ async function tape(scene?: unknown, ms = 0) {
     return await tapeInner(scene, ms);
   } finally {
     g.__bayBake = false;
+    g.__bayPace = false;
   }
 }
 
@@ -842,7 +844,8 @@ async function tapeInner(scene?: unknown, ms = 0) {
   if (!liveCanvas()) return { ok: false as const, reason: "no-canvas" as const };
   const W = 720;
   const H = 1280;
-  const DT = 1000 / 30;
+  const TARGET_FPS = 24;
+  const DT = 1000 / TARGET_FPS;
   const frames: string[] = [];
   const wgrab = window as unknown as { __bayWantGrab?: boolean; __bayGrabData?: string | null; __bayKick?: () => void };
   const kick = () => {
@@ -922,40 +925,44 @@ async function tapeInner(scene?: unknown, ms = 0) {
     });
   let lastJpegAt = performance.now();
   let stalled = false;
-  const TW = 160;
-  const TH = 100;
   let scratch: HTMLCanvasElement | null = null;
   let pix: Uint8Array | null = null;
+  let grabW = 0;
+  let grabH = 0;
   const rawFrames: Uint8Array[] = [];
-  const jpegFromRaw = (raw: Uint8Array) => {
+  const jpegFromRaw = (raw: Uint8Array, w: number, h: number) => {
     if (!scratch) scratch = document.createElement("canvas");
-    if (scratch.width !== TW || scratch.height !== TH) {
-      scratch.width = TW;
-      scratch.height = TH;
+    if (scratch.width !== w || scratch.height !== h) {
+      scratch.width = w;
+      scratch.height = h;
     }
     const ctx = scratch.getContext("2d");
     if (!ctx) return null;
-    const img = ctx.createImageData(TW, TH);
-    img.data.set(raw.subarray(0, TW * TH * 4));
+    const img = ctx.createImageData(w, h);
+    const row = w * 4;
+    const dst = img.data;
+    for (let y = 0; y < h; y++) {
+      dst.set(raw.subarray((h - 1 - y) * row, (h - y) * row), y * row);
+    }
     ctx.putImageData(img, 0, 0);
-    return scratch.toDataURL("image/jpeg", 0.45);
+    return scratch.toDataURL("image/jpeg", 0.52);
   };
   const grab = async () => {
     beat();
     try {
-      const el = liveCanvas();
       const gl = (window as unknown as { __bayWebgl?: WebGLRenderingContext | WebGL2RenderingContext }).__bayWebgl;
-      if (!el || !gl) return;
-      const w = Math.min(TW, el.width);
-      const h = Math.min(TH, el.height);
-      const x = Math.max(0, Math.floor((el.width - w) / 2));
-      const y = Math.max(0, Math.floor((el.height - h) / 2));
-      const need = TW * TH * 4;
+      if (!gl) return;
+      const w = gl.drawingBufferWidth;
+      const h = gl.drawingBufferHeight;
+      if (w < 2 || h < 2) return;
+      grabW = w;
+      grabH = h;
+      const need = w * h * 4;
       if (!pix || pix.length < need) pix = new Uint8Array(need);
-      gl.readPixels(x, y, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pix);
+      gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pix);
       rawFrames.push(pix.slice(0, need));
       lastJpegAt = performance.now();
-      if (rawFrames.length === 1 || rawFrames.length % 30 === 0) {
+      if (rawFrames.length === 1 || rawFrames.length % 24 === 0) {
         try {
           void fetch("/__bay/progress", {
             method: "POST",
@@ -967,7 +974,6 @@ async function tapeInner(scene?: unknown, ms = 0) {
           /* progress is best-effort */
         }
       }
-      return;
     } finally {
       wgrab.__bayWantGrab = false;
     }
@@ -1012,26 +1018,27 @@ async function tapeInner(scene?: unknown, ms = 0) {
   }
   kick();
   await yieldPaint(80);
-  await grab();
   const hard = Number(ms) > 400 ? Number(ms) : 14000;
-  const want = Math.max(360, Math.round(hard / DT));
+  lastJpegAt = performance.now();
   const t0 = performance.now();
+  g.__bayPace = true;
+  await new Promise<void>((resolve) => setTimeout(resolve, 24));
   let contactN = 0;
   const contacts: { tMs: number; impulse: number; closing: number; id: string | null; otherMass: number | null }[] = [];
   const speedHz: number[] = [];
   const groundedHz: number[] = [];
   const t0Probe = probeTime();
   let spins = 0;
-  while (rawFrames.length < want && spins < want + 8) {
+  while (performance.now() - t0 < hard && performance.now() - t0 < 85000) {
     spins += 1;
     beat();
-    if (performance.now() - t0 >= 85000) break;
     if (performance.now() - lastJpegAt > 20000) {
       stalled = true;
       break;
     }
     const tick0 = performance.now();
     try {
+      kick();
       await grab();
       if (performance.now() - lastJpegAt > 20000) {
         stalled = true;
@@ -1078,44 +1085,16 @@ async function tapeInner(scene?: unknown, ms = 0) {
       /* keep baking */
     }
     const leftover = DT - (performance.now() - tick0);
-    if (leftover > 1) {
-      await new Promise<void>((resolve) => {
-        let done = false;
-        const finish = () => {
-          if (done) return;
-          done = true;
-          resolve();
-        };
-        try {
-          const w = bayClk();
-          if (w) {
-            const onm = () => {
-              try {
-                w.removeEventListener("message", onm);
-              } catch {
-                /* */
-              }
-              finish();
-            };
-            w.addEventListener("message", onm);
-            w.postMessage(leftover);
-          }
-        } catch {
-          /* worker optional */
-        }
-        setTimeout(finish, leftover);
-      });
-    }
+    const waitMs = leftover > 8 ? leftover : 0;
+    await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
   }
-  if (!stalled) {
-    kick();
-    await yieldPaint(80);
-    await grab();
-  }
+  g.__bayPace = false;
   const durationMs = Math.round(performance.now() - t0);
-  for (const raw of rawFrames) {
-    const data = jpegFromRaw(raw);
-    if (typeof data === "string" && data.startsWith("data:image")) frames.push(data);
+  if (grabW > 0 && grabH > 0) {
+    for (const raw of rawFrames) {
+      const data = jpegFromRaw(raw, grabW, grabH);
+      if (typeof data === "string" && data.startsWith("data:image")) frames.push(data);
+    }
   }
   const jpegN = frames.length;
   if (stalled) {
@@ -1142,6 +1121,9 @@ async function tapeInner(scene?: unknown, ms = 0) {
     ok: jpegN > 2,
     w: W,
     h: H,
+    grabW,
+    grabH,
+    pipeGen: g.__bayPipeGen ?? PIPE_GEN,
     mime: "image/jpeg",
     n: jpegN,
     jpegN,
@@ -1388,7 +1370,7 @@ function startHarnessPipe() {
     try {
       const cap =
         fn === "tape"
-          ? Math.min(90000, Number(capMs) || 90000)
+          ? Math.min(120000, Number(capMs) || 120000)
           : Math.max(4000, Math.min(240000, Number(capMs) || 16000));
       const value = await Promise.race([
         Promise.resolve(api[fn](...args)),
@@ -1459,7 +1441,7 @@ function startHarnessPipe() {
         const fnName = String(msg.fn ?? "");
         const jobId = String(msg.id);
         const wait = Number(msg.waitMs) || 16000;
-        const cap = fnName === "tape" ? Math.min(90000, wait) : Math.min(240000, wait);
+        const cap = fnName === "tape" ? Math.min(120000, wait) : Math.min(240000, wait);
         const postDone = (out: { value?: unknown; error?: string; skipped?: boolean }) =>
           fetch("/__bay/done", {
             method: "POST",

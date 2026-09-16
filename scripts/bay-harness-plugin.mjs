@@ -465,7 +465,7 @@ export function bayHarnessPlugin() {
                 return;
               }
               const args = Array.isArray(body.args) ? body.args : [];
-              const waitMs = Math.min(fn === "tape" ? 90000 : 240000, Number(body.waitMs) || 20000);
+              const waitMs = Math.min(fn === "tape" ? 120000 : 240000, Number(body.waitMs) || 20000);
               const id = `c${Date.now().toString(36)}${++seq}`;
               const payload = await new Promise((resolve) => {
                 const timer = setTimeout(() => {
@@ -647,7 +647,7 @@ if (!(g.__bayPipeCtl && !g.__bayPipeCtl.signal.aborted)) {
         const fnName = String(msg.fn ?? "");
         let pending = jobs.get(jobKey);
         if (!pending) {
-          const cap = Math.min(fnName === "tape" ? 90000 : 240000, Number(msg.waitMs) || 16000);
+          const cap = Math.min(fnName === "tape" ? 120000 : 240000, Number(msg.waitMs) || 16000);
           if (fnName === "tape") g.__bayTapeJob = msg.id;
           pending = Promise.race([
             run(fnName, Array.isArray(msg.args) ? msg.args : [], msg.id),

@@ -109,7 +109,7 @@ if (fn === "abort" || fn === "cancel") {
 let waitMs = 20000;
 if (fn === "until") waitMs = Math.max(waitMs, Number(args[1] || 8000) + 4000);
 if (fn === "restage" || fn === "load" || fn === "run") waitMs = 60000;
-if (fn === "tape") waitMs = 95000;
+if (fn === "tape") waitMs = 120000;
 let pipeFn = fn;
 let pipeArgs = args;
 let tapeDest = null;

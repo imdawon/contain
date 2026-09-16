@@ -181,9 +181,9 @@ const CAM_OFF_DEF: [number, number, number] = [0, 2.2, -8];
 const CAM_LOOK_DEF: [number, number, number] = [0, -0.3, 14];
 const CAM_FOV_DEF = 48;
 /** Engine hangar chase — scene JSON offset [0,16,-24] fov 48 is far void around a 1.5 m coil. */
-const HANGAR_CAM_OFF: [number, number, number] = [0, 3.2, -7.8];
-const HANGAR_CAM_LOOK: [number, number, number] = [0, 0.3, 4];
-const HANGAR_CAM_FOV = 44;
+const HANGAR_CAM_OFF: [number, number, number] = [0, 2.05, -5.6];
+const HANGAR_CAM_LOOK: [number, number, number] = [0, 0.05, 2.4];
+const HANGAR_CAM_FOV = 42;
 const PIPE_HALF_X = 10.6;
 const PIPE_LIP_Y = 12;
 const CAM_EYE_Y_MAX = 13.2;
@@ -417,6 +417,10 @@ function TrackCam({
             const controls = orbit.current;
             if (controls) controls.target.copy(_desLook);
             camera.lookAt(_desLook);
+            if (bake && "far" in camera && camera.far !== 120) {
+              camera.far = 120;
+              camera.updateProjectionMatrix();
+            }
             camera.updateMatrixWorld();
             primed.current = true;
           }
@@ -617,7 +621,15 @@ function BakeFrameloop() {
   const set = useThree((s) => s.set);
   useEffect(() => {
     set({ frameloop: "always" });
+    let last = false;
+    const iv = window.setInterval(() => {
+      const pace = Boolean((globalThis as { __bayPace?: boolean }).__bayPace);
+      if (pace === last) return;
+      last = pace;
+      set({ frameloop: pace ? "never" : "always" });
+    }, 16);
     return () => {
+      window.clearInterval(iv);
       set({ frameloop: "always" });
     };
   }, [set]);
@@ -734,14 +746,16 @@ function FitGl() {
       let w = parent?.clientWidth ?? 0;
       let h = parent?.clientHeight ?? 0;
       if (!parent || w < 2 || h < 2) return;
-      // Small FBO during bake so SwiftShader readPixels can keep ~30 unique fps.
-      // Do not use dpr 2 (loses GL). Shot/live keep the parent size.
+      // Small 9:16 FBO during bake. Fill-frame hangar chase makes coil/drums
+      // readable at this size; 360x640 jpeg-in-loop was 2.7fps. Shot/live keep parent size.
       if (wWin.__bayBake) {
         w = 180;
         h = 320;
       }
       const dpr = 1;
-      if (canvas.width === Math.floor(w * dpr) && canvas.height === Math.floor(h * dpr)) return;
+      const bw = Math.floor(w * dpr);
+      const bh = Math.floor(h * dpr);
+      if (canvas.width === bw && canvas.height === bh) return;
       gl.setPixelRatio(dpr);
       setSize(w, h);
     };
@@ -757,7 +771,7 @@ function FitGl() {
   }, [gl, setSize]);
   useFrame(() => {
     applyRef.current();
-  });
+  }, 100);
   return null;
 }
 
@@ -779,6 +793,8 @@ function BakeRapier() {
   });
   return null;
 }
+
+
 
 function HideOnBake({ children }: { children: React.ReactNode }) {
   const ref = useRef<THREE.Group>(null);
@@ -863,9 +879,17 @@ function World() {
   const placing = Boolean(useBay((s) => s.placeKind));
   const playing = useBay((s) => s.playing);
   const garden = Boolean(sceneTheme(scene));
+  const [bakeOn, setBakeOn] = useState(false);
+  useEffect(() => {
+    const iv = window.setInterval(() => {
+      const on = Boolean((globalThis as { __bayBake?: boolean }).__bayBake);
+      setBakeOn((prev) => (prev === on ? prev : on));
+    }, 40);
+    return () => window.clearInterval(iv);
+  }, []);
 
   return (
-    <Physics key={stageN} gravity={sceneGravity(scene)} timeStep={slowMo ? "vary" : 1 / 60} paused={!playing || slowMo} interpolate numSolverIterations={24} numInternalPgsIterations={12} maxCcdSubsteps={1}>
+    <Physics key={stageN} gravity={sceneGravity(scene)} timeStep={slowMo || bakeOn ? "vary" : 1 / 60} paused={!playing || slowMo} interpolate={!bakeOn} numSolverIterations={bakeOn ? 4 : 24} numInternalPgsIterations={bakeOn ? 1 : 12} maxCcdSubsteps={1}>
       <BakeRapier />
       <SlowMoDriver />
       <TrackCam orbit={orbit} />
