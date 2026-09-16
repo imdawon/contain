@@ -187,7 +187,21 @@ function SteelBody({
     if (kind === "wheel") {
       lastWheelZ = b.translation().z;
     }
-    if (kind === "wheel" && hangarTrack) {
+    if (kind === "wheel" && halfpipe) {
+      const v = b.linvel();
+      const p = b.translation();
+      let vz = v.z;
+      if (lastWheelGrounded && vz < 8) vz = 8;
+      const omega = -vz / Math.max(0.2, WHEEL.radius);
+      b.setAngvel({ x: omega, y: 0, z: 0 }, true);
+      if (lastWheelGrounded) {
+        let vx = v.x * 0.2;
+        if (Math.abs(p.x) > 0.6) vx += -Math.sign(p.x) * 0.25;
+        vx = Math.max(-0.35, Math.min(0.35, vx));
+        const vy = Math.min(v.y, 0.35);
+        b.setLinvel({ x: vx, y: vy, z: vz }, true);
+      }
+    } else if (kind === "wheel" && hangarTrack) {
       const w = b.angvel();
       const v = b.linvel();
       const q = b.rotation();
@@ -197,11 +211,8 @@ function SteelBody({
       const roll = w.x * ax + w.y * ay + w.z * az;
       const speed = Math.hypot(v.x, v.y, v.z);
       const maxW = speed / Math.max(0.2, WHEEL.radius) + 0.4;
-      const wantW = halfpipe
-        ? Math.max(v.z, performance.now() < launchUntil.current ? (vel?.[2] ?? 16) : 0) /
-          Math.max(0.2, WHEEL.radius)
-        : v.z / Math.max(0.2, WHEEL.radius);
-      const keep = halfpipe ? wantW : Math.abs(roll) > maxW ? Math.sign(roll) * maxW : roll;
+      const wantW = v.z / Math.max(0.2, WHEEL.radius);
+      const keep = Math.abs(roll) > maxW ? Math.sign(roll) * maxW : roll;
       b.setAngvel(
         {
           x: ax * keep + (w.x - ax * roll) * 0.04,
@@ -210,36 +221,26 @@ function SteelBody({
         },
         true,
       );
-      if (!halfpipe && v.y > 0) v.y = 0;
+      if (v.y > 0) v.y = 0;
       b.setLinvel({ x: v.x, y: v.y, z: v.z }, true);
-      if (!halfpipe) {
-        const p = b.translation();
-        try {
-          const hit = world.castRay(
-            new rapier.Ray({ x: p.x, y: p.y, z: p.z }, { x: 0, y: -1, z: 0 }),
-            5,
-            true,
-            undefined,
-            undefined,
-            undefined,
-            b,
-          );
-          const toi = hit?.timeOfImpact;
-          if (toi != null && toi > 2.4) {
-            const drop = Math.min(toi - WHEEL.radius, 0.55);
-            if (drop > 0.2) b.setTranslation({ x: p.x, y: p.y - drop, z: p.z }, true);
-          }
-        } catch {
-          /* ray missed */
+      const p = b.translation();
+      try {
+        const hit = world.castRay(
+          new rapier.Ray({ x: p.x, y: p.y, z: p.z }, { x: 0, y: -1, z: 0 }),
+          5,
+          true,
+          undefined,
+          undefined,
+          undefined,
+          b,
+        );
+        const toi = hit?.timeOfImpact;
+        if (toi != null && toi > 2.4) {
+          const drop = Math.min(toi - WHEEL.radius, 0.55);
+          if (drop > 0.2) b.setTranslation({ x: p.x, y: p.y - drop, z: p.z }, true);
         }
-      }
-    }
-    if (halfpipe && kind === "wheel" && performance.now() < launchUntil.current) {
-      const cur = b.linvel();
-      const wantZ = vel && Number.isFinite(vel[2]) ? vel[2] : 16;
-      if (cur.z < wantZ * 0.75) {
-        b.setLinvel({ x: cur.x * 0.2, y: cur.y, z: wantZ }, true);
-        b.wakeUp();
+      } catch {
+        /* ray missed */
       }
     }
     if (!halfpipe && kind === "wheel" && kg >= 90_000) {
@@ -290,9 +291,11 @@ function SteelBody({
           /* hidden tab / no audio */
         }
       }
-      const forYield = raw.filter(
-        (h) => h.closing >= SFX.hit.minClosing && (h.otherMass >= 1200 || !Number.isFinite(h.otherMass)),
-      );
+      const forYield = raw.filter((h) => {
+        const pipe = !Number.isFinite(h.otherMass);
+        if (pipe && h.impulse > 1e-4) return true;
+        return h.closing >= SFX.hit.minClosing && (h.otherMass >= 1200 || !Number.isFinite(h.otherMass));
+      });
       if (forYield.length > 0) {
         const reach = WHEEL.radius * 1.7 + WHEEL.thick;
         const local = forYield.some((h) => Math.hypot(h.x, h.y, h.z) > reach) ? worldHitsToLocal(b, forYield) : forYield;
@@ -345,7 +348,7 @@ function SteelBody({
       collisionGroups={groups}
       canSleep={kind !== "wheel"}
       ccd={kind === "wheel" || Boolean(vel)}
-      enabledRotations={[true, true, true]}
+      enabledRotations={halfpipe && kind === "wheel" ? [false, true, false] : [true, true, true]}
     >
       {kind === "wheel"
         ? hullArgs.map((args, i) => (

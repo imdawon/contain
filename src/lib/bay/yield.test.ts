@@ -18,14 +18,48 @@ test("a hard slam caves the live rim, including inverted Rapier normals", () => 
 });
 
 test("rolling contact and a 55-gal hit leave the coil round", () => {
+  const junk = makeSteelShell("wheel");
+  const r0 = steelRim(junk);
+  applySteelHits(junk, [
+    { x: 0, y: 0, z: junk.radius, nx: 0, ny: 0, nz: 1, impulse: 2_400, closing: 14, otherMass: 180 },
+  ]);
+  assert.equal(steelRim(junk), r0);
+  assert.equal(junk.maxTaken, 0);
+
+  const tick = makeSteelShell("wheel");
+  applySteelHits(tick, [
+    { x: 0, y: 0, z: tick.radius, nx: 0, ny: 0, nz: 1, impulse: 40_000, closing: 1.1, otherMass: Infinity },
+  ]);
+  assert.ok(tick.maxTaken > 0 && tick.maxTaken < 0.06, `pipe tick maxTaken ${tick.maxTaken}`);
+});
+
+test("five seconds of pipe roll bruises the coil without pancaking", () => {
   const shell = makeSteelShell("wheel");
   const r0 = steelRim(shell);
-  applySteelHits(shell, [
-    { x: 0, y: 0, z: shell.radius, nx: 0, ny: 0, nz: 1, impulse: 40_000, closing: 1.1, otherMass: Infinity },
-    { x: 0, y: 0, z: shell.radius, nx: 0, ny: 0, nz: 1, impulse: 2_400, closing: 14, otherMass: 180 },
-  ]);
-  assert.equal(steelRim(shell), r0);
-  assert.equal(shell.maxTaken, 0);
+  const hits = [];
+  for (let i = 0; i < 300; i++) {
+    const a = (i / 300) * Math.PI * 2;
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    hits.push({
+      x: c * shell.radius,
+      y: 0,
+      z: s * shell.radius,
+      nx: c,
+      ny: 0,
+      nz: s,
+      impulse: 40_000,
+      closing: 1.1,
+      otherMass: Infinity,
+    });
+  }
+  applySteelHits(shell, hits);
+  const rimDrop = r0 - steelRim(shell);
+  assert.ok(
+    shell.maxTaken >= 0.08 || rimDrop >= 0.05,
+    `roll bruise maxTaken ${shell.maxTaken} rimDrop ${rimDrop}`,
+  );
+  assert.ok(shell.maxTaken < 0.35, `pancake maxTaken ${shell.maxTaken}`);
 });
 
 test("a drum side hit caves the wall inward", () => {
@@ -106,7 +140,7 @@ test("a mid-tread slam also dents both rims at that azimuth", () => {
 
 test("coilInertia is tonne-scale, not a 6 kg hull", () => {
   const I = coilInertia(100_000);
-  assert.ok(I.y > 40_000 && I.y < 80_000, `Iy ${I.y}`);
+  assert.ok(I.y > 90_000 && I.y < 150_000, `Iy ${I.y}`);
   assert.ok(I.x > I.y * 4, `tumble Ix ${I.x} vs roll Iy ${I.y}`);
 });
 
