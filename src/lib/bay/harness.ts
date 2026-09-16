@@ -68,7 +68,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 233;
+const PIPE_GEN = 234;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -929,7 +929,6 @@ async function tapeInner(scene?: unknown, ms = 0) {
   let pix: Uint8Array | null = null;
   let grabW = 0;
   let grabH = 0;
-  const rawFrames: Uint8Array[] = [];
   const jpegFromRaw = (raw: Uint8Array, w: number, h: number) => {
     if (!scratch) scratch = document.createElement("canvas");
     if (scratch.width !== w || scratch.height !== h) {
@@ -960,15 +959,16 @@ async function tapeInner(scene?: unknown, ms = 0) {
       const need = w * h * 4;
       if (!pix || pix.length < need) pix = new Uint8Array(need);
       gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pix);
-      rawFrames.push(pix.slice(0, need));
+      const data = jpegFromRaw(pix, w, h);
+      if (typeof data === "string" && data.startsWith("data:image")) frames.push(data);
       lastJpegAt = performance.now();
-      if (rawFrames.length === 1 || rawFrames.length % 8 === 0) {
+      if (frames.length === 1 || frames.length % 8 === 0) {
         try {
           void fetch("/__bay/progress", {
             method: "POST",
             headers: { "content-type": "application/json" },
             cache: "no-store",
-            body: JSON.stringify({ id: g.__bayTapeJob, jpegN: rawFrames.length }),
+            body: JSON.stringify({ id: g.__bayTapeJob, jpegN: frames.length }),
           }).catch(() => {});
         } catch {
           /* progress is best-effort */
@@ -1123,22 +1123,19 @@ async function tapeInner(scene?: unknown, ms = 0) {
       /* progress is best-effort */
     }
   };
-  pingProgress(rawFrames.length);
-  if (grabW > 0 && grabH > 0) {
-    for (let i = 0; i < rawFrames.length; i++) {
-      const data = jpegFromRaw(rawFrames[i]!, grabW, grabH);
-      if (typeof data === "string" && data.startsWith("data:image")) frames.push(data);
-      if (i === 0 || (i + 1) % 40 === 0) pingProgress(frames.length);
-    }
-  }
+  pingProgress(frames.length);
   const jpegN = frames.length;
+  const outW = grabW || W;
+  const outH = grabH || H;
   if (stalled) {
     return {
       ok: false,
       aborted: true,
       reason: "tape-stall" as const,
-      w: W,
-      h: H,
+      w: outW,
+      h: outH,
+      grabW,
+      grabH,
       mime: "image/jpeg",
       n: jpegN,
       jpegN,
@@ -1150,12 +1147,13 @@ async function tapeInner(scene?: unknown, ms = 0) {
       groundedHz,
       hitsMs: contacts.map((c) => c.tMs),
       durationMs,
+      frames,
     };
   }
   return {
     ok: jpegN > 2,
-    w: W,
-    h: H,
+    w: outW,
+    h: outH,
     grabW,
     grabH,
     pipeGen: g.__bayPipeGen ?? PIPE_GEN,
