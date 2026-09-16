@@ -75,10 +75,28 @@ if (fn === "health") {
 }
 
 if (fn === "reload") {
+  // Owned hangar paint uses ?hmr=false, so Vite WS full-reload never reaches it.
+  let pipeOut = null;
+  try {
+    const pr = await fetch(`${base}/__bay`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ fn: "reload", args: [], waitMs: 4000 }),
+    });
+    pipeOut = await readJson(pr);
+  } catch (err) {
+    pipeOut = { ok: false, error: String(err && err.message ? err.message : err) };
+  }
   const out = await reloadPage();
-  const waited = await waitForTaker(10000);
-  process.stdout.write(`${JSON.stringify({ ...out, ...waited })}\n`);
-  process.exit((waited.takers ?? 0) > 0 ? 0 : 1);
+  const t0 = Date.now();
+  let waited = await health();
+  while (Date.now() - t0 < 15000) {
+    if ((waited.takers ?? 0) > 0 && (waited.paints ?? 0) > 0) break;
+    await sleep(250);
+    waited = await health();
+  }
+  process.stdout.write(`${JSON.stringify({ ...out, pipe: pipeOut, ...waited })}\n`);
+  process.exit((waited.takers ?? 0) > 0 && (waited.paints ?? 0) > 0 ? 0 : 1);
 }
 
 if (fn === "abort" || fn === "cancel") {
@@ -209,7 +227,8 @@ if (fn === "tape") {
       });
       const wallMs = Number(val?.durationMs);
       const durationSec = wallMs > 0 ? wallMs / 1000 : Number(val?.durationSec) > 0 ? Number(val.durationSec) : 0;
-      const fps = durationSec > 0 ? frames.length / durationSec : 30;
+      const jpegN = Number(val?.jpegN) > 0 ? Number(val.jpegN) : frames.length;
+      const fps = durationSec > 0 ? jpegN / durationSec : 30;
       const ff = spawnSync(
         "ffmpeg",
         ["-y", "-framerate", String(fps), "-i", join(dir, "f%04d.jpg"), "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "26", "-movflags", "+faststart", mp4],
@@ -264,8 +283,8 @@ if (fn === "tape") {
         }
       }
       rmSync(dir, { recursive: true, force: true });
-      val.jpegN = frames.length;
-      val.n = frames.length;
+      val.jpegN = jpegN;
+      val.n = jpegN;
       delete val.frames;
       val.file = mp4;
       val.ffmpeg = ff.status;
@@ -292,7 +311,7 @@ if (fn === "tape") {
         val.mp4Frames = mp4Frames;
         val.mp4DurationSec = mp4DurationSec;
       }
-      val.fps = durationSec > 0 ? frames.length / durationSec : 30;
+      val.fps = durationSec > 0 ? jpegN / durationSec : 30;
       val.framesPerSec = val.fps;
       val.bake = true;
       if (val.aborted === true) val.aborted = true;
