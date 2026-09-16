@@ -283,12 +283,27 @@ function troughFloorAtX(x: number, ents: PipeEnt[]) {
   return Number.isFinite(best) ? best : 2;
 }
 
-function isHalfpipeTrack(sceneId: string | undefined, _ents?: PipeEnt[], _followCoil?: boolean) {
-  return String(sceneId ?? "").startsWith("halfpipe-");
+/** High 8/27 hangar ramps (coil ~y829). Outdoor halfpipe trough lives at y~4–11. */
+function hangarHighCam(ents?: PipeEnt[]) {
+  for (const e of ents || []) {
+    if ((e.kind === "ramp" || e.kind === "hill") && (e.pos?.[1] ?? 0) > 40) return true;
+  }
+  return false;
+}
+
+function isHalfpipeTrack(sceneId: string | undefined, ents?: PipeEnt[], _followCoil?: boolean) {
+  if (hangarHighCam(ents)) return false;
+  const id = String(sceneId ?? "");
+  if (id === "wheel-100") return false;
+  if (id.startsWith("halfpipe-")) return true;
+  const ty = _trackP.y;
+  if (ty < 0 || ty > 20) return false;
+  return (ents || []).some((e) => (e.kind === "ramp" || e.kind === "hill") && (e.cut ?? 0) >= 0.99);
 }
 
 /** After offset: never sit under the trough floor; keep chase behind the coil. */
 function clampHalfpipeChase(ents: PipeEnt[]) {
+  if (!isHalfpipeTrack(useBay.getState().scene?.id, ents) || hangarHighCam(ents)) return;
   const ty = _trackP.y;
   const minEye = Math.max(ty + TROUGH_CLEAR, troughFloorAtX(_desEye.x, ents) + TROUGH_CLEAR);
   const minLook = Math.max(ty + TROUGH_LOOK_CLEAR, troughFloorAtX(_desLook.x, ents) + TROUGH_LOOK_CLEAR);
@@ -298,6 +313,7 @@ function clampHalfpipeChase(ents: PipeEnt[]) {
 }
 
 function liftEyeAbovePipe(scene: THREE.Scene) {
+  if (_trackP.y > 40) return;
   fillChaseMeshes(scene);
   for (let i = 0; i < 16; i++) {
     if (!chaseEyeBlocked(_desLook, _desEye)) break;
