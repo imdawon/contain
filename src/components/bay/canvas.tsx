@@ -599,16 +599,10 @@ function FitGl() {
       const bake = Boolean(wWin.__bayBake) || Boolean(wWin.__bayWantGrab);
       let w = parent?.clientWidth ?? 0;
       let h = parent?.clientHeight ?? 0;
-      if (bake) {
-        w = Math.max(720, w);
-        h = Math.max(1280, h);
-        const dpr = 2;
-        if (canvas.width === Math.floor(w * dpr) && canvas.height === Math.floor(h * dpr)) return;
-        gl.setPixelRatio(dpr);
-        setSize(w, h);
-        return;
-      }
       if (!parent || w < 2 || h < 2) return;
+      // Bake used to force 720x1280 @ dpr 2 (often 2560x2560) and lose the GL context;
+      // tape letterboxes to 9:16 after grab. Keep the painted buffer stable.
+      void bake;
       const dpr = 1;
       if (canvas.width === Math.floor(w * dpr) && canvas.height === Math.floor(h * dpr)) return;
       gl.setPixelRatio(dpr);
@@ -799,15 +793,8 @@ export function BayCanvas() {
     const el = wrap.current;
     if (!el) return;
     const mark = () => {
-      const bake = Boolean((globalThis as { __bayBake?: boolean }).__bayBake);
       const w = el.clientWidth;
       const h = el.clientHeight;
-      if (bake) {
-        const nw = Math.max(720, w);
-        const nh = Math.max(1280, h);
-        setBox((prev) => (prev.w === nw && prev.h === nh ? prev : { w: nw, h: nh }));
-        return;
-      }
       if (w > 8 && h > 8) setBox((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
     };
     mark();
