@@ -271,10 +271,10 @@ export function steelExtents(shell: SteelShell) {
 }
 
 
-/** Empty drum under a tonne coil: squash to a thin steel pancake. Not paper, not a leftover barrel. */
+/** Cheap crushed-can morph. Keeps a 3D barrel — not a deleted body, not a sheet. */
 export function crumpleDrum(shell: SteelShell, hit?: SteelHit) {
   if (shell.kind !== "drum") return 0;
-  if (shell.maxTaken >= 0.5) return 0;
+  if (shell.maxTaken >= 0.28) return 0;
   const { rest, live, dent, halfH, radius } = shell;
   const n = dent.length;
   let hx = hit?.nx ?? 0;
@@ -292,12 +292,17 @@ export function crumpleDrum(shell: SteelShell, hit?: SteelHit) {
     const rx = rest[o]!;
     const ry = rest[o + 1]!;
     const rz = rest[o + 2]!;
+    const theta = Math.atan2(rz, rx);
+    const yk = ry / Math.max(1e-4, halfH);
     const facing = (rx * hx + rz * hz) / Math.max(1e-4, radius);
-    const splay = 1.38 + 0.1 * Math.max(0, facing);
-    const hFold = 0.05;
-    const px = rx * splay;
+    const lobe = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(theta * 5 + yk * 2.1));
+    const hitSide = 0.5 + 0.5 * Math.max(0, facing);
+    const radial = (0.58 + 0.38 * lobe) * (1 - 0.16 * hitSide);
+    const hFold = 0.62 + 0.1 * Math.cos(theta * 3) - 0.08 * hitSide;
+    const lid = Math.abs(yk) > 0.78 ? 0.84 : 1;
+    const px = rx * radial * lid;
     const py = ry * hFold;
-    const pz = rz * splay;
+    const pz = rz * radial * lid;
     const push = Math.hypot(live[o]! - px, live[o + 1]! - py, live[o + 2]! - pz);
     if (push <= 1e-5) continue;
     live[o] = px;

@@ -21,6 +21,7 @@ import { SFX, contactAudible } from "@/lib/contain/sfx";
 import { useBay } from "@/store/bay-store";
 import {
   applySteelHits,
+  crumpleDrum,
   makeSteelShell,
   pushSteelHulls,
   refreshSteelMesh,
@@ -36,7 +37,6 @@ import {
 
 const WHEEL_GROUPS = interactionGroups([WHEEL_G], [WORLD_G, DRUM_G, CRATE_G, DUMMY_G]);
 const DRUM_SHEET_GROUPS = interactionGroups([DRUM_G], [WORLD_G, DRUM_G, WHEEL_G]);
-const DRUM_FLAT_GROUPS = interactionGroups([DRUM_G], [WORLD_G, DRUM_G]);
 const WHEEL_MEMBER = 1 << WHEEL_G;
 let lastWheelZ = 0;
 let lastWheelGrounded = 0;
@@ -50,7 +50,7 @@ type CrushCol = RapierCollider & {
   setCollisionGroups?: (g: number) => void;
 };
 
-function crushDrumCollider(col: RapierCollider | null, halfH: number, radius: number, flat: boolean) {
+function crushDrumCollider(col: RapierCollider | null, halfH: number, radius: number) {
   if (!col) return;
   const wrapped = col as CrushCol;
   const raw = wrapped.raw?.() ?? wrapped;
@@ -58,7 +58,6 @@ function crushDrumCollider(col: RapierCollider | null, halfH: number, radius: nu
     raw.setHalfHeight?.(Math.max(0.028, halfH));
     raw.setRadius?.(Math.max(0.16, radius));
     raw.setRestitution?.(0);
-    if (flat) raw.setCollisionGroups?.(DRUM_FLAT_GROUPS);
   } catch {
     /* shape lock */
   }
@@ -144,6 +143,9 @@ function SteelBody({
     try {
       setBodyMass(b, kg, kind);
       b.wakeUp();
+      if (kind === "wheel" && hangarTrack) {
+        b.setTranslation({ x: pos[0], y: pos[1] + 1.15, z: pos[2] + 1.4 }, true);
+      }
       if (vel) {
         b.setLinvel({ x: vel[0], y: vel[1], z: vel[2] }, true);
         b.wakeUp();
@@ -152,7 +154,7 @@ function SteelBody({
     } catch {
       /* restage can leave a dead rapier handle */
     }
-  }, [kg, kind, stageN, vel]);
+  }, [kg, kind, stageN, vel, pos, hangarTrack]);
 
   useFrame((state, dt) => {
     grab.tick(state.raycaster.ray, Math.min(dt, 0.05));
@@ -190,7 +192,7 @@ function SteelBody({
       b.setTranslation({ x: 0, y: p.y, z: p.z }, true);
       b.setLinvel({ x: 0, y: v.y, z: vz }, true);
       b.setAngvel({ x: -vz / Math.max(0.08, WHEEL.radius), y: 0, z: 0 }, true);
-    } else if (kind === "wheel" && hangarTrack) {
+    } else if (kind === "wheel" && hangarTrack && kg < 90_000) {
       const w = b.angvel();
       const v = b.linvel();
       const q = b.rotation();
@@ -242,13 +244,35 @@ function SteelBody({
           : 0;
       const cur = b.linvel();
       const zKeep = Math.max(cur.z, floorVz, keepHint);
-      b.setLinvel(
-        { x: cur.x * 0.15, y: Math.min(cur.y, 0.35), z: Math.min(cap, zKeep) },
-        true,
-      );
+      const vz = Math.min(cap, zKeep);
+      b.setLinvel({ x: cur.x * 0.15, y: Math.min(cur.y, 0.35), z: vz }, true);
+      b.setAngvel({ x: -vz / Math.max(0.08, WHEEL.radius), y: 0, z: 0 }, true);
       b.wakeUp();
     }
     let added = 0;
+    if (kind === "drum" && shell.maxTaken < 0.25) {
+      const wheel = findActorBody("wheel");
+      if (wheel) {
+        const wp = wheel.translation();
+        const p = b.translation();
+        const dx = wp.x - p.x;
+        const dz = wp.z - p.z;
+        const horiz = WHEEL.radius + DRUM.radius + 1.1;
+        if (dx * dx + dz * dz < horiz * horiz && p.z < wp.z + 1.2) {
+          added += crumpleDrum(shell, {
+            x: dx,
+            y: 0,
+            z: dz,
+            nx: dx,
+            ny: 0,
+            nz: dz || 1,
+            impulse: 1_000_000,
+            closing: 30,
+            otherMass: 1_000_000,
+          });
+        }
+      }
+    }
     if (kind === "wheel") {
       let raw: ReturnType<typeof collectHits> = [];
       try {
@@ -301,7 +325,31 @@ function SteelBody({
           added += applySteelHits(shell, local);
         }
       }
-      if (kind === "wheel" && halfpipe) (shell as { slammed?: boolean }).slammed = slammed;
+      if (kind === "wheel") (shell as { slammed?: boolean }).slammed = slammed;
+    } else {
+      const wheel = findActorBody("wheel");
+      let near = !wheel;
+      if (wheel) {
+        const wp = wheel.translation();
+        const p = b.translation();
+        const dx = wp.x - p.x;
+        const dz = wp.z - p.z;
+        const reach = WHEEL.radius + DRUM.radius + 8;
+        near = dx * dx + dz * dz < reach * reach;
+      }
+      if (near) {
+        let raw: ReturnType<typeof collectHits> = [];
+        try {
+          raw = collectHits(world, b, kind);
+        } catch {
+          return;
+        }
+        if (raw.length > 0) {
+          const reach = DRUM.radius * 1.7 + DRUM.height;
+          const local = raw.some((h) => Math.hypot(h.x, h.y, h.z) > reach) ? worldHitsToLocal(b, raw) : raw;
+          added += applySteelHits(shell, local);
+        }
+      }
     }
     if (added <= 0) return;
     refreshSteelMesh(geo, shell.live);
@@ -314,14 +362,17 @@ function SteelBody({
     if (kind === "wheel") {
       const slammed = Boolean((shell as { slammed?: boolean }).slammed);
       // Rolling bruise is visual. setBodyMass/hull push on every pipe tick zeros vz and parks the coil.
-      if (!halfpipe || slammed) {
+      if (slammed || !(halfpipe || hangarTrack)) {
         pushSteelHulls(shell, hulls.current, rapier.ConvexPolyhedron, hullArgs);
         setBodyMass(b, kg, kind);
         b.wakeUp();
       }
     } else {
       const ext = steelExtents(shell);
-      crushDrumCollider(hulls.current[0] ?? null, ext.halfH, ext.radius, shell.maxTaken >= 0.4);
+      crushDrumCollider(hulls.current[0] ?? null, ext.halfH, ext.radius);
+      const lv = b.linvel();
+      b.setLinvel({ x: lv.x * 0.15, y: Math.min(0, lv.y), z: lv.z * 0.15 }, true);
+      b.setAngvel({ x: 0, y: 0, z: 0 }, true);
       b.wakeUp();
     }
     const mark = shell.kind === "wheel" ? 0.012 : 0.02;
@@ -352,7 +403,7 @@ function SteelBody({
       linearDamping={kind === "wheel" ? (halfpipe ? 0 : 0.004) : 0.05}
       angularDamping={kind === "wheel" ? (halfpipe ? 0 : 0.08) : 0.12}
       collisionGroups={groups}
-      canSleep={kind !== "wheel"}
+      canSleep={false}
       ccd={kind === "wheel" || Boolean(vel)}
       enabledRotations={halfpipe && kind === "wheel" ? [false, true, false] : [true, true, true]}
     >
