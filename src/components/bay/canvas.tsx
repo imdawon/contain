@@ -181,9 +181,9 @@ const CAM_OFF_DEF: [number, number, number] = [0, 2.2, -8];
 const CAM_LOOK_DEF: [number, number, number] = [0, -0.3, 14];
 const CAM_FOV_DEF = 48;
 /** Engine hangar chase — scene JSON offset [0,16,-24] fov 48 is far void around a 1.5 m coil. */
-const HANGAR_CAM_OFF: [number, number, number] = [0, 2.05, -5.6];
-const HANGAR_CAM_LOOK: [number, number, number] = [0, 0.05, 2.4];
-const HANGAR_CAM_FOV = 42;
+const HANGAR_CAM_OFF: [number, number, number] = [0, 7.5, -17];
+const HANGAR_CAM_LOOK: [number, number, number] = [0, -2.5, 12];
+const HANGAR_CAM_FOV = 50;
 const PIPE_HALF_X = 10.6;
 const PIPE_LIP_Y = 12;
 const CAM_EYE_Y_MAX = 13.2;
@@ -417,8 +417,8 @@ function TrackCam({
             const controls = orbit.current;
             if (controls) controls.target.copy(_desLook);
             camera.lookAt(_desLook);
-            if (bake && "far" in camera && camera.far !== 120) {
-              camera.far = 120;
+            if (bake && hangar && "far" in camera && camera.far !== 180) {
+              camera.far = 180;
               camera.updateProjectionMatrix();
             }
             camera.updateMatrixWorld();
@@ -618,21 +618,26 @@ function Present() {
 }
 
 function BakeFrameloop() {
-  const set = useThree((s) => s.set);
+  const setFrameloop = useThree((s) => s.setFrameloop);
   useEffect(() => {
-    set({ frameloop: "always" });
+    setFrameloop("always");
     let last = false;
     const iv = window.setInterval(() => {
       const pace = Boolean((globalThis as { __bayPace?: boolean }).__bayPace);
       if (pace === last) return;
       last = pace;
-      set({ frameloop: pace ? "never" : "always" });
+      if (pace) {
+        (globalThis as { __baySimT?: number }).__baySimT = 0;
+        setFrameloop("never");
+      } else {
+        setFrameloop("always");
+      }
     }, 16);
     return () => {
       window.clearInterval(iv);
-      set({ frameloop: "always" });
+      setFrameloop("always");
     };
-  }, [set]);
+  }, [setFrameloop]);
   return null;
 }
 
@@ -651,8 +656,15 @@ function KickFrames() {
       if (busy.current) return;
       busy.current = true;
       try {
-        invalidate();
-        advance(performance.now(), true);
+        const pace = Boolean((globalThis as { __bayPace?: boolean }).__bayPace);
+        if (pace) {
+          const gsim = globalThis as { __baySimT?: number };
+          gsim.__baySimT = (gsim.__baySimT ?? 0) + 1 / 24;
+          advance(gsim.__baySimT, true);
+        } else {
+          invalidate();
+          advance(performance.now(), true);
+        }
       } catch {
         /* rAF-less kick is best-effort */
       } finally {
@@ -776,10 +788,11 @@ function FitGl() {
 }
 
 function BakeRapier() {
-  const { world } = useRapier();
+  const { world, step } = useRapier();
   const rest = useRef<{ s: number; p: number } | null>(null);
-  useFrame(() => {
+  useFrame((_, dt) => {
     const bake = Boolean((globalThis as { __bayBake?: boolean }).__bayBake);
+    const pace = Boolean((globalThis as { __bayPace?: boolean }).__bayPace);
     const ip = world.integrationParameters;
     if (bake) {
       if (!rest.current) rest.current = { s: ip.numSolverIterations, p: ip.numInternalPgsIterations };
@@ -790,6 +803,7 @@ function BakeRapier() {
       ip.numInternalPgsIterations = rest.current.p;
       rest.current = null;
     }
+    if (pace && dt < 1 / 48) step(1 / 24);
   });
   return null;
 }
