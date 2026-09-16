@@ -21,6 +21,7 @@ import {
   type ProbeEvent,
   type ProbeObject,
 } from "@/lib/bay/probe";
+import { sceneTheme } from "@/lib/bay/arena";
 import { placeActor } from "@/lib/bay/studio";
 import { useBay } from "@/store/bay-store";
 import * as THREE from "three";
@@ -685,6 +686,8 @@ export function peek() {
           file: store.scene.file ?? `scenes/${store.scene.id}.json`,
           n: store.scene.entities.length,
           ties: store.scene.ties.length,
+          theme: store.scene.theme ?? sceneTheme(store.scene),
+          garden: Boolean(sceneTheme(store.scene)),
         }
       : null,
     stage: store.entities.map((e) => ({ id: e.id, kind: e.kind, x: e.pos[0], y: e.pos[1], z: e.pos[2] })),

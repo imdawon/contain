@@ -90,8 +90,10 @@ function SteelBody({
   const grab = useGrab(body, id);
   const pinned = useRef(false);
   const armed = useRef(false);
+  const launchUntil = useRef(0);
   const selected = useBay((s) => s.selected === id);
   const hangarTrack = useBay((s) => s.entities.some((e) => e.kind === "ramp"));
+  const halfpipe = useBay((s) => Boolean(s.scene?.id?.startsWith("halfpipe-")));
   const { world, rapier } = useRapier();
   const spec = kind === "wheel" ? WHEEL : DRUM;
   const kg = mass ?? spec.mass;
@@ -142,15 +144,22 @@ function SteelBody({
     if (!b) return;
     try {
       setBodyMass(b, kg, kind);
+      b.wakeUp();
       if (vel) {
         b.setLinvel({ x: vel[0], y: vel[1], z: vel[2] }, true);
         b.wakeUp();
+      }
+      if (halfpipe) {
+        launchUntil.current = performance.now() + 1800;
+        const g = globalThis as typeof globalThis & { __bayCoilKeepVz?: number; __bayCoilKeepUntil?: number };
+        g.__bayCoilKeepVz = vel?.[2] ?? 16;
+        g.__bayCoilKeepUntil = launchUntil.current;
       }
       pinned.current = true;
     } catch {
       /* restage can leave a dead rapier handle */
     }
-  }, [kg, kind, stageN, vel]);
+  }, [kg, kind, stageN, vel, halfpipe]);
 
   useFrame((state, dt) => {
     grab.tick(state.raycaster.ray, Math.min(dt, 0.05));
@@ -188,7 +197,11 @@ function SteelBody({
       const roll = w.x * ax + w.y * ay + w.z * az;
       const speed = Math.hypot(v.x, v.y, v.z);
       const maxW = speed / Math.max(0.2, WHEEL.radius) + 0.4;
-      const keep = Math.abs(roll) > maxW ? Math.sign(roll) * maxW : roll;
+      const wantW = halfpipe
+        ? Math.max(v.z, performance.now() < launchUntil.current ? (vel?.[2] ?? 16) : 0) /
+          Math.max(0.2, WHEEL.radius)
+        : v.z / Math.max(0.2, WHEEL.radius);
+      const keep = halfpipe ? wantW : Math.abs(roll) > maxW ? Math.sign(roll) * maxW : roll;
       b.setAngvel(
         {
           x: ax * keep + (w.x - ax * roll) * 0.04,
@@ -197,29 +210,39 @@ function SteelBody({
         },
         true,
       );
-      if (v.y > 0) v.y = 0;
+      if (!halfpipe && v.y > 0) v.y = 0;
       b.setLinvel({ x: v.x, y: v.y, z: v.z }, true);
-      const p = b.translation();
-      try {
-        const hit = world.castRay(
-          new rapier.Ray({ x: p.x, y: p.y, z: p.z }, { x: 0, y: -1, z: 0 }),
-          5,
-          true,
-          undefined,
-          undefined,
-          undefined,
-          b,
-        );
-        const toi = hit?.timeOfImpact;
-        if (toi != null && toi > 2.4) {
-          const drop = Math.min(toi - WHEEL.radius, 0.55);
-          if (drop > 0.2) b.setTranslation({ x: p.x, y: p.y - drop, z: p.z }, true);
+      if (!halfpipe) {
+        const p = b.translation();
+        try {
+          const hit = world.castRay(
+            new rapier.Ray({ x: p.x, y: p.y, z: p.z }, { x: 0, y: -1, z: 0 }),
+            5,
+            true,
+            undefined,
+            undefined,
+            undefined,
+            b,
+          );
+          const toi = hit?.timeOfImpact;
+          if (toi != null && toi > 2.4) {
+            const drop = Math.min(toi - WHEEL.radius, 0.55);
+            if (drop > 0.2) b.setTranslation({ x: p.x, y: p.y - drop, z: p.z }, true);
+          }
+        } catch {
+          /* ray missed */
         }
-      } catch {
-        /* ray missed */
       }
     }
-    if (kind === "wheel" && kg >= 90_000) {
+    if (halfpipe && kind === "wheel" && performance.now() < launchUntil.current) {
+      const cur = b.linvel();
+      const wantZ = vel && Number.isFinite(vel[2]) ? vel[2] : 16;
+      if (cur.z < wantZ * 0.75) {
+        b.setLinvel({ x: cur.x * 0.2, y: cur.y, z: wantZ }, true);
+        b.wakeUp();
+      }
+    }
+    if (!halfpipe && kind === "wheel" && kg >= 90_000) {
       const floorVz = kg >= 180_000 ? 12 : 8;
       const cap = 22;
       const g = globalThis as typeof globalThis & { __bayCoilKeepVz?: number; __bayCoilKeepUntil?: number };
@@ -229,7 +252,10 @@ function SteelBody({
           : 0;
       const cur = b.linvel();
       const zKeep = Math.max(cur.z, floorVz, keepHint);
-      b.setLinvel({ x: cur.x * 0.15, y: Math.min(cur.y, 0.35), z: Math.min(cap, zKeep) }, true);
+      b.setLinvel(
+        { x: cur.x * 0.15, y: Math.min(cur.y, 0.35), z: Math.min(cap, zKeep) },
+        true,
+      );
       b.wakeUp();
     }
     let added = 0;
@@ -265,7 +291,7 @@ function SteelBody({
         }
       }
       const forYield = raw.filter(
-        (h) => h.closing >= SFX.hit.minClosing && (h.otherMass >= 4000 || !Number.isFinite(h.otherMass)),
+        (h) => h.closing >= SFX.hit.minClosing && (h.otherMass >= 1200 || !Number.isFinite(h.otherMass)),
       );
       if (forYield.length > 0) {
         const reach = WHEEL.radius * 1.7 + WHEEL.thick;
@@ -318,7 +344,7 @@ function SteelBody({
       angularDamping={kind === "wheel" ? 0.08 : 0.12}
       collisionGroups={groups}
       canSleep={kind !== "wheel"}
-      ccd={Boolean(vel)}
+      ccd={kind === "wheel" || Boolean(vel)}
       enabledRotations={[true, true, true]}
     >
       {kind === "wheel"

@@ -326,10 +326,15 @@ export function applySteelHits(shell: SteelShell, hits: SteelHit[]) {
   const cap = kind === "wheel" ? 0.055 : 0.9;
   let added = 0;
   for (const hit of hits) {
+    let j = hit.impulse;
     if (kind === "wheel") {
       if (hit.otherMass != null && Number.isFinite(hit.otherMass) && hit.otherMass < 4000) continue;
+      const m = hit.otherMass != null && Number.isFinite(hit.otherMass) ? hit.otherMass : 100_000;
+      const closing = hit.closing ?? 0;
+      const kinetic = 0.5 * Math.min(100_000, Math.max(0, m)) * closing * closing;
+      j = Math.max(hit.impulse, kinetic);
     }
-    const excess = hit.impulse - yieldJ;
+    const excess = j - yieldJ;
     if (excess <= 0) continue;
     const crater = craterOnShell(shell, hit);
     if (!crater) continue;
