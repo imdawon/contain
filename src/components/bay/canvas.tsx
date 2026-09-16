@@ -185,6 +185,13 @@ const PIPE_LIP_Y = 12;
 const CAM_EYE_Y_MAX = 13.2;
 const CAM_EYE_Y_MIN = 3.4;
 const CAM_CLOSE_Z = -5;
+/** Keep chase eye/look above the U-pipe inner floor. Matches ramp.tsx parabolaY trough (+0.9) and buildPipe flat. */
+const TROUGH_CLEAR = 2;
+const TROUGH_LOOK_CLEAR = 0.2;
+const PIPE_FLOOR_LOCAL = 0.9;
+const PIPE_FLAT_X = 4;
+
+type PipeEnt = { kind: string; pos: [number, number, number]; size?: [number, number, number]; cut?: number };
 
 function camTriple(src: number[] | undefined, fallback: [number, number, number]): [number, number, number] {
   const a = src?.[0];
@@ -251,6 +258,55 @@ function pipeStayCam(ox: number, oy: number, oz: number, lx: number, ly: number,
   _desLook.set(tx + lx, ty + lyUse, tz + lz);
 }
 
+function pipeParabolaY(s: number, h: number) {
+  const v = 0.5;
+  const a = h / (v * v);
+  const d = s - v;
+  return a * d * d + PIPE_FLOOR_LOCAL;
+}
+
+function troughFloorAtX(x: number, ents: PipeEnt[]) {
+  let best = Infinity;
+  for (const e of ents) {
+    if (e.kind !== "ramp" && e.kind !== "hill") continue;
+    if ((e.cut ?? 0) < 0.99) continue;
+    const w = e.size?.[0] ?? 24;
+    const h = e.size?.[1] ?? 10;
+    const lx = x - e.pos[0];
+    const hw = w / 2;
+    let local = PIPE_FLOOR_LOCAL;
+    if (Math.abs(lx) > hw) local = pipeParabolaY(lx < 0 ? 0 : 1, h);
+    else if (Math.abs(lx) > PIPE_FLAT_X) local = pipeParabolaY(Math.min(1, Math.max(0, lx / w + 0.5)), h);
+    const y = e.pos[1] + local;
+    if (y < best) best = y;
+  }
+  return Number.isFinite(best) ? best : 2;
+}
+
+function isHalfpipeTrack(sceneId: string | undefined, ents: PipeEnt[], followCoil: boolean) {
+  if (String(sceneId ?? "").startsWith("halfpipe-")) return true;
+  if (!followCoil) return false;
+  return ents.some((e) => (e.kind === "ramp" || e.kind === "hill") && (e.cut ?? 0) >= 0.99);
+}
+
+/** After offset: never sit under the trough floor; keep chase behind the coil. */
+function clampHalfpipeChase(ents: PipeEnt[]) {
+  const ty = _trackP.y;
+  const minEye = Math.max(ty + TROUGH_CLEAR, troughFloorAtX(_desEye.x, ents) + TROUGH_CLEAR);
+  const minLook = Math.max(ty + TROUGH_LOOK_CLEAR, troughFloorAtX(_desLook.x, ents) + TROUGH_LOOK_CLEAR);
+  if (_desEye.y < minEye) _desEye.y = minEye;
+  if (_desLook.y < minLook) _desLook.y = minLook;
+  if (_desEye.z > _trackP.z - 1.2) _desEye.z = _trackP.z - 4;
+}
+
+function liftEyeAbovePipe(scene: THREE.Scene) {
+  fillChaseMeshes(scene);
+  for (let i = 0; i < 16; i++) {
+    if (!chaseEyeBlocked(_desLook, _desEye)) break;
+    _desEye.y += 0.45;
+  }
+}
+
 function TrackCam({
   orbit,
 }: {
@@ -298,6 +354,10 @@ function TrackCam({
           const [ox, oy, oz] = camTriple(offset, CAM_OFF_DEF);
           const [lx, ly, lz] = camTriple(look, CAM_LOOK_DEF);
           pipeStayCam(ox, oy, oz, lx, ly, lz);
+          if (isHalfpipeTrack(bay.scene?.id, ents, true)) {
+            clampHalfpipeChase(ents);
+            liftEyeAbovePipe(scene);
+          }
           if (
             Number.isFinite(_desEye.x) &&
             Number.isFinite(_desEye.y) &&
