@@ -63,7 +63,7 @@ export function ProbeTick() {
     const objects = [];
     const inView: string[] = [];
     for (const [id, rec] of listSamplers()) {
-      if (bake && rec.kind !== "wheel" && id !== trackId) continue;
+      if (bake && rec.kind !== "wheel" && rec.kind !== "drum" && id !== trackId) continue;
       const s = rec.sample();
       if (s.state?.missing) continue;
       _pt.set(s.x, s.y, s.z);

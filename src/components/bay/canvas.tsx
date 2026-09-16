@@ -627,7 +627,6 @@ function BakeFrameloop() {
       if (pace === last) return;
       last = pace;
       if (pace) {
-        (globalThis as { __baySimT?: number }).__baySimT = 0;
         setFrameloop("never");
       } else {
         setFrameloop("always");
@@ -658,10 +657,15 @@ function KickFrames() {
       try {
         const pace = Boolean((globalThis as { __bayPace?: boolean }).__bayPace);
         if (pace) {
-          const gsim = globalThis as { __baySimT?: number };
+          const gsim = globalThis as { __baySimT?: number; __baySimArmed?: boolean };
+          if (!gsim.__baySimArmed) {
+            gsim.__baySimT = 0;
+            gsim.__baySimArmed = true;
+          }
           gsim.__baySimT = (gsim.__baySimT ?? 0) + 1 / 24;
           advance(gsim.__baySimT, true);
         } else {
+          (globalThis as { __baySimArmed?: boolean }).__baySimArmed = false;
           invalidate();
           advance(performance.now(), true);
         }
@@ -677,6 +681,8 @@ function KickFrames() {
       const hidden = typeof document !== "undefined" && document.hidden;
       const bake = Boolean((globalThis as unknown as { __bayBake?: boolean }).__bayBake);
       if (bake) {
+        const paced = Boolean((globalThis as { __bayPace?: boolean }).__bayPace);
+        if (paced) return;
         if (!hidden) return;
         if (now - lastRaf.current < 16) return;
         g.__bayKick?.();
@@ -803,7 +809,7 @@ function BakeRapier() {
       ip.numInternalPgsIterations = rest.current.p;
       rest.current = null;
     }
-    if (pace && dt < 1 / 48) step(1 / 24);
+    if (pace) step(dt > 1 / 48 && dt < 0.08 ? dt : 1 / 24);
   });
   return null;
 }
@@ -894,16 +900,19 @@ function World() {
   const playing = useBay((s) => s.playing);
   const garden = Boolean(sceneTheme(scene));
   const [bakeOn, setBakeOn] = useState(false);
+  const [paceOn, setPaceOn] = useState(false);
   useEffect(() => {
     const iv = window.setInterval(() => {
       const on = Boolean((globalThis as { __bayBake?: boolean }).__bayBake);
+      const pace = Boolean((globalThis as { __bayPace?: boolean }).__bayPace);
       setBakeOn((prev) => (prev === on ? prev : on));
-    }, 40);
+      setPaceOn((prev) => (prev === pace ? prev : pace));
+    }, 16);
     return () => window.clearInterval(iv);
   }, []);
 
   return (
-    <Physics key={stageN} gravity={sceneGravity(scene)} timeStep={slowMo || bakeOn ? "vary" : 1 / 60} paused={!playing || slowMo} interpolate={!bakeOn} numSolverIterations={bakeOn ? 4 : 24} numInternalPgsIterations={bakeOn ? 1 : 12} maxCcdSubsteps={1}>
+    <Physics key={stageN} gravity={sceneGravity(scene)} timeStep={slowMo || bakeOn || paceOn ? "vary" : 1 / 60} paused={!playing || slowMo || paceOn} interpolate={!bakeOn} numSolverIterations={bakeOn ? 4 : 24} numInternalPgsIterations={bakeOn ? 1 : 12} maxCcdSubsteps={1}>
       <BakeRapier />
       <SlowMoDriver />
       <TrackCam orbit={orbit} />
