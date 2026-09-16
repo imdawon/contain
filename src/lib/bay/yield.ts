@@ -333,7 +333,8 @@ export function applySteelHits(shell: SteelShell, hits: SteelHit[]) {
       const m = hit.otherMass != null && Number.isFinite(hit.otherMass) ? hit.otherMass : 100_000;
       const closing = hit.closing ?? 0;
       const pipe = !Number.isFinite(hit.otherMass);
-      if (pipe && closing < 8) {
+      // Spawn kick into the trough can close at 8–15. True wall slams in tests are ~28.
+      if (pipe && closing < 20) {
         rolling = true;
       } else {
         const kinetic = 0.5 * Math.min(100_000, Math.max(0, m)) * closing * closing;
@@ -354,7 +355,7 @@ export function applySteelHits(shell: SteelShell, hits: SteelHit[]) {
     const sigY = kind === "wheel" ? halfH * 0.55 : sigma;
     const twoR = 2 * sigR * sigR;
     const twoY = 2 * sigY * sigY;
-    const depth = rolling ? 0.026 : Math.min(hitCap, maxDent, excess / Math.max(0.5, stiff));
+    const depth = rolling ? 0.012 : Math.min(hitCap, maxDent, excess / Math.max(0.5, stiff));
     if (kind !== "drum" && depth < 0.002) continue;
 
     if (kind === "drum") {

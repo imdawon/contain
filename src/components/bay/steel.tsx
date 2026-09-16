@@ -90,7 +90,6 @@ function SteelBody({
   const grab = useGrab(body, id);
   const pinned = useRef(false);
   const armed = useRef(false);
-  const launchUntil = useRef(0);
   const selected = useBay((s) => s.selected === id);
   const hangarTrack = useBay((s) => s.entities.some((e) => e.kind === "ramp"));
   const halfpipe = useBay((s) => Boolean(s.scene?.id?.startsWith("halfpipe-")));
@@ -149,17 +148,11 @@ function SteelBody({
         b.setLinvel({ x: vel[0], y: vel[1], z: vel[2] }, true);
         b.wakeUp();
       }
-      if (halfpipe) {
-        launchUntil.current = performance.now() + 1800;
-        const g = globalThis as typeof globalThis & { __bayCoilKeepVz?: number; __bayCoilKeepUntil?: number };
-        g.__bayCoilKeepVz = vel?.[2] ?? 16;
-        g.__bayCoilKeepUntil = launchUntil.current;
-      }
       pinned.current = true;
     } catch {
       /* restage can leave a dead rapier handle */
     }
-  }, [kg, kind, stageN, vel, halfpipe]);
+  }, [kg, kind, stageN, vel]);
 
   useFrame((state, dt) => {
     grab.tick(state.raycaster.ray, Math.min(dt, 0.05));
@@ -188,19 +181,15 @@ function SteelBody({
       lastWheelZ = b.translation().z;
     }
     if (kind === "wheel" && halfpipe) {
-      const v = b.linvel();
+      // 0221962 pin: x=0, true-roll about world X. Keep down-pipe speed — the 5x parabola
+      // fed vz from gravity; this flat U-pipe's trimesh otherwise parks 100 t in ~7 m.
       const p = b.translation();
+      const v = b.linvel();
       let vz = v.z;
       if (lastWheelGrounded && vz < 8) vz = 8;
-      const omega = -vz / Math.max(0.2, WHEEL.radius);
-      b.setAngvel({ x: omega, y: 0, z: 0 }, true);
-      if (lastWheelGrounded) {
-        let vx = v.x * 0.2;
-        if (Math.abs(p.x) > 0.6) vx += -Math.sign(p.x) * 0.25;
-        vx = Math.max(-0.35, Math.min(0.35, vx));
-        const vy = Math.min(v.y, 0.35);
-        b.setLinvel({ x: vx, y: vy, z: vz }, true);
-      }
+      b.setTranslation({ x: 0, y: p.y, z: p.z }, true);
+      b.setLinvel({ x: 0, y: v.y, z: vz }, true);
+      b.setAngvel({ x: -vz / Math.max(0.08, WHEEL.radius), y: 0, z: 0 }, true);
     } else if (kind === "wheel" && hangarTrack) {
       const w = b.angvel();
       const v = b.linvel();
@@ -296,11 +285,26 @@ function SteelBody({
         if (pipe && h.impulse > 1e-4) return true;
         return h.closing >= SFX.hit.minClosing && (h.otherMass >= 1200 || !Number.isFinite(h.otherMass));
       });
+      let slammed = false;
       if (forYield.length > 0) {
-        const reach = WHEEL.radius * 1.7 + WHEEL.thick;
-        const local = forYield.some((h) => Math.hypot(h.x, h.y, h.z) > reach) ? worldHitsToLocal(b, forYield) : forYield;
-        added += applySteelHits(shell, local);
+        // Pipe is rolling contact even at spawn kick (closing can exceed 8). Only other bodies slam.
+        const slams = forYield.filter((h) => Number.isFinite(h.otherMass) && (h.closing ?? 0) >= 8);
+        slammed = slams.length > 0;
+        const pipeRoll = forYield
+          .filter((h) => !Number.isFinite(h.otherMass))
+          .sort((a, b) => b.impulse - a.impulse)
+          .slice(0, 1);
+        const hits = slammed ? slams : pipeRoll;
+        const rollN = ((shell as { rollN?: number }).rollN ?? 0) + 1;
+        (shell as { rollN?: number }).rollN = rollN;
+        const rollTick = !slammed && rollN % 12 === 0;
+        if (hits.length > 0 && (slammed || rollTick)) {
+          const reach = WHEEL.radius * 1.7 + WHEEL.thick;
+          const local = hits.some((h) => Math.hypot(h.x, h.y, h.z) > reach) ? worldHitsToLocal(b, hits) : hits;
+          added += applySteelHits(shell, local);
+        }
       }
+      if (kind === "wheel" && halfpipe) (shell as { slammed?: boolean }).slammed = slammed;
     }
     if (added <= 0) return;
     refreshSteelMesh(geo, shell.live);
@@ -311,13 +315,18 @@ function SteelBody({
     }
     if (bits.current) bits.current.visible = shell.maxTaken < 0.12;
     if (kind === "wheel") {
-      pushSteelHulls(shell, hulls.current, rapier.ConvexPolyhedron, hullArgs);
-      setBodyMass(b, kg, kind);
+      const slammed = Boolean((shell as { slammed?: boolean }).slammed);
+      // Rolling bruise is visual. setBodyMass/hull push on every pipe tick zeros vz and parks the coil.
+      if (!halfpipe || slammed) {
+        pushSteelHulls(shell, hulls.current, rapier.ConvexPolyhedron, hullArgs);
+        setBodyMass(b, kg, kind);
+        b.wakeUp();
+      }
     } else {
       const ext = steelExtents(shell);
       crushDrumCollider(hulls.current[0] ?? null, ext.halfH, ext.radius, shell.maxTaken >= 0.4);
+      b.wakeUp();
     }
-    b.wakeUp();
     const mark = shell.kind === "wheel" ? 0.012 : 0.02;
     if (shell.maxTaken >= mark && shell.noted < Math.floor(shell.maxTaken / mark)) {
       shell.noted = Math.floor(shell.maxTaken / mark);
@@ -343,8 +352,8 @@ function SteelBody({
       colliders={false}
       friction={mu}
       restitution={rest}
-      linearDamping={kind === "wheel" ? 0.004 : 0.05}
-      angularDamping={kind === "wheel" ? 0.08 : 0.12}
+      linearDamping={kind === "wheel" ? (halfpipe ? 0 : 0.004) : 0.05}
+      angularDamping={kind === "wheel" ? (halfpipe ? 0 : 0.08) : 0.12}
       collisionGroups={groups}
       canSleep={kind !== "wheel"}
       ccd={kind === "wheel" || Boolean(vel)}
