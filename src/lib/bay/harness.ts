@@ -68,7 +68,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 205;
+const PIPE_GEN = 210;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -922,76 +922,52 @@ async function tapeInner(scene?: unknown, ms = 0) {
     });
   let lastJpegAt = performance.now();
   let stalled = false;
+  const TW = 160;
+  const TH = 100;
   let scratch: HTMLCanvasElement | null = null;
-  const jpegSmall = (el: HTMLCanvasElement) => {
-    const tw = 320;
-    const th = 200;
+  let pix: Uint8Array | null = null;
+  const rawFrames: Uint8Array[] = [];
+  const jpegFromRaw = (raw: Uint8Array) => {
     if (!scratch) scratch = document.createElement("canvas");
-    if (scratch.width !== tw || scratch.height !== th) {
-      scratch.width = tw;
-      scratch.height = th;
+    if (scratch.width !== TW || scratch.height !== TH) {
+      scratch.width = TW;
+      scratch.height = TH;
     }
     const ctx = scratch.getContext("2d");
-    const gl =
-      (window as unknown as { __bayWebgl?: WebGLRenderingContext | WebGL2RenderingContext }).__bayWebgl ||
-      el.getContext("webgl2") ||
-      el.getContext("webgl");
-    if (gl && ctx) {
-      const w = Math.min(tw, el.width);
-      const h = Math.min(th, el.height);
-      const x = Math.max(0, Math.floor((el.width - w) / 2));
-      const y = Math.max(0, Math.floor((el.height - h) / 2));
-      const pix = new Uint8Array(w * h * 4);
-      gl.readPixels(x, y, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pix);
-      const img = ctx.createImageData(w, h);
-      for (let row = 0; row < h; row++) {
-        const src = (h - 1 - row) * w * 4;
-        img.data.set(pix.subarray(src, src + w * 4), row * w * 4);
-      }
-      ctx.putImageData(img, 0, 0);
-      return scratch.toDataURL("image/jpeg", 0.62);
-    }
-    if (!ctx) return el.toDataURL("image/jpeg", 0.62);
-    ctx.drawImage(el, 0, 0, tw, th);
-    return scratch.toDataURL("image/jpeg", 0.62);
+    if (!ctx) return null;
+    const img = ctx.createImageData(TW, TH);
+    img.data.set(raw.subarray(0, TW * TH * 4));
+    ctx.putImageData(img, 0, 0);
+    return scratch.toDataURL("image/jpeg", 0.45);
   };
   const grab = async () => {
     beat();
     try {
-      const wlast = window as unknown as { __bayLastJpeg?: string; __bayJpegAt?: number };
-      let data: unknown = wlast.__bayLastJpeg;
-      const nowGrab = performance.now();
-      const refresh =
-        typeof data !== "string" ||
-        !data.startsWith("data:image") ||
-        nowGrab - (wlast.__bayJpegAt || 0) > 700;
-      if (refresh) {
-        const el = liveCanvas();
-        try {
-          if (el) data = jpegSmall(el);
-        } catch {
-          data = null;
-        }
-        if (typeof data === "string" && data.startsWith("data:image")) {
-          wlast.__bayLastJpeg = data;
-          wlast.__bayJpegAt = nowGrab;
-        }
-      }
-
-      if (typeof data === "string" && data.startsWith("data:image")) {
-        frames.push(data);
-        lastJpegAt = performance.now();
+      const el = liveCanvas();
+      const gl = (window as unknown as { __bayWebgl?: WebGLRenderingContext | WebGL2RenderingContext }).__bayWebgl;
+      if (!el || !gl) return;
+      const w = Math.min(TW, el.width);
+      const h = Math.min(TH, el.height);
+      const x = Math.max(0, Math.floor((el.width - w) / 2));
+      const y = Math.max(0, Math.floor((el.height - h) / 2));
+      const need = TW * TH * 4;
+      if (!pix || pix.length < need) pix = new Uint8Array(need);
+      gl.readPixels(x, y, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pix);
+      rawFrames.push(pix.slice(0, need));
+      lastJpegAt = performance.now();
+      if (rawFrames.length === 1 || rawFrames.length % 30 === 0) {
         try {
           void fetch("/__bay/progress", {
             method: "POST",
             headers: { "content-type": "application/json" },
             cache: "no-store",
-            body: JSON.stringify({ id: g.__bayTapeJob, jpegN: frames.length }),
+            body: JSON.stringify({ id: g.__bayTapeJob, jpegN: rawFrames.length }),
           }).catch(() => {});
         } catch {
           /* progress is best-effort */
         }
       }
+      return;
     } finally {
       wgrab.__bayWantGrab = false;
     }
@@ -1039,7 +1015,6 @@ async function tapeInner(scene?: unknown, ms = 0) {
   await grab();
   const hard = Number(ms) > 400 ? Number(ms) : 14000;
   const want = Math.max(360, Math.round(hard / DT));
-  g.__bayPace = true;
   const t0 = performance.now();
   let contactN = 0;
   const contacts: { tMs: number; impulse: number; closing: number; id: string | null; otherMass: number | null }[] = [];
@@ -1047,7 +1022,7 @@ async function tapeInner(scene?: unknown, ms = 0) {
   const groundedHz: number[] = [];
   const t0Probe = probeTime();
   let spins = 0;
-  while (frames.length < want && spins < want + 8) {
+  while (rawFrames.length < want && spins < want + 8) {
     spins += 1;
     beat();
     if (performance.now() - t0 >= 85000) break;
@@ -1081,6 +1056,7 @@ async function tapeInner(scene?: unknown, ms = 0) {
       }
       speedHz.push(wheelSpeed);
       groundedHz.push(wheelGrounded);
+      if (spins % 8 === 0) {
       const cons = log().filter((e) => e.type === "contact");
       if (cons.length > contactN) {
         const tHit = Math.round(performance.now() - t0);
@@ -1097,15 +1073,38 @@ async function tapeInner(scene?: unknown, ms = 0) {
         }
         contactN = cons.length;
       }
+      }
     } catch {
       /* keep baking */
     }
     const leftover = DT - (performance.now() - tick0);
     if (leftover > 1) {
-      const until = performance.now() + leftover;
-      while (performance.now() < until) {
-        /* hidden-tab timers clamp to ~1s; spin keeps wall fps honest */
-      }
+      await new Promise<void>((resolve) => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          resolve();
+        };
+        try {
+          const w = bayClk();
+          if (w) {
+            const onm = () => {
+              try {
+                w.removeEventListener("message", onm);
+              } catch {
+                /* */
+              }
+              finish();
+            };
+            w.addEventListener("message", onm);
+            w.postMessage(leftover);
+          }
+        } catch {
+          /* worker optional */
+        }
+        setTimeout(finish, leftover);
+      });
     }
   }
   if (!stalled) {
@@ -1113,8 +1112,11 @@ async function tapeInner(scene?: unknown, ms = 0) {
     await yieldPaint(80);
     await grab();
   }
-  g.__bayPace = false;
   const durationMs = Math.round(performance.now() - t0);
+  for (const raw of rawFrames) {
+    const data = jpegFromRaw(raw);
+    if (typeof data === "string" && data.startsWith("data:image")) frames.push(data);
+  }
   const jpegN = frames.length;
   if (stalled) {
     return {

@@ -181,8 +181,8 @@ const CAM_OFF_DEF: [number, number, number] = [0, 2.2, -8];
 const CAM_LOOK_DEF: [number, number, number] = [0, -0.3, 14];
 const CAM_FOV_DEF = 48;
 /** Engine hangar chase — scene JSON offset [0,16,-24] fov 48 is far void around a 1.5 m coil. */
-const HANGAR_CAM_OFF: [number, number, number] = [0, 3.4, -9.2];
-const HANGAR_CAM_LOOK: [number, number, number] = [0, 0.35, 5];
+const HANGAR_CAM_OFF: [number, number, number] = [0, 3.2, -7.8];
+const HANGAR_CAM_LOOK: [number, number, number] = [0, 0.3, 4];
 const HANGAR_CAM_FOV = 44;
 const PIPE_HALF_X = 10.6;
 const PIPE_LIP_Y = 12;
@@ -405,14 +405,6 @@ function TrackCam({
             _desEye.set(_trackP.x + ox, _trackP.y + oy, _trackP.z + oz);
             _desLook.set(_trackP.x + lx, _trackP.y + ly, _trackP.z + lz);
           }
-          dumpBayChase({
-            clampedToTrough,
-            hangar,
-            ox,
-            oy,
-            oz,
-            dist: _desEye.distanceTo(_trackP),
-          });
           if (
             Number.isFinite(_desEye.x) &&
             Number.isFinite(_desEye.y) &&
@@ -428,6 +420,14 @@ function TrackCam({
             camera.updateMatrixWorld();
             primed.current = true;
           }
+          dumpBayChase({
+            clampedToTrough: hangar ? false : clampedToTrough,
+            hangar,
+            ox,
+            oy,
+            oz,
+            dist: camera.position.distanceTo(_trackP),
+          });
         }
         return;
       }
@@ -602,7 +602,7 @@ function TrackCam({
     } catch {
       /* chase bake must not throw */
     }
-  }, 1);
+  }, 11);
   return null;
 }
 
@@ -616,15 +616,8 @@ function Present() {
 function BakeFrameloop() {
   const set = useThree((s) => s.set);
   useEffect(() => {
-    let last: boolean | null = null;
-    const id = window.setInterval(() => {
-      const pace = Boolean((globalThis as { __bayPace?: boolean }).__bayPace);
-      if (pace === last) return;
-      last = pace;
-      set({ frameloop: pace ? "demand" : "always" });
-    }, 40);
+    set({ frameloop: "always" });
     return () => {
-      window.clearInterval(id);
       set({ frameloop: "always" });
     };
   }, [set]);
@@ -660,12 +653,7 @@ function KickFrames() {
       const hidden = typeof document !== "undefined" && document.hidden;
       const bake = Boolean((globalThis as unknown as { __bayBake?: boolean }).__bayBake);
       if (bake) {
-        const pace = Boolean((globalThis as { __bayPace?: boolean }).__bayPace);
-        if (pace) {
-          if (now - lastRaf.current < 500) return;
-          g.__bayKick?.();
-          return;
-        }
+        if (!hidden) return;
         if (now - lastRaf.current < 16) return;
         g.__bayKick?.();
         return;
@@ -705,16 +693,17 @@ function GlHooks({ onLost }: { onLost: () => void }) {
   useLayoutEffect(() => {
     const canvas = gl.domElement;
     const g = gl as THREE.WebGLRenderer & { __bayGrabWrap?: boolean };
+    (window as GrabWin & { __bayWebgl?: WebGLRenderingContext | WebGL2RenderingContext }).__bayWebgl = gl.getContext();
     if (!g.__bayGrabWrap) {
       g.__bayGrabWrap = true;
       const orig = g.render.bind(g);
-      (window as GrabWin & { __bayWebgl?: WebGLRenderingContext | WebGL2RenderingContext }).__bayWebgl = gl.getContext();
       g.render = ((scene: THREE.Object3D, camera: THREE.Camera) => {
         orig(scene, camera);
-        const w = window as GrabWin & { __bayBake?: boolean; __bayLastJpeg?: string };
-        if (!w.__bayWantGrab) return;
+        const w = window as GrabWin & { __bayBake?: boolean };
+        // Never jpeg-on-render during bake — toDataURL stalls the unique-fps loop.
+        if (w.__bayBake || !w.__bayWantGrab) return;
         try {
-          w.__bayGrabData = w.__bayLastJpeg || canvas.toDataURL("image/jpeg", w.__bayBake ? 0.7 : 0.85);
+          w.__bayGrabData = canvas.toDataURL("image/jpeg", 0.85);
         } catch {
           w.__bayGrabData = null;
         }
@@ -742,13 +731,15 @@ function FitGl() {
     const apply = () => {
       const parent = canvas.parentElement;
       const wWin = window as GrabWin & { __bayBake?: boolean };
-      const bake = Boolean(wWin.__bayBake) || Boolean(wWin.__bayWantGrab);
       let w = parent?.clientWidth ?? 0;
       let h = parent?.clientHeight ?? 0;
       if (!parent || w < 2 || h < 2) return;
-      // Bake used to force 720x1280 @ dpr 2 (often 2560x2560) and lose the GL context;
-      // tape letterboxes to 9:16 after grab. Keep the painted buffer stable.
-      void bake;
+      // Small FBO during bake so SwiftShader readPixels can keep ~30 unique fps.
+      // Do not use dpr 2 (loses GL). Shot/live keep the parent size.
+      if (wWin.__bayBake) {
+        w = 180;
+        h = 320;
+      }
       const dpr = 1;
       if (canvas.width === Math.floor(w * dpr) && canvas.height === Math.floor(h * dpr)) return;
       gl.setPixelRatio(dpr);
@@ -768,6 +759,35 @@ function FitGl() {
     applyRef.current();
   });
   return null;
+}
+
+function BakeRapier() {
+  const { world } = useRapier();
+  const rest = useRef<{ s: number; p: number } | null>(null);
+  useFrame(() => {
+    const bake = Boolean((globalThis as { __bayBake?: boolean }).__bayBake);
+    const ip = world.integrationParameters;
+    if (bake) {
+      if (!rest.current) rest.current = { s: ip.numSolverIterations, p: ip.numInternalPgsIterations };
+      if (ip.numSolverIterations !== 4) ip.numSolverIterations = 4;
+      if (ip.numInternalPgsIterations !== 1) ip.numInternalPgsIterations = 1;
+    } else if (rest.current) {
+      ip.numSolverIterations = rest.current.s;
+      ip.numInternalPgsIterations = rest.current.p;
+      rest.current = null;
+    }
+  });
+  return null;
+}
+
+function HideOnBake({ children }: { children: React.ReactNode }) {
+  const ref = useRef<THREE.Group>(null);
+  useFrame(() => {
+    const bake = Boolean((globalThis as { __bayBake?: boolean }).__bayBake);
+    const g = ref.current;
+    if (g && g.visible === bake) g.visible = !bake;
+  });
+  return <group ref={ref}>{children}</group>;
 }
 
 function BlastBus() {
@@ -846,6 +866,7 @@ function World() {
 
   return (
     <Physics key={stageN} gravity={sceneGravity(scene)} timeStep={slowMo ? "vary" : 1 / 60} paused={!playing || slowMo} interpolate numSolverIterations={24} numInternalPgsIterations={12} maxCcdSubsteps={1}>
+      <BakeRapier />
       <SlowMoDriver />
       <TrackCam orbit={orbit} />
       <Present />
@@ -862,6 +883,7 @@ function World() {
         )}
       </RigidBody>
       {garden ? <Arena /> : (
+      <HideOnBake>
       <Grid
         infiniteGrid
         fadeDistance={34}
@@ -874,6 +896,7 @@ function World() {
         sectionColor="#8f8678"
         position={[0, 0.012, 0]}
       />
+      </HideOnBake>
       )}
       {entities.map((e) =>
         e.kind === "can" ? (
@@ -913,7 +936,7 @@ function World() {
           orbit.current = el;
         }}
         makeDefault
-        enabled={!dragging && !placing}
+        enabled={!dragging && !placing && !Boolean((globalThis as { __bayBake?: boolean }).__bayBake)}
         enablePan
         enableZoom
         zoomSpeed={hangar ? 1.35 : 1}

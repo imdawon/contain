@@ -59,9 +59,11 @@ export function ProbeTick() {
     camera.getWorldDirection(_dir);
     _look.copy(camera.position).addScaledVector(_dir, 2);
 
+    const bake = Boolean((globalThis as { __bayBake?: boolean }).__bayBake);
     const objects = [];
     const inView: string[] = [];
     for (const [id, rec] of listSamplers()) {
+      if (bake && rec.kind !== "wheel" && id !== trackId) continue;
       const s = rec.sample();
       if (s.state?.missing) continue;
       _pt.set(s.x, s.y, s.z);
