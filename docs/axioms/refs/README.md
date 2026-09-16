@@ -1,8 +1,8 @@
 # Axiom source clips
 
-Dawon dropped these on 2026-08-28 as the pictures the watch/shorts axioms were distilled from. They are **taste sources**, not assets. Do not rip cars, BeamNG maps, series logos, or a `SURVIVAL CHANCE` HUD into CONTAIN. Cast stays dummy / coil / drums.
+Dawon dropped these on 2026-08-28 as the pictures the watch/shorts axioms were distilled from. They are **taste sources**, not assets. Do not rip cars, BeamNG maps, series logos, or a `SURVIVAL CHANCE` HUD into CONTAIN. Hangar cast is dummy, wagon, wheel, drum, grenade, pack, crate, toy vehicles — distill the loop, do not copy the BeamNG cars.
 
-Full mp4s live on disk (gitignored, ~97 MB). Stills are under `frames/` so a session can watch without decoding video. Served at `http://192.168.1.5:8090/axioms/`.
+Full mp4s live on disk (gitignored, ~97 MB). Stills are under `frames/` so a session can watch without decoding video. On disk at `docs/axioms/refs/`; optional local `http://127.0.0.1:8090/axioms/` when that server is up.
 
 | File | Source | Size | What it is |
 |---|---|---|---|

@@ -15,6 +15,8 @@ const _dir = new THREE.Vector3();
 
 export function ProbeTick() {
   const camera = useThree((s) => s.camera);
+  const scene = useThree((s) => s.scene);
+  const gl = useThree((s) => s.gl);
   const latch = useBay((s) => s.latch);
   const selected = useBay((s) => s.selected);
   const trackId = useBay((s) => s.trackId);
@@ -38,6 +40,11 @@ export function ProbeTick() {
   }, [setTrack, toggleCutaway]);
 
   useFrame((_, dt) => {
+    (window as any).__bayView = { camera, scene };
+    if (gl) {
+      const ctx = typeof gl.getContext === "function" ? gl.getContext() : null;
+      (globalThis as any).__bayWebglAlive = ctx?.isContextLost ? !ctx.isContextLost() : true;
+    }
     const cap = Math.min(dt, 0.05);
     const inst = dt > 1e-4 ? 1 / dt : 0;
     fpsEma.current = fpsEma.current === 0 ? inst : fpsEma.current * 0.85 + inst * 0.15;
@@ -69,17 +76,29 @@ export function ProbeTick() {
       let vx: number | null = null;
       let vy: number | null = null;
       let vz: number | null = null;
+      let wx: number | null = null;
+      let wy: number | null = null;
+      let wz: number | null = null;
+      let omega: number | null = null;
+      const state = { ...(s.state ?? {}) } as Record<string, unknown>;
       if (b) {
         mass = round(b.mass());
         const lv = b.linvel();
         vx = round(lv.x);
         vy = round(lv.y);
         vz = round(lv.z);
+        const av = b.angvel();
+        wx = round(av.x);
+        wy = round(av.y);
+        wz = round(av.z);
+        omega = round(Math.hypot(av.x, av.y, av.z));
         if (b.numColliders() > 0) {
           const c = b.collider(0);
           friction = round(c.friction());
           restitution = round(c.restitution());
         }
+        const contacts = (b as { numContacts?: () => number }).numContacts;
+        if (typeof contacts === "function") state.grounded = contacts.call(b) > 0;
       }
       objects.push({
         id,
@@ -93,12 +112,16 @@ export function ProbeTick() {
         vx,
         vy,
         vz,
+        wx,
+        wy,
+        wz,
+        omega,
         inView: seen,
         mass,
         friction,
         restitution,
         editable: Boolean(b),
-        state: s.state ?? {},
+        state,
       });
     }
 
@@ -121,7 +144,15 @@ export function ProbeTick() {
       inView,
     });
     recordHistory(
-      objects.filter((o) => o.kind === "wheel" || o.kind === "dummy" || o.id === trackId),
+      objects.filter(
+        (o) =>
+          o.kind === "wheel" ||
+          o.kind === "dummy" ||
+          o.kind === "dummy-bone" ||
+          o.kind === "wagon" ||
+          o.kind === "drum" ||
+          o.id === trackId,
+      ),
       probeTime(),
       {
         x: round(camera.position.x),

@@ -141,3 +141,39 @@ export function drumInertia(kg: number) {
   const trans = 0.25 * kg * r * r + (kg * h * h) / 12;
   return { x: trans, y: ring, z: trans };
 }
+
+export const VEHICLE_KINDS = [
+  "dumptruck",
+  "van",
+  "suv",
+  "pickup",
+  "car",
+  "bus",
+  "flatbed",
+  "loader",
+] as const;
+
+export type VehicleKind = (typeof VEHICLE_KINDS)[number];
+
+export type VehicleSpec = {
+  size: [number, number, number];
+  mass: number;
+  yieldImpulse: number;
+  color: number;
+};
+
+/** Box hulls, length along Z. Yield is Rapier contact impulse to snap the world weld. */
+export const VEHICLE: Record<VehicleKind, VehicleSpec> = {
+  dumptruck: { size: [8.0, 2.5, 3.2], mass: 12_000, yieldImpulse: 6.0e5, color: 0xc45c28 },
+  van: { size: [5.5, 2.0, 2.2], mass: 2_500, yieldImpulse: 4e5, color: 0xd8d4c8 },
+  suv: { size: [4.8, 1.9, 1.8], mass: 2_200, yieldImpulse: 4e5, color: 0x3d5a80 },
+  pickup: { size: [5.5, 2.0, 1.9], mass: 2_300, yieldImpulse: 5e5, color: 0x5c6b4a },
+  car: { size: [4.5, 1.8, 1.5], mass: 1_500, yieldImpulse: 2e5, color: 0xb42318 },
+  bus: { size: [12.0, 2.5, 3.2], mass: 14_000, yieldImpulse: 2e6, color: 0xd4a017 },
+  flatbed: { size: [8.0, 2.5, 1.5], mass: 8_000, yieldImpulse: 1.2e6, color: 0x6b6e72 },
+  loader: { size: [7.0, 2.8, 3.5], mass: 18_000, yieldImpulse: 3.5e6, color: 0xc9a227 },
+};
+
+export function isVehicleKind(kind: string): kind is VehicleKind {
+  return Object.prototype.hasOwnProperty.call(VEHICLE, kind);
+}

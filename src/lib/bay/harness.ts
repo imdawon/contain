@@ -67,7 +67,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 142;
+const PIPE_GEN = 169;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -77,6 +77,8 @@ const g = globalThis as unknown as {
   __bayPipeGen?: number;
   __bayTakeBeat?: number;
   __bayWatch?: ReturnType<typeof setInterval>;
+  __bayBake?: boolean;
+  __bayClk?: Worker;
 };
 const hist = (g.__bayHist ??= { frames: [], lastHistT: -1, lastEventN: 0 });
 const frames = hist.frames;
@@ -89,6 +91,17 @@ function round(n: number) {
 function beat() {
   g.__bayTakeBeat = performance.now();
 }
+
+function paintState() {
+  const vis = typeof document !== "undefined" ? document.visibilityState : "hidden";
+  const canvas = typeof document !== "undefined" && Boolean(document.querySelector("canvas"));
+  const owned = Boolean(typeof window !== "undefined" && (window as unknown as { __bayOwned?: boolean }).__bayOwned);
+  const bake = Boolean(g.__bayBake);
+  const bot = typeof navigator !== "undefined" && navigator.webdriver === true;
+  const paint = Boolean(canvas && (owned || bake || vis === "visible"));
+  return { vis, canvas, owned, bake, bot, paint };
+}
+
 
 export function recordHistory(
   objects: ProbeObject[],
@@ -694,7 +707,8 @@ export function peek() {
     studio: store.studio,
     playing: store.playing,
     slowMo: store.slowMo,
-    paint: typeof document !== "undefined" && document.visibilityState === "visible",
+    paint: paintState().paint,
+    owned: paintState().owned,
     hidden: typeof document !== "undefined" && document.hidden,
     fps: Math.round((s.fps ?? 0) * 10) / 10,
     frameMs: Math.round((s.frameMs ?? 0) * 10) / 10,
@@ -784,6 +798,15 @@ function loadClip(id: string) {
 
 
 async function tape(scene?: unknown, ms = 0) {
+  g.__bayBake = true;
+  try {
+    return await tapeInner(scene, ms);
+  } finally {
+    g.__bayBake = false;
+  }
+}
+
+async function tapeInner(scene?: unknown, ms = 0) {
   const liveCanvas = () => {
     const all = [...document.querySelectorAll("canvas")].filter(
       (el): el is HTMLCanvasElement => el instanceof HTMLCanvasElement && el.width >= 64 && el.height >= 64,
@@ -796,35 +819,106 @@ async function tape(scene?: unknown, ms = 0) {
   const H = 1280;
   const DT = 1000 / 30;
   const frames: string[] = [];
+  const wgrab = window as unknown as { __bayWantGrab?: boolean; __bayGrabData?: string | null; __bayKick?: () => void };
   const kick = () => {
     try {
-      (window as unknown as { __bayKick?: () => void }).__bayKick?.();
+      wgrab.__bayKick?.();
     } catch {
       /* kick is best-effort */
     }
   };
-  const grab = async () => {
-    const w = window as unknown as { __bayWantGrab?: boolean; __bayGrabData?: string | null };
-    w.__bayGrabData = null;
-    w.__bayWantGrab = true;
-    kick();
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    const data: unknown = w.__bayGrabData;
-    if (typeof data === "string" && data.startsWith("data:image")) frames.push(data);
+  const bayClk = () => {
+    if (g.__bayClk) return g.__bayClk;
+    try {
+      const blob = new Blob(["onmessage=e=>setTimeout(()=>postMessage(0),+e.data||16)"], { type: "text/javascript" });
+      g.__bayClk = new Worker(URL.createObjectURL(blob));
+    } catch {
+      g.__bayClk = undefined;
+    }
+    return g.__bayClk;
   };
-  const yieldPaint = () =>
+  const yieldPaint = (ms = 80) =>
     new Promise<void>((resolve) => {
       let done = false;
+      const cap = Math.max(1, Math.min(80, Number(ms) || 80));
+      const ac = new AbortController();
       const finish = () => {
         if (done) return;
         done = true;
+        try {
+          ac.abort();
+        } catch {
+          /* leftover fetch */
+        }
         resolve();
       };
-      const ch = new MessageChannel();
-      ch.port1.onmessage = () => finish();
-      ch.port2.postMessage(0);
-      requestAnimationFrame(() => finish());
+      try {
+        const w = bayClk();
+        if (w) {
+          const onm = () => {
+            try {
+              w.removeEventListener("message", onm);
+            } catch {
+              /* */
+            }
+            finish();
+          };
+          w.addEventListener("message", onm);
+          w.postMessage(cap);
+        }
+      } catch {
+        /* worker optional */
+      }
+      try {
+        const ch = new MessageChannel();
+        ch.port1.onmessage = () => finish();
+        ch.port2.postMessage(0);
+      } catch {
+        /* */
+      }
+      try {
+        requestAnimationFrame(() => finish());
+      } catch {
+        /* */
+      }
+      try {
+        setTimeout(finish, cap);
+      } catch {
+        /* */
+      }
+      try {
+        void fetch("/__bay/health", { cache: "no-store", signal: ac.signal }).then(
+          () => finish(),
+          () => finish(),
+        );
+      } catch {
+        finish();
+      }
     });
+  const grab = async () => {
+    wgrab.__bayGrabData = null;
+    wgrab.__bayWantGrab = true;
+    try {
+      try {
+        kick();
+      } catch {
+        /* kick must not hang grab */
+      }
+      await yieldPaint(80);
+      let data: unknown = wgrab.__bayGrabData;
+      if (typeof data !== "string" || !data.startsWith("data:image")) {
+        try {
+          const el = liveCanvas();
+          if (el) data = el.toDataURL("image/jpeg", 0.85);
+        } catch {
+          data = null;
+        }
+      }
+      if (typeof data === "string" && data.startsWith("data:image")) frames.push(data);
+    } finally {
+      wgrab.__bayWantGrab = false;
+    }
+  };
   clearHist();
   clearLog();
   const staged = scene != null && scene !== "" ? await restageScene(scene) : { ok: true, id: null };
@@ -834,86 +928,95 @@ async function tape(scene?: unknown, ms = 0) {
   } catch {
     /* hidden tab */
   }
-  await waitFrames(350);
-  kick();
-  await yieldPaint();
-  await grab();
-  const setSlow = (on: boolean) => {
-    if (useBay.getState().slowMo === on) return;
-    useBay.getState().toggleSlowMo();
-    try {
-      playSlowMo(on);
-    } catch {
-      /* hidden tab / no audio */
+  {
+    const paint0 = performance.now();
+    while (performance.now() - paint0 < 2000) {
+      let painted = false;
+      try {
+        painted = Boolean(peek().paint);
+      } catch {
+        painted = false;
+      }
+      if (painted) break;
+      await yieldPaint(80);
     }
-    note("slowmo", { on });
-  };
-  const hard = Number(ms) > 400 ? Number(ms) : 95000;
+  }
+  await waitFrames(50);
+  {
+    const ready0 = performance.now();
+    while (performance.now() - ready0 < 2500) {
+      kick();
+      await yieldPaint(80);
+      try {
+        const s = peek();
+        const kinds = new Set((s.objects ?? []).map((o) => o.kind));
+        const cy = s.camera?.y;
+        if (kinds.has("dumptruck") && kinds.has("wheel") && typeof cy === "number" && cy >= 3.5 && cy <= 6.5) break;
+      } catch {
+        /* */
+      }
+    }
+  }
+  kick();
+  await yieldPaint(80);
+  await grab();
+  const hard = Number(ms) > 400 ? Number(ms) : 14000;
+  const want = Math.max(360, Math.round(hard / DT));
   const t0 = performance.now();
-  let floorAt = 0;
-  let slowAt = 0;
-  let slowOff = 0;
   let contactN = 0;
   const contacts: { tMs: number; impulse: number; closing: number; id: string | null; otherMass: number | null }[] = [];
   const speedHz: number[] = [];
   const groundedHz: number[] = [];
-  const hangar = Boolean(useBay.getState().entities.some((e) => e.kind === "ramp"));
-  const cap = hangar ? hard : Math.min(hard, 14000);
   const t0Probe = probeTime();
-  while (performance.now() - t0 < cap) {
+  let spins = 0;
+  while (frames.length < want && spins < want + 8) {
+    spins += 1;
     const tick0 = performance.now();
-    kick();
-    await yieldPaint();
-    await grab();
-    const snap = peek();
-    const wheel = snap.objects.find((o) => o.kind === "wheel");
-    speedHz.push(wheel ? wheel.speed : 0);
-    groundedHz.push(wheel && Number(wheel.grounded) > 0 ? 1 : 0);
-    const cons = log().filter((e) => e.type === "contact");
-    if (cons.length > contactN) {
-      const tHit = Math.round(performance.now() - t0);
-      for (let i = contactN; i < cons.length && contacts.length < SFX.hit.max; i++) {
-        const e = cons[i]!;
-        const eventMs = typeof e.t === "number" ? Math.round((e.t - t0Probe) * 1000) : tHit;
-        contacts.push({
-          tMs: Math.max(0, eventMs),
-          impulse: typeof e.data.impulse === "number" ? e.data.impulse : 0,
-          closing: typeof e.data.closing === "number" ? e.data.closing : 0,
-          id: typeof e.data.id === "string" ? e.data.id : null,
-          otherMass: typeof e.data.otherMass === "number" ? e.data.otherMass : null,
-        });
+    try {
+      kick();
+      await yieldPaint(80);
+      await grab();
+      let snap: ReturnType<typeof peek>;
+      try {
+        snap = peek();
+      } catch {
+        snap = { objects: [] } as ReturnType<typeof peek>;
       }
-      contactN = cons.length;
-    }
-    if (hangar) {
-      const w = snap.objects.find((o) => o.kind === "wheel");
-      const onFloor = Boolean(w && w.z > 1480 && w.y < 8);
-      if (onFloor && floorAt === 0) floorAt = performance.now();
-      if (floorAt > 0 && performance.now() - floorAt >= 7000) break;
-    } else {
       const wheel = snap.objects.find((o) => o.kind === "wheel");
-      const hips = snap.objects.find((o) => String(o.id).endsWith("-hips"));
-      const gap = wheel && hips ? Math.hypot(wheel.x - hips.x, wheel.y - hips.y, wheel.z - hips.z) : 99;
-      const elapsed = performance.now() - t0;
-      if (!slowAt && elapsed > 250 && gap < 6.4) {
-        setSlow(true);
-        slowAt = elapsed;
+      speedHz.push(wheel ? wheel.speed : 0);
+      groundedHz.push(wheel && Number(wheel.grounded) > 0 ? 1 : 0);
+      const cons = log().filter((e) => e.type === "contact");
+      if (cons.length > contactN) {
+        const tHit = Math.round(performance.now() - t0);
+        for (let i = contactN; i < cons.length && contacts.length < SFX.hit.max; i++) {
+          const e = cons[i]!;
+          const eventMs = typeof e.t === "number" ? Math.round((e.t - t0Probe) * 1000) : tHit;
+          contacts.push({
+            tMs: Math.max(0, eventMs),
+            impulse: typeof e.data.impulse === "number" ? e.data.impulse : 0,
+            closing: typeof e.data.closing === "number" ? e.data.closing : 0,
+            id: typeof e.data.id === "string" ? e.data.id : null,
+            otherMass: typeof e.data.otherMass === "number" ? e.data.otherMass : null,
+          });
+        }
+        contactN = cons.length;
       }
-      if (slowAt && !slowOff && elapsed - slowAt >= 3200) {
-        setSlow(false);
-        slowOff = elapsed;
-      }
-      const speed = hips ? Math.hypot(hips.vx ?? 0, hips.vy ?? 0, hips.vz ?? 0) : 0;
-      const warmed = elapsed > 9000;
-      const down = Boolean(warmed && hips && hips.y < 1.35 && speed < 1.6);
-      if (down && floorAt === 0) floorAt = performance.now();
-      if (floorAt > 0 && performance.now() - floorAt >= 2500) break;
+    } catch {
+      /* keep baking */
     }
-    while (performance.now() - tick0 < DT) await yieldPaint();
+    const leftover = DT - (performance.now() - tick0);
+    if (leftover > 0) {
+      const extra0 = performance.now();
+      let extraN = 0;
+      while (performance.now() - tick0 < DT && extraN < 2) {
+        extraN += 1;
+        await yieldPaint(Math.min(80, leftover));
+        if (performance.now() - extra0 > 80) break;
+      }
+    }
   }
-  setSlow(false);
   kick();
-  await yieldPaint();
+  await yieldPaint(80);
   await grab();
   return {
     ok: frames.length > 2,
@@ -922,8 +1025,8 @@ async function tape(scene?: unknown, ms = 0) {
     mime: "image/jpeg",
     n: frames.length,
     restage: staged,
-    slowAtMs: slowAt || null,
-    slowOffMs: slowOff || null,
+    slowAtMs: null,
+    slowOffMs: null,
     contacts,
     speedHz,
     groundedHz,
@@ -1197,12 +1300,14 @@ function startHarnessPipe() {
     while (!ctl.signal.aborted) {
       try {
         beat();
-        const vis = typeof document !== "undefined" ? document.visibilityState : "hidden";
+        const { vis, owned, bot, paint } = paintState();
         const nobj = listSamplers().size;
-        const bot = typeof navigator !== "undefined" && navigator.webdriver === true;
-        const paint = vis === "visible" && typeof document !== "undefined" && Boolean(document.querySelector("canvas")) && !bot;
+        const snap = snapshot();
+        const fps = Math.round(snap.fps ?? 0);
+        const ms = Math.round(snap.frameMs ?? 0);
+        const gen = g.__bayPipeGen ?? PIPE_GEN;
         const r = await fetch(
-          `/__bay/take?wait=10000&vis=${encodeURIComponent(vis)}&nobj=${nobj}&paint=${paint ? 1 : 0}&bot=${bot ? 1 : 0}`,
+          `/__bay/take?wait=10000&vis=${encodeURIComponent(vis)}&nobj=${nobj}&paint=${paint ? 1 : 0}&bot=${bot ? 1 : 0}&fps=${fps}&ms=${ms}&gen=${gen}&owned=${owned ? 1 : 0}`,
           { signal: ctl.signal },
         );
         if (ctl.signal.aborted) return;
@@ -1224,6 +1329,7 @@ function startHarnessPipe() {
             ...out,
             paint,
             nobj: listSamplers().size,
+            owned,
           }),
         });
       } catch {

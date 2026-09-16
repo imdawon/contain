@@ -20,19 +20,162 @@ import { ScorePlate } from "@/components/bay/score-plate";
 import { StudioPlace } from "@/components/bay/studio-place";
 import { MoveGizmo } from "@/components/bay/move-gizmo";
 import { Drum, Wheel } from "@/components/bay/steel";
+import { Vehicle } from "@/components/bay/vehicle";
 import { Wagon } from "@/components/bay/wagon";
 import { Wall } from "@/components/bay/wall";
 import { isSolid } from "@/store/bay-store";
 import { ProbeTick } from "@/components/bay/probe-tick";
-import { FLOOR } from "@/lib/bay/parts";
-import { CRATE_G, DUMMY_G, WAGON_G, WORLD_G } from "@/lib/bay/groups";
+import { FLOOR, isVehicleKind } from "@/lib/bay/parts";
+import { CRATE_G, DUMMY_G, VEHICLE_G, WAGON_G, WORLD_G } from "@/lib/bay/groups";
 import { actorMesh, listSamplers } from "@/lib/bay/probe";
 import { useBay } from "@/store/bay-store";
 import { LabLook } from "@/components/bay/look";
 import { Arena, ArenaLook } from "@/components/bay/arena";
 import { sceneGravity, sceneTheme } from "@/lib/bay/arena";
 
+
 const _trackP = new THREE.Vector3();
+const _dumpP = new THREE.Vector3();
+const _desEye = new THREE.Vector3();
+const _desLook = new THREE.Vector3();
+const _camRay = new THREE.Raycaster();
+const _camDir = new THREE.Vector3();
+const _chaseMeshes: THREE.Object3D[] = [];
+const _dumpBox = new THREE.Box3();
+
+function fillChaseMeshes(scene: THREE.Scene) {
+  _chaseMeshes.length = 0;
+  for (const [id, actor] of listSamplers()) {
+    const k = actor.kind;
+    if (k !== "ramp" && k !== "hill") continue;
+    const m = actorMesh(id);
+    if (!m) continue;
+    _chaseMeshes.push(m);
+    const body = m.parent;
+    if (body) {
+      body.traverse((obj) => {
+        if ((obj as THREE.Mesh).isMesh) _chaseMeshes.push(obj);
+      });
+    }
+  }
+  if (_chaseMeshes.length === 0) {
+    for (const child of scene.children) _chaseMeshes.push(child);
+  }
+}
+
+function chaseEyeBlocked(look: THREE.Vector3, eye: THREE.Vector3) {
+  if (_chaseMeshes.length === 0) return false;
+  _camDir.subVectors(eye, look);
+  const span = _camDir.length();
+  if (span < 1e-4) return false;
+  _camDir.multiplyScalar(1 / span);
+  _camRay.near = 0.05;
+  _camRay.far = span + 0.02;
+  _camRay.set(look, _camDir);
+  const hits = _camRay.intersectObjects(_chaseMeshes, true);
+  const clear = 1.2;
+  for (let i = 0; i < hits.length; i++) {
+    const hit = hits[i];
+    if (!hit) continue;
+    const d = hit.distance;
+    if (d > 2.6 && d < span - 0.12) return true;
+    if (span - d < clear && d < span) return true;
+  }
+  _camDir.multiplyScalar(-1);
+  _camRay.near = 0;
+  _camRay.far = 1.35;
+  _camRay.set(eye, _camDir);
+  const inside = _camRay.intersectObjects(_chaseMeshes, true);
+  if (inside.length && inside[0] && inside[0].distance < 1.25) return true;
+  _camDir.subVectors(eye, look).normalize();
+  _camRay.set(eye, _camDir);
+  const rear = _camRay.intersectObjects(_chaseMeshes, true);
+  return Boolean(rear.length && rear[0] && rear[0].distance < 1.25);
+}
+
+function dumpMeshes() {
+  const out: THREE.Object3D[] = [];
+  for (const [id, actor] of listSamplers()) {
+    if (actor.kind !== "dumptruck") continue;
+    const m = actorMesh(id);
+    if (!m) continue;
+    out.push(m);
+    const body = m.parent;
+    if (body) {
+      body.traverse((obj) => {
+        if ((obj as THREE.Mesh).isMesh) out.push(obj);
+      });
+    }
+  }
+  return out;
+}
+
+function eyeTooCloseDump(eye: THREE.Vector3, look: THREE.Vector3, dx: number, dy: number, dz: number) {
+  const sep = Math.hypot(eye.x - dx, eye.y - dy, eye.z - dz);
+  if (sep < 6.5) return true;
+  const meshes = dumpMeshes();
+  if (!meshes.length) return false;
+  _camDir.subVectors(look, eye);
+  const span = _camDir.length();
+  if (span < 1e-4) return false;
+  _camDir.multiplyScalar(1 / span);
+  _camRay.near = 0;
+  _camRay.far = 3.4;
+  _camRay.set(eye, _camDir);
+  const hits = _camRay.intersectObjects(meshes, true);
+  return Boolean(hits.length && hits[0] && hits[0].distance < 3.2);
+}
+
+function clearBakeEye(eye: THREE.Vector3, look: THREE.Vector3, scene: THREE.Scene) {
+  fillChaseMeshes(scene);
+  const keep = () => {
+    eye.y = Math.min(6.4, Math.max(3.7, eye.y));
+    if (Math.abs(eye.x) > 4.2) eye.x = Math.sign(eye.x || 1) * 4.2;
+  };
+  keep();
+  for (let i = 0; i < 18; i++) {
+    if (!chaseEyeBlocked(look, eye)) break;
+    eye.z -= 0.85;
+    keep();
+  }
+  if (chaseEyeBlocked(look, eye)) {
+    eye.z = Math.min(eye.z, look.z) - 16;
+    const side = eye.x >= look.x ? 2.55 : -2.55;
+    eye.x = Math.max(-4.2, Math.min(4.2, look.x * 0.15 + side));
+    keep();
+  }
+}
+
+function pushEyeOutOfDump(eye: THREE.Vector3, dumpZ: number) {
+  const meshes = dumpMeshes();
+  if (!meshes.length) {
+    if (eye.z > dumpZ - 10) eye.z = dumpZ - 18;
+    return;
+  }
+  _dumpBox.makeEmpty();
+  for (const m of meshes) {
+    try {
+      _dumpBox.expandByObject(m);
+    } catch {
+      /* */
+    }
+  }
+  if (_dumpBox.isEmpty()) {
+    if (eye.z > dumpZ - 10) eye.z = dumpZ - 18;
+    return;
+  }
+  const cz = (_dumpBox.min.z + _dumpBox.max.z) * 0.5;
+  if (Math.abs(cz - dumpZ) > 28) {
+    if (eye.z > dumpZ - 10) eye.z = dumpZ - 18;
+    return;
+  }
+  _dumpBox.expandByScalar(2.2);
+  if (_dumpBox.containsPoint(eye) || eye.z > _dumpBox.min.z - 9) {
+    eye.z = Math.min(eye.z, _dumpBox.min.z - 16);
+    eye.y = Math.min(6.2, Math.max(4.0, eye.y));
+  }
+}
+
 
 function TrackCam({
   orbit,
@@ -46,56 +189,201 @@ function TrackCam({
   const eye = useBay((s) => s.scene?.cam?.eye);
   const fov = useBay((s) => s.scene?.cam?.fov);
   const camera = useThree((s) => s.camera);
+  const scene = useThree((s) => s.scene);
   const primed = useRef(false);
   useEffect(() => {
     primed.current = false;
   }, [trackId, stageN]);
-  // After Rapier interpolate (priority 0). Raw translation() at -1 is one physics tick and skips.
   useFrame(() => {
-    if (fov && "fov" in camera && camera.fov !== fov) {
-      camera.fov = fov;
-      camera.updateProjectionMatrix();
-    }
-    if (eye && look && !trackId) {
-      camera.position.set(eye[0], eye[1], eye[2]);
-      camera.lookAt(look[0], look[1], look[2]);
-      camera.updateMatrixWorld();
-      return;
-    }
-    if (!trackId) return;
-    const rec = listSamplers().get(trackId);
-    const ent = rec ? null : useBay.getState().entities.find((e) => e.id === trackId);
-    if (!rec && !ent) return;
-    const mesh = rec ? actorMesh(trackId) : null;
-    let x: number;
-    let y: number;
-    let z: number;
-    if (mesh) {
-      mesh.getWorldPosition(_trackP);
-      x = _trackP.x;
-      y = _trackP.y;
-      z = _trackP.z;
-    } else {
-      const p = rec ? rec.sample() : { x: ent!.pos[0], y: ent!.pos[1], z: ent!.pos[2] };
-      x = p.x;
-      y = p.y;
-      z = p.z;
-    }
-    const controls = orbit.current;
-    if (!controls) return;
-    const t = controls.target;
-    if (!primed.current) {
+    try {
+      const bake = Boolean((globalThis as { __bayBake?: boolean }).__bayBake);
+      const bay = useBay.getState();
+      const ents = bay.entities;
+      const dumpEnt = ents.find((e) => e.kind === "dumptruck");
+      const trackRef = String(bay.scene?.track?.ref ?? "").toLowerCase();
+      const tid = String(trackId ?? "").toLowerCase();
+      const tracked = ents.find((e) => e.id === trackId);
+      const followCoil =
+        trackRef === "coil" ||
+        trackRef === "wheel" ||
+        tid.includes("coil") ||
+        tid.includes("wheel") ||
+        tracked?.kind === "wheel" ||
+        tracked?.kind === "coil" ||
+        String(tracked?.name ?? "").toLowerCase() === "coil" ||
+        String(tracked?.name ?? "").toLowerCase() === "wheel";
+      const chaseDump = !followCoil && (bake || Boolean(dumpEnt));
+      if (chaseDump && "fov" in camera) {
+        const wantFov = bake ? 46 : fov || 48;
+        if (camera.fov !== wantFov) {
+          camera.fov = wantFov;
+          camera.updateProjectionMatrix();
+        }
+      } else if (!bake && fov && "fov" in camera && camera.fov !== fov) {
+        camera.fov = fov;
+        camera.updateProjectionMatrix();
+      }
+      if (chaseDump) {
+        const dumpId = dumpEnt?.id;
+        let dx: number | null = null;
+        let dy = 0;
+        let dz = 0;
+        if (dumpId) {
+          const dMesh = actorMesh(dumpId);
+          if (dMesh) {
+            try {
+              dMesh.getWorldPosition(_dumpP);
+              const wx = _dumpP.x;
+              const wy = _dumpP.y;
+              const wz = _dumpP.z;
+              const finite = Number.isFinite(wx) && Number.isFinite(wy) && Number.isFinite(wz);
+              const ez = dumpEnt ? dumpEnt.pos[2] : 0;
+              const unusable =
+                !finite || (wz < 10 && ez >= 20) || Math.abs(wz - ez) > 25;
+              if (!unusable) {
+                dx = wx;
+                dy = wy;
+                dz = wz;
+              } else if (dumpEnt) {
+                dx = dumpEnt.pos[0];
+                dy = dumpEnt.pos[1];
+                dz = dumpEnt.pos[2];
+              }
+            } catch {
+              /* */
+            }
+          }
+          if (dx == null) {
+            const dRec = listSamplers().get(dumpId);
+            if (dRec) {
+              const p = dRec.sample();
+              if (Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z)) {
+                dx = p.x;
+                dy = p.y;
+                dz = p.z;
+              }
+            } else if (dumpEnt) {
+              dx = dumpEnt.pos[0];
+              dy = dumpEnt.pos[1];
+              dz = dumpEnt.pos[2];
+            }
+          }
+        }
+        let x = 0;
+        let haveCoil = false;
+        if (trackId) {
+          const rec = listSamplers().get(trackId);
+          const ent = rec ? null : ents.find((e) => e.id === trackId);
+          const mesh = rec ? actorMesh(trackId) : null;
+          if (mesh) {
+            try {
+              mesh.getWorldPosition(_trackP);
+              if (Number.isFinite(_trackP.x) && Number.isFinite(_trackP.y) && Number.isFinite(_trackP.z)) {
+                x = _trackP.x;
+                haveCoil = true;
+              }
+            } catch {
+              /* */
+            }
+          }
+          if (!haveCoil) {
+            const p = rec ? rec.sample() : ent ? { x: ent.pos[0], y: ent.pos[1], z: ent.pos[2] } : null;
+            if (p && Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z)) {
+              x = p.x;
+              haveCoil = true;
+            }
+          }
+        }
+        const dumpW = 0.78;
+        const coilW = 0.22;
+        if (dx == null && dumpEnt) {
+          dx = dumpEnt.pos[0];
+          dy = dumpEnt.pos[1];
+          dz = dumpEnt.pos[2];
+        }
+        if (dx == null) {
+          dx = 1.8;
+          dy = 3.6;
+          dz = 40;
+        }
+        const lookX = haveCoil ? dx * dumpW + x * coilW : dx;
+        const dumpZ = dz;
+        const lookZ = dumpZ + 1.1;
+        const lookY = 2.35;
+        _desLook.set(Math.max(-4, Math.min(4, lookX)), lookY, lookZ);
+        const eyeY = 5.6;
+        _desEye.set(Math.max(-4.2, Math.min(4.2, lookX * 0.15 + 2.55)), eyeY, dumpZ - 16);
+        _desEye.y = eyeY;
+        if (_desEye.z > dz - 14) _desEye.z = dz - 16;
+        pushEyeOutOfDump(_desEye, dumpZ);
+        clearBakeEye(_desEye, _desLook, scene);
+        if (eyeTooCloseDump(_desEye, _desLook, dx, dy, dz)) {
+          _desEye.z = Math.min(_desEye.z, dz - 20);
+          _desEye.y = Math.min(6.2, Math.max(4.0, _desEye.y));
+        }
+        _desEye.y = Math.min(6.4, Math.max(3.7, _desEye.y));
+        if (Math.abs(_desEye.x) > 4.2) _desEye.x = Math.sign(_desEye.x || 1) * 4.2;
+        if (
+          Number.isFinite(_desEye.x) === false ||
+          Number.isFinite(_desEye.y) === false ||
+          Number.isFinite(_desEye.z) === false ||
+          Number.isFinite(_desLook.x) === false ||
+          Number.isFinite(_desLook.y) === false ||
+          Number.isFinite(_desLook.z) === false
+        ) {
+          return;
+        }
+        camera.position.copy(_desEye);
+        const controls = orbit.current;
+        if (controls) controls.target.copy(_desLook);
+        camera.lookAt(_desLook);
+        camera.updateMatrixWorld();
+        primed.current = true;
+        return;
+      }
+      if (eye && look && !trackId) {
+        camera.position.set(eye[0], eye[1], eye[2]);
+        camera.lookAt(look[0], look[1], look[2]);
+        camera.updateMatrixWorld();
+        return;
+      }
+      if (!trackId) return;
+      const rec = listSamplers().get(trackId);
+      const ent = rec ? null : useBay.getState().entities.find((e) => e.id === trackId);
+      if (!rec && !ent) return;
+      const mesh = rec ? actorMesh(trackId) : null;
+      let x: number;
+      let y: number;
+      let z: number;
+      if (mesh) {
+        mesh.getWorldPosition(_trackP);
+        x = _trackP.x;
+        y = _trackP.y;
+        z = _trackP.z;
+      } else {
+        const p = rec ? rec.sample() : { x: ent!.pos[0], y: ent!.pos[1], z: ent!.pos[2] };
+        x = p.x;
+        y = p.y;
+        z = p.z;
+      }
+      const controls = orbit.current;
+      if (!controls) return;
+      const t = controls.target;
+      if (!primed.current) {
+        t.set(x, y, z);
+        if (offset) camera.position.set(x + offset[0], y + offset[1], z + offset[2]);
+        primed.current = true;
+        camera.updateMatrixWorld();
+        return;
+      }
+      camera.position.x += x - t.x;
+      camera.position.y += y - t.y;
+      camera.position.z += z - t.z;
       t.set(x, y, z);
-      if (offset) camera.position.set(x + offset[0], y + offset[1], z + offset[2]);
-      primed.current = true;
       camera.updateMatrixWorld();
-      return;
+    } catch {
+      /* chase bake must not throw */
     }
-    camera.position.x += x - t.x;
-    camera.position.y += y - t.y;
-    camera.position.z += z - t.z;
-    t.set(x, y, z);
-    camera.updateMatrixWorld();
   }, 1);
   return null;
 }
@@ -177,7 +465,7 @@ function GlHooks({ onLost }: { onLost: () => void }) {
         const w = window as GrabWin;
         if (!w.__bayWantGrab) return;
         try {
-          w.__bayGrabData = canvas.toDataURL("image/jpeg", 0.52);
+          w.__bayGrabData = canvas.toDataURL("image/jpeg", 0.85);
         } catch {
           w.__bayGrabData = null;
         }
@@ -199,26 +487,43 @@ function GlHooks({ onLost }: { onLost: () => void }) {
 function FitGl() {
   const gl = useThree((s) => s.gl);
   const setSize = useThree((s) => s.setSize);
+  const applyRef = useRef<() => void>(() => {});
   useLayoutEffect(() => {
     const canvas = gl.domElement;
-    const parent = canvas.parentElement;
-    if (!parent) return;
     const apply = () => {
-      const w = parent.clientWidth;
-      const h = parent.clientHeight;
-      if (w < 2 || h < 2) return;
+      const parent = canvas.parentElement;
+      const wWin = window as GrabWin & { __bayBake?: boolean };
+      const bake = Boolean(wWin.__bayBake) || Boolean(wWin.__bayWantGrab);
+      let w = parent?.clientWidth ?? 0;
+      let h = parent?.clientHeight ?? 0;
+      if (bake) {
+        w = Math.max(720, w);
+        h = Math.max(1280, h);
+        const dpr = 2;
+        if (canvas.width === Math.floor(w * dpr) && canvas.height === Math.floor(h * dpr)) return;
+        gl.setPixelRatio(dpr);
+        setSize(w, h);
+        return;
+      }
+      if (!parent || w < 2 || h < 2) return;
       const dpr = 1;
       if (canvas.width === Math.floor(w * dpr) && canvas.height === Math.floor(h * dpr)) return;
       gl.setPixelRatio(dpr);
       setSize(w, h);
     };
+    applyRef.current = apply;
     apply();
+    const parent = canvas.parentElement;
+    if (!parent) return;
     const ro = new ResizeObserver(apply);
     ro.observe(parent);
     return () => {
       ro.disconnect();
     };
   }, [gl, setSize]);
+  useFrame(() => {
+    applyRef.current();
+  });
   return null;
 }
 
@@ -354,6 +659,8 @@ function World() {
           <Wheel key={e.id} id={e.id} pos={e.pos} rot={e.rot} grip={e.grip} bounce={e.bounce} mass={e.mass} vel={e.vel} />
         ) : e.kind === "drum" ? (
           <Drum key={e.id} id={e.id} pos={e.pos} rot={e.rot} grip={e.grip} bounce={e.bounce} mass={e.mass} />
+        ) : isVehicleKind(e.kind) ? (
+          <Vehicle key={e.id} id={e.id} kind={e.kind} pos={e.pos} rot={e.rot} size={e.size} mass={e.mass} grip={e.grip} />
         ) : isSolid(e.kind) ? (
           <Solid key={e.id} id={e.id} shape={e.kind} pos={e.pos} />
         ) : null,
@@ -389,8 +696,15 @@ export function BayCanvas() {
     const el = wrap.current;
     if (!el) return;
     const mark = () => {
+      const bake = Boolean((globalThis as { __bayBake?: boolean }).__bayBake);
       const w = el.clientWidth;
       const h = el.clientHeight;
+      if (bake) {
+        const nw = Math.max(720, w);
+        const nh = Math.max(1280, h);
+        setBox((prev) => (prev.w === nw && prev.h === nh ? prev : { w: nw, h: nh }));
+        return;
+      }
       if (w > 8 && h > 8) setBox((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
     };
     mark();

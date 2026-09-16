@@ -140,12 +140,16 @@ function SteelBody({
   useLayoutEffect(() => {
     const b = body.current;
     if (!b) return;
-    setBodyMass(b, kg, kind);
-    if (vel) {
-      b.setLinvel({ x: vel[0], y: vel[1], z: vel[2] }, true);
-      b.wakeUp();
+    try {
+      setBodyMass(b, kg, kind);
+      if (vel) {
+        b.setLinvel({ x: vel[0], y: vel[1], z: vel[2] }, true);
+        b.wakeUp();
+      }
+      pinned.current = true;
+    } catch {
+      /* restage can leave a dead rapier handle */
     }
-    pinned.current = true;
   }, [kg, kind, stageN, vel]);
 
   useFrame((state, dt) => {
@@ -214,6 +218,19 @@ function SteelBody({
       } catch {
         /* ray missed */
       }
+    }
+    if (kind === "wheel" && kg >= 90_000) {
+      const floorVz = kg >= 180_000 ? 12 : 8;
+      const cap = 22;
+      const g = globalThis as typeof globalThis & { __bayCoilKeepVz?: number; __bayCoilKeepUntil?: number };
+      const keepHint =
+        g.__bayCoilKeepUntil != null && performance.now() < g.__bayCoilKeepUntil && g.__bayCoilKeepVz != null
+          ? g.__bayCoilKeepVz
+          : 0;
+      const cur = b.linvel();
+      const zKeep = Math.max(cur.z, floorVz, keepHint);
+      b.setLinvel({ x: cur.x * 0.15, y: Math.min(cur.y, 0.35), z: Math.min(cap, zKeep) }, true);
+      b.wakeUp();
     }
     let added = 0;
     if (kind === "wheel") {
@@ -330,18 +347,13 @@ function SteelBody({
               restitution={0}
             />
           )}
-      {kind === "wheel" ? (
-        <mesh geometry={geo} scale={1.055} frustumCulled={false} userData={{ labSkip: true }}>
-          <meshBasicMaterial color="#000000" side={THREE.FrontSide} toneMapped={false} fog={false} />
-        </mesh>
-      ) : null}
       <mesh ref={mesh} geometry={geo} onPointerDown={grab.down} castShadow receiveShadow frustumCulled={false}>
         <meshStandardMaterial
-          color={color}
+          color={kind === "wheel" ? (selected ? 0xf2f3ef : 0xffffff) : color}
           vertexColors
           flatShading={kind === "wheel"}
-          metalness={kind === "wheel" ? 0.42 : 0.55}
-          roughness={kind === "wheel" ? 0.5 : 0.38}
+          metalness={kind === "wheel" ? 0.72 : 0.55}
+          roughness={kind === "wheel" ? 0.32 : 0.38}
           side={THREE.DoubleSide}
         />
       </mesh>

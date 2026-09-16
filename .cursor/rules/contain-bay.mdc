@@ -1,0 +1,27 @@
+---
+description: CONTAIN live bay harness. Omp never opens Chrome.
+alwaysApply: true
+---
+
+# CONTAIN harness (hard stop)
+
+This repo is CONTAIN. App Builder QA in `AGENTS.md` is void here.
+
+Drive the live bay only with:
+
+```
+node scripts/hangar.mjs start   # vite + owned paint page; not your Chrome
+node scripts/bay.mjs health
+node scripts/bay.mjs restage <sceneId>
+node scripts/bay.mjs wait <frames>
+node scripts/bay.mjs peek
+node scripts/bay.mjs shot screenshots/<name>.jpg
+node scripts/bay.mjs history
+node scripts/bay.mjs effects
+```
+
+`hangar.mjs` holds one Playwright page (`window.__bayOwned`) on :8080. That is the sim. Agents never launch Chrome, never Playwright, never click RUN/RESET. Named miss: `omp-browser-harness`.
+
+`health` must show `takers >= 1` and `paints >= 1`. `paints: 0` is blocked (the headless hangar-taker is a second Rapier world — do not treat it as the canvas). Do not open a tab to recover.
+
+Proof is peek/history JSON **and** the shot JPEG from that same world. Peek xyz is not a picture. Tune scenes by restaging through `bay.mjs`.

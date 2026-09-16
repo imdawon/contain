@@ -47,9 +47,9 @@ When you spawn one, write: `You are a subagent. Don't run memo.`
 
 This is CONTAIN, not a Grok App Builder sandbox. App Builder QA later in this file is **void**.
 
-Validate and restage only with `node scripts/bay.mjs` against `window.__bay`. Do not open Chrome. Do not click RUN or RESET. Do not watch the canvas. Named miss: `omp-browser-harness`.
+Validate and restage only with `node scripts/bay.mjs` against `window.__bay`. `node scripts/hangar.mjs start` owns the painted page (`window.__bayOwned`). Do not open Chrome. Do not click RUN or RESET. Do not watch the canvas. Named miss: `omp-browser-harness`. Health needs `takers>=1` and `paints>=1`. `paints: 0` is the headless hangar-taker (a second Rapier world) — blocked, not a pass.
 
-**Done means validated:** look at the work before you tell dawon it is done. Never skip that. Do not invent a test suite as a substitute. Run `node scripts/bay.mjs` (`health`, restage, `peek`, `camera`, `shot`) and inspect the shot JPEG. Peek xyz is not a picture. If the still is missing the dummy, wagon, score, orbit-usable chase, or whatever you just claimed, it is not done — keep fixing. A timeout, black frame, vanished HUD, or `nobj=0` is a failed fix. Do not narrate success from code you wrote. The hangar is often a hidden tab; if `shot` cannot grab, that is your bug.
+**Done means validated:** look at the work before you tell dawon it is done. Never skip that. Do not invent a test suite as a substitute. Run `node scripts/bay.mjs` (`health`, restage, `peek`, `camera`, `shot`) and inspect the shot JPEG. Peek xyz is not a picture. If the still is missing the dummy, wagon, score, orbit-usable chase, or whatever you just claimed, it is not done — keep fixing. A timeout, black frame, vanished HUD, or `nobj=0` is a failed fix. Do not narrate success from code you wrote. If `shot` cannot grab, that is your bug — restart via `hangar.mjs`, do not open a tab.
 
 **Do not regress:** TrackCam is sticky follow (translate with the target). Do not overwrite camera pose every frame or orbit dies. Keep `OrbitControls` enabled while tracking. Dummy default track is chest. Keep `World` `stageN` — deleting it unmounts the canvas. Score HUD stays small and high so Grenades vs Dummy is not clipped by the bottom bar.
 

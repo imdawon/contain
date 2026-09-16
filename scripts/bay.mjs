@@ -4,6 +4,8 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { writeScoreWav } from "./sfx-score.mjs";
+import { Agent, setGlobalDispatcher } from "undici";
+setGlobalDispatcher(new Agent({ headersTimeout: 600000, bodyTimeout: 600000, connectTimeout: 600000 }));
 
 const base = (process.env.BAY_URL || "http://127.0.0.1:8080").replace(/\/$/, "");
 const fn = process.argv[2];
@@ -79,9 +81,17 @@ if (fn === "reload") {
   process.exit((waited.takers ?? 0) > 0 ? 0 : 1);
 }
 
+if (fn === "abort" || fn === "cancel") {
+  const ar = await fetch(`${base}/__bay/abort`, { method: "POST" });
+  const body = await readJson(ar);
+  process.stdout.write(`${JSON.stringify(body)}\n`);
+  process.exit(body.ok ? 0 : 1);
+}
+
 let waitMs = 20000;
 if (fn === "until") waitMs = Math.max(waitMs, Number(args[1] || 8000) + 4000);
-if (fn === "tape") waitMs = 200000;
+if (fn === "restage" || fn === "load" || fn === "run") waitMs = 60000;
+if (fn === "tape") waitMs = 590000;
 let pipeFn = fn;
 let pipeArgs = args;
 let tapeDest = null;
@@ -197,9 +207,12 @@ if (fn === "tape") {
         const b64 = String(f).split(",")[1] ?? "";
         writeFileSync(join(dir, `f${String(i).padStart(4, "0")}.jpg`), Buffer.from(b64, "base64"));
       });
+      const wallMs = Number(val?.durationMs);
+      const durationSec = wallMs > 0 ? wallMs / 1000 : Number(val?.durationSec) > 0 ? Number(val.durationSec) : 0;
+      const fps = durationSec > 0 ? frames.length / durationSec : 30;
       const ff = spawnSync(
         "ffmpeg",
-        ["-y", "-framerate", "30", "-i", join(dir, "f%04d.jpg"), "-vf", "crop=ih*9/16:ih,scale=720:1280", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "26", "-movflags", "+faststart", mp4],
+        ["-y", "-framerate", String(fps), "-i", join(dir, "f%04d.jpg"), "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "26", "-movflags", "+faststart", mp4],
         { encoding: "utf8" },
       );
       const slowAt = Number(val?.slowAtMs);
@@ -208,7 +221,6 @@ if (fn === "tape") {
         ? val.contacts
         : (Array.isArray(val?.hitsMs) ? val.hitsMs.map((n) => ({ tMs: Number(n), impulse: 800, closing: 12 })) : []);
       const speedHz = Array.isArray(val?.speedHz) ? val.speedHz.map((n) => Number(n) || 0) : [];
-      const durationSec = Number(val?.durationMs) > 0 ? Number(val.durationMs) / 1000 : frames.length / 30;
       const wantSteel = ff.status === 0 && !(Number.isFinite(slowAt) && slowAt > 0) && durationSec > 2;
       if (wantSteel) {
         const bed = join(dir, "steel-bed.wav");
@@ -252,16 +264,49 @@ if (fn === "tape") {
         }
       }
       rmSync(dir, { recursive: true, force: true });
-      delete val.frames;
+      val.jpegN = frames.length;
       val.n = frames.length;
+      delete val.frames;
       val.file = mp4;
       val.ffmpeg = ff.status;
+      if (wallMs > 0) val.durationSec = wallMs / 1000;
+      if (ff.status === 0 && existsSync(mp4)) {
+        const probe = spawnSync(
+          "ffprobe",
+          ["-v", "error", "-count_frames", "-select_streams", "v:0", "-show_entries", "stream=nb_read_frames,nb_frames,duration", "-of", "json", mp4],
+          { encoding: "utf8" },
+        );
+        let mp4Frames = 0;
+        let mp4DurationSec = 0;
+        try {
+          const info = JSON.parse(probe.stdout || "{}");
+          const st = Array.isArray(info.streams) ? info.streams[0] : null;
+          const readN = Number(st?.nb_read_frames);
+          const nb = Number(st?.nb_frames);
+          mp4Frames = Number.isFinite(readN) && readN > 0 ? readN : Number.isFinite(nb) && nb > 0 ? nb : 0;
+          const dur = Number(st?.duration);
+          if (Number.isFinite(dur) && dur > 0) mp4DurationSec = dur;
+        } catch {
+          /* keep zeros */
+        }
+        val.mp4Frames = mp4Frames;
+        val.mp4DurationSec = mp4DurationSec;
+      }
+      val.fps = durationSec > 0 ? frames.length / durationSec : 30;
+      val.framesPerSec = val.fps;
+      val.bake = true;
       parsed.value = val;
       parsed.ok = parsed.ok !== false && val.ok !== false && ff.status === 0;
       out = `${JSON.stringify(parsed)}\n`;
     } else if (val) {
-      delete val.frames;
+      val.jpegN = frames.length;
       val.n = frames.length;
+      delete val.frames;
+      if (Number(val.durationMs) > 0) val.durationSec = Number(val.durationMs) / 1000;
+      else if (!(Number(val.durationSec) > 0)) val.durationSec = 0;
+      val.fps = Number(val.durationSec) > 0 ? frames.length / Number(val.durationSec) : 0;
+      val.framesPerSec = val.fps;
+      val.bake = val.bake === true;
       parsed.value = val;
       parsed.ok = false;
       out = `${JSON.stringify(parsed)}\n`;
@@ -270,6 +315,7 @@ if (fn === "tape") {
     /* keep raw */
   }
 }
+
 if (fn === "writeScene") {
   try {
     const parsed = JSON.parse(out);
@@ -290,5 +336,6 @@ if (fn === "writeScene") {
     /* keep raw */
   }
 }
+
 process.stdout.write(out.endsWith("\n") ? out : `${out}\n`);
 if (!r.ok) process.exit(1);
