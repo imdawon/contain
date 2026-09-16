@@ -229,9 +229,29 @@ if (fn === "tape") {
       const durationSec = wallMs > 0 ? wallMs / 1000 : Number(val?.durationSec) > 0 ? Number(val.durationSec) : 0;
       const jpegN = Number(val?.jpegN) > 0 ? Number(val.jpegN) : frames.length;
       const fps = durationSec > 0 ? jpegN / durationSec : 30;
+      const gw = Number(val.grabW) || Number(val.w);
+      const gh = Number(val.grabH) || Number(val.h);
+      let evenW = Number.isFinite(gw) && gw >= 2 ? gw - (gw % 2) : 0;
+      let evenH = Number.isFinite(gh) && gh >= 2 ? gh - (gh % 2) : 0;
+      if (evenW < 2 || evenH < 2) {
+        const jp = spawnSync(
+          "ffprobe",
+          ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=p=0", join(dir, "f0000.jpg")],
+          { encoding: "utf8" },
+        );
+        const [jw, jh] = String(jp.stdout || "")
+          .trim()
+          .split(/[x,\s]+/)
+          .map((n) => Number(n));
+        if (Number.isFinite(jw) && jw >= 2) evenW = jw - (jw % 2);
+        if (Number.isFinite(jh) && jh >= 2) evenH = jh - (jh % 2);
+      }
+      evenW = evenW >= 2 ? evenW : 0;
+      evenH = evenH >= 2 ? evenH : 0;
+      const vf = evenW >= 2 && evenH >= 2 ? ["-vf", `scale=${evenW}:${evenH}`] : [];
       const ff = spawnSync(
         "ffmpeg",
-        ["-y", "-framerate", String(fps), "-i", join(dir, "f%04d.jpg"), "-vf", "scale=720:1280:force_original_aspect_ratio=decrease,pad=720:1280:(ow-iw)/2:(oh-ih)/2", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "26", "-movflags", "+faststart", mp4],
+        ["-y", "-framerate", String(fps), "-i", join(dir, "f%04d.jpg"), ...vf, "-c:v", "libx264", "-pix_fmt", "yuv420p", "-crf", "26", "-movflags", "+faststart", mp4],
         { encoding: "utf8" },
       );
       const slowAt = Number(val?.slowAtMs);
@@ -292,11 +312,13 @@ if (fn === "tape") {
       if (ff.status === 0 && existsSync(mp4)) {
         const probe = spawnSync(
           "ffprobe",
-          ["-v", "error", "-count_frames", "-select_streams", "v:0", "-show_entries", "stream=nb_read_frames,nb_frames,duration", "-of", "json", mp4],
+          ["-v", "error", "-count_frames", "-select_streams", "v:0", "-show_entries", "stream=nb_read_frames,nb_frames,duration,width,height", "-of", "json", mp4],
           { encoding: "utf8" },
         );
         let mp4Frames = 0;
         let mp4DurationSec = 0;
+        let mp4W = 0;
+        let mp4H = 0;
         try {
           const info = JSON.parse(probe.stdout || "{}");
           const st = Array.isArray(info.streams) ? info.streams[0] : null;
@@ -305,11 +327,17 @@ if (fn === "tape") {
           mp4Frames = Number.isFinite(readN) && readN > 0 ? readN : Number.isFinite(nb) && nb > 0 ? nb : 0;
           const dur = Number(st?.duration);
           if (Number.isFinite(dur) && dur > 0) mp4DurationSec = dur;
+          const pw = Number(st?.width);
+          const ph = Number(st?.height);
+          if (Number.isFinite(pw) && pw > 0) mp4W = pw;
+          if (Number.isFinite(ph) && ph > 0) mp4H = ph;
         } catch {
           /* keep zeros */
         }
         val.mp4Frames = mp4Frames;
         val.mp4DurationSec = mp4DurationSec;
+        val.mp4W = mp4W;
+        val.mp4H = mp4H;
       }
       val.fps = durationSec > 0 ? jpegN / durationSec : 30;
       val.framesPerSec = val.fps;

@@ -766,10 +766,10 @@ function FitGl() {
       let w = parent?.clientWidth ?? 0;
       let h = parent?.clientHeight ?? 0;
       if (!parent || w < 2 || h < 2) return;
-      // 360x640 rawFrames OOM'd the owned paint (tape-stall jpegN=504). jpeg is after the loop.
+      // Full-res bake is safe because tape streams JPEG and does not keep a raw RGBA stack.
       if (wWin.__bayBake) {
-        w = 180;
-        h = 320;
+        w = 720;
+        h = 1280;
       }
       const dpr = 1;
       const bw = Math.floor(w * dpr);
