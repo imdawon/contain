@@ -37,6 +37,7 @@ import { sceneGravity, sceneTheme } from "@/lib/bay/arena";
 const _trackP = new THREE.Vector3();
 const _dumpP = new THREE.Vector3();
 const _desEye = new THREE.Vector3();
+let hangarEyeZ: number | null = null;
 const _desLook = new THREE.Vector3();
 const _camRay = new THREE.Raycaster();
 const _camDir = new THREE.Vector3();
@@ -180,7 +181,7 @@ function pushEyeOutOfDump(eye: THREE.Vector3, dumpZ: number) {
 const CAM_OFF_DEF: [number, number, number] = [0, 2.2, -8];
 const CAM_LOOK_DEF: [number, number, number] = [0, -0.3, 14];
 const CAM_FOV_DEF = 48;
-/** Engine hangar chase — scene JSON offset [0,16,-24] fov 48 is far void around a 1.5 m coil. */
+/** Diagnostic: exact r5 hangar chase that filled the coil, then we add 3/4. */
 const HANGAR_CAM_OFF: [number, number, number] = [0, 7.5, -17];
 const HANGAR_CAM_LOOK: [number, number, number] = [0, -2.5, 12];
 const HANGAR_CAM_FOV = 50;
@@ -403,6 +404,7 @@ function TrackCam({
               camera.updateProjectionMatrix();
             }
             _desEye.set(_trackP.x + ox, _trackP.y + oy, _trackP.z + oz);
+            hangarEyeZ = _desEye.z;
             _desLook.set(_trackP.x + lx, _trackP.y + ly, _trackP.z + lz);
           }
           if (
@@ -417,8 +419,8 @@ function TrackCam({
             const controls = orbit.current;
             if (controls) controls.target.copy(_desLook);
             camera.lookAt(_desLook);
-            if (bake && hangar && "far" in camera && camera.far !== 180) {
-              camera.far = 180;
+            if (hangar && "far" in camera && camera.far !== 200) {
+              camera.far = 200;
               camera.updateProjectionMatrix();
             }
             camera.updateMatrixWorld();
@@ -764,8 +766,7 @@ function FitGl() {
       let w = parent?.clientWidth ?? 0;
       let h = parent?.clientHeight ?? 0;
       if (!parent || w < 2 || h < 2) return;
-      // Small 9:16 FBO during bake. Fill-frame hangar chase makes coil/drums
-      // readable at this size; 360x640 jpeg-in-loop was 2.7fps. Shot/live keep parent size.
+      // 360x640 rawFrames OOM'd the owned paint (tape-stall jpegN=504). jpeg is after the loop.
       if (wWin.__bayBake) {
         w = 180;
         h = 320;
@@ -809,7 +810,7 @@ function BakeRapier() {
       ip.numInternalPgsIterations = rest.current.p;
       rest.current = null;
     }
-    if (pace) step(dt > 1 / 48 && dt < 0.08 ? dt : 1 / 24);
+    if (pace) return;
   });
   return null;
 }
@@ -912,7 +913,7 @@ function World() {
   }, []);
 
   return (
-    <Physics key={stageN} gravity={sceneGravity(scene)} timeStep={slowMo || bakeOn || paceOn ? "vary" : 1 / 60} paused={!playing || slowMo || paceOn} interpolate={!bakeOn} numSolverIterations={bakeOn ? 4 : 24} numInternalPgsIterations={bakeOn ? 1 : 12} maxCcdSubsteps={1}>
+    <Physics key={stageN} gravity={sceneGravity(scene)} timeStep={slowMo || bakeOn || paceOn ? "vary" : 1 / 60} paused={!playing || slowMo} interpolate={!bakeOn || paceOn} numSolverIterations={bakeOn ? 4 : 24} numInternalPgsIterations={bakeOn ? 1 : 12} maxCcdSubsteps={1}>
       <BakeRapier />
       <SlowMoDriver />
       <TrackCam orbit={orbit} />

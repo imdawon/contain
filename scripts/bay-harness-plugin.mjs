@@ -206,7 +206,7 @@ export function bayHarnessPlugin() {
           } else {
             job.takersZeroSince = null;
           }
-          if (Date.now() - (job.lastJpegAt || 0) > 20000) {
+          if (Date.now() - (job.lastJpegAt || 0) > 90000) {
             settle(job, { error: "tape-stall", value: tapeAbortValue(job) });
           }
         }, 1000);
