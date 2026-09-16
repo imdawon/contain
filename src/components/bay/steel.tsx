@@ -42,6 +42,7 @@ const ROT_ALL: [boolean, boolean, boolean] = [true, true, true];
 const ROT_HP: [boolean, boolean, boolean] = [false, true, false];
 const ROT_ZERO: [number, number, number] = [0, 0, 0];
 let lastWheelZ = 0;
+let lastHangarCoilZ: number | null = null;
 let lastWheelGrounded = 0;
 const lastContactAt = new Map<string, number>();
 
@@ -165,6 +166,7 @@ function SteelBody({
       setBodyMass(b, kg, kind);
       b.wakeUp();
       if (kind === "wheel" && hangarTrack) {
+        lastHangarCoilZ = null;
         b.setTranslation({ x: spawnPos[0], y: spawnPos[1], z: spawnPos[2] }, true);
       }
       if (vel) {
@@ -263,7 +265,11 @@ function SteelBody({
       asDynamic(b);
       const floorVz = kg >= 180_000 ? 12 : 8;
       const cap = 22;
-      const g = globalThis as typeof globalThis & { __bayCoilKeepVz?: number; __bayCoilKeepUntil?: number };
+      const g = globalThis as typeof globalThis & {
+        __bayCoilKeepVz?: number;
+        __bayCoilKeepUntil?: number;
+        __bayPace?: boolean;
+      };
       const keepHint =
         g.__bayCoilKeepUntil != null && performance.now() < g.__bayCoilKeepUntil && g.__bayCoilKeepVz != null
           ? g.__bayCoilKeepVz
@@ -271,6 +277,15 @@ function SteelBody({
       const cur = b.linvel();
       const zKeep = Math.max(cur.z, floorVz, keepHint);
       const vz = Math.min(cap, zKeep);
+      const p = b.translation();
+      const stepZ = vz / 24;
+      if (g.__bayPace) {
+        const moved = lastHangarCoilZ == null ? 0 : p.z - lastHangarCoilZ;
+        if (moved < stepZ * 0.4) {
+          b.setTranslation({ x: p.x * 0.2, y: p.y, z: p.z + stepZ }, true);
+        }
+      }
+      lastHangarCoilZ = b.translation().z;
       b.setLinvel({ x: cur.x * 0.15, y: Math.min(cur.y, 0.35), z: vz }, true);
       b.setAngvel({ x: -vz / Math.max(0.08, WHEEL.radius), y: 0, z: 0 }, true);
       b.wakeUp();
@@ -280,7 +295,8 @@ function SteelBody({
       if (wheel) {
         const wp = wheel.translation();
         const p = b.translation();
-        if (p.z > wp.z + 6) {
+        const ahead = p.z - wp.z;
+        if (ahead > 6 || ahead < -4) {
           b.setLinvel({ x: 0, y: 0, z: 0 }, true);
           b.setAngvel({ x: 0, y: 0, z: 0 }, true);
         }

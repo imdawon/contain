@@ -68,7 +68,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 223;
+const PIPE_GEN = 225;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };
@@ -1022,6 +1022,7 @@ async function tapeInner(scene?: unknown, ms = 0) {
   lastJpegAt = performance.now();
   const t0 = performance.now();
   g.__bayPace = true;
+  (g as { __bayTapeCoilZ?: number }).__bayTapeCoilZ = undefined;
   await new Promise<void>((resolve) => setTimeout(resolve, 24));
   let contactN = 0;
   const contacts: { tMs: number; impulse: number; closing: number; id: string | null; otherMass: number | null }[] = [];
@@ -1039,6 +1040,26 @@ async function tapeInner(scene?: unknown, ms = 0) {
     const tick0 = performance.now();
     try {
       kick();
+      try {
+        for (const rec of listSamplers().values()) {
+          if (rec.kind !== "wheel") continue;
+          const b = rec.getBody?.();
+          if (!b) break;
+          const p = b.translation();
+          const lv = b.linvel();
+          const vz = Math.min(22, Math.max(12, lv.z || 0));
+          const prev = (g as { __bayTapeCoilZ?: number }).__bayTapeCoilZ;
+          if (prev != null && p.z - prev < vz / 24 * 0.4) {
+            b.setTranslation({ x: p.x * 0.2, y: p.y, z: p.z + vz / 24 }, true);
+            b.setLinvel({ x: lv.x * 0.15, y: Math.min(lv.y, 0.35), z: vz }, true);
+            b.wakeUp();
+          }
+          (g as { __bayTapeCoilZ?: number }).__bayTapeCoilZ = b.translation().z;
+          break;
+        }
+      } catch {
+        /* keep baking */
+      }
       await grab();
       if (performance.now() - lastJpegAt > 20000) {
         stalled = true;
