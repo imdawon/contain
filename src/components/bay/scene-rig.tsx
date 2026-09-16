@@ -188,6 +188,68 @@ export function SceneRig({ scene }: { scene: Scene }) {
       const wheel = ents.find((e) => e.kind === "wheel");
       const nade = ents.find((e) => e.kind === "grenade" || e.kind === "charge");
       const hill = ents.find((e) => e.kind === "hill" || e.kind === "ramp");
+      const hangarRoll = Boolean(wheel) && Boolean(hill) && !dummy && !wagon && scene.ties.length === 0;
+      if (hangarRoll && wheel) {
+        if (ents.some((e) => (e.kind === "hill" || e.kind === "ramp") && !bodyOf(e.id))) return;
+        const wheelBody = bodyOf(wheel.id);
+        if (!wheelBody) return;
+
+        for (const e of ents) {
+          if (e.kind === "hill" || e.kind === "ramp") continue;
+          const b = e.kind === "wheel" ? wheelBody : bodyOf(e.id);
+          if (!b) continue;
+          const rot = quatFromEuler(e.rot ?? [0, 0, 0]);
+          if (e.kind !== "wheel") {
+            poseBody(b, e.pos[0], e.pos[1], e.pos[2], rot);
+          }
+          const patch: { friction?: number; restitution?: number; mass?: number } = {};
+          if (e.grip != null) patch.friction = e.grip;
+          if (e.bounce != null) patch.restitution = e.bounce;
+          if (e.mass != null) patch.mass = e.mass;
+          if (Object.keys(patch).length) applyActor(e.id, patch);
+          if (isVehicleKind(e.kind)) {
+            b.setGravityScale(1, true);
+            continue;
+          }
+          b.setBodyType(0, true);
+          if (e.kind === "wheel" || e.kind === "drum" || e.kind === "crate") {
+            b.setGravityScale(1, true);
+          } else {
+            b.setGravityScale(0, true);
+          }
+        }
+
+        const kick = wheel.vel ?? [0, 0, 0];
+        wheelBody.setBodyType(0, true);
+        wheelBody.setGravityScale(1, true);
+        wheelBody.setTranslation(
+          { x: wheel.pos[0], y: wheel.pos[1] + 1.15, z: wheel.pos[2] + 1.4 },
+          true,
+        );
+        wheelBody.setLinvel({ x: kick[0], y: kick[1], z: kick[2] }, true);
+        const r = WHEEL.radius;
+        wheelBody.setAngvel(
+          {
+            x: -(kick[2] || 0) / Math.max(0.08, r),
+            y: 0,
+            z: -(kick[0] || 0) / Math.max(0.08, r),
+          },
+          true,
+        );
+        wheelBody.wakeUp();
+        applyActor(wheel.id, { vx: kick[0], vy: kick[1], vz: kick[2] });
+        note("scene-kick", {
+          id: scene.id,
+          file: scene.file ?? `scenes/${scene.id}.json`,
+          vx: kick[0],
+          vy: kick[1],
+          vz: kick[2],
+        });
+        leadId.current = wheel.id;
+        phase.current = 1;
+        return;
+      }
+
       if (hill && !bodyOf(hill.id)) return;
       if (ents.some((e) => (e.kind === "hill" || e.kind === "ramp") && !bodyOf(e.id))) return;
       if (wagon && !bodyOf(wagon.id)) return;

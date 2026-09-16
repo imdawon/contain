@@ -283,10 +283,8 @@ function troughFloorAtX(x: number, ents: PipeEnt[]) {
   return Number.isFinite(best) ? best : 2;
 }
 
-function isHalfpipeTrack(sceneId: string | undefined, ents: PipeEnt[], followCoil: boolean) {
-  if (String(sceneId ?? "").startsWith("halfpipe-")) return true;
-  if (!followCoil) return false;
-  return ents.some((e) => (e.kind === "ramp" || e.kind === "hill") && (e.cut ?? 0) >= 0.99);
+function isHalfpipeTrack(sceneId: string | undefined, _ents?: PipeEnt[], _followCoil?: boolean) {
+  return String(sceneId ?? "").startsWith("halfpipe-");
 }
 
 /** After offset: never sit under the trough floor; keep chase behind the coil. */
@@ -344,19 +342,26 @@ function TrackCam({
         String(tracked?.name ?? "").toLowerCase() === "wheel";
       const chaseDump = !followCoil && (bake || Boolean(dumpEnt));
       if (followCoil) {
-        const wantFov = fov || CAM_FOV_DEF;
-        if ("fov" in camera && camera.fov !== wantFov) {
-          camera.fov = wantFov;
-          camera.updateProjectionMatrix();
-        }
         const id = coilTrackId(trackId, ents);
         if (sampleTrackPos(id)) {
           const [ox, oy, oz] = camTriple(offset, CAM_OFF_DEF);
           const [lx, ly, lz] = camTriple(look, CAM_LOOK_DEF);
-          pipeStayCam(ox, oy, oz, lx, ly, lz);
           if (isHalfpipeTrack(bay.scene?.id, ents, true)) {
+            const wantFov = fov || CAM_FOV_DEF;
+            if ("fov" in camera && camera.fov !== wantFov) {
+              camera.fov = wantFov;
+              camera.updateProjectionMatrix();
+            }
+            pipeStayCam(ox, oy, oz, lx, ly, lz);
             clampHalfpipeChase(ents);
             liftEyeAbovePipe(scene);
+          } else {
+            if (fov && "fov" in camera && camera.fov !== fov) {
+              camera.fov = fov;
+              camera.updateProjectionMatrix();
+            }
+            _desEye.set(_trackP.x + ox, _trackP.y + oy, _trackP.z + oz);
+            _desLook.set(_trackP.x + lx, _trackP.y + ly, _trackP.z + lz);
           }
           if (
             Number.isFinite(_desEye.x) &&

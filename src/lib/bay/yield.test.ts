@@ -144,9 +144,9 @@ test("coilInertia is tonne-scale, not a 6 kg hull", () => {
   assert.ok(I.x > I.y * 4, `tumble Ix ${I.x} vs roll Iy ${I.y}`);
 });
 
-test("a tonne-scale hit flattens an empty drum into a thin steel pancake", () => {
+test("a tonne-scale hit crumples an empty drum into a crushed can, not a sheet", () => {
   const shell = makeSteelShell("drum");
-  const r0 = shell.radius;
+  const h0 = shell.halfH;
   crumpleDrum(shell, {
     x: 0,
     y: 0,
@@ -159,8 +159,17 @@ test("a tonne-scale hit flattens an empty drum into a thin steel pancake", () =>
     otherMass: 1_000_000,
   });
   const ext = steelExtents(shell);
-  assert.ok(ext.halfH < 0.08, `pancake height ${ext.halfH}`);
-  assert.ok(ext.radius > r0 * 1.15, `splay ${ext.radius} vs ${r0}`);
+  assert.ok(ext.halfH > 0.18, `still 3D ${ext.halfH}`);
+  assert.ok(ext.halfH < h0 * 0.75, `shorter ${ext.halfH} vs ${h0}`);
+  let minR = 99;
+  let maxR = 0;
+  for (let i = 0; i < shell.dent.length; i++) {
+    const o = i * 3;
+    const r = Math.hypot(shell.live[o]!, shell.live[o + 2]!);
+    if (r < minR) minR = r;
+    if (r > maxR) maxR = r;
+  }
+  assert.ok(maxR - minR > 0.08, `wrinkle ${minR.toFixed(3)}..${maxR.toFixed(3)}`);
 });
 
 test("a 200 t-scale panel hit folds roof down with wrinkles, not a uniform shrink", () => {
