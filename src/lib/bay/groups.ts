@@ -8,3 +8,5 @@ export const WAGON_G = 15;
 export const WHEEL_G = WAGON_G;
 /** Drum reuses crate so it hits the wheel, other drums, and the track. */
 export const DRUM_G = CRATE_G;
+/** Vehicles reuse crate so they hit the wheel, other smashables, and the track. */
+export const VEHICLE_G = CRATE_G;

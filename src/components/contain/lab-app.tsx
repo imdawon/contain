@@ -1,4 +1,5 @@
-import { Component, lazy, Suspense, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
+import { Component, Suspense, useEffect, useState, type ErrorInfo, type ReactNode } from "react";
+import { BayCanvas } from "@/components/bay/canvas";
 import { Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Inspector } from "@/components/contain/inspector";
@@ -16,25 +17,31 @@ import { SOLID, SOLID_SHAPES } from "@/lib/bay/solids";
 import { useBay, type Tool } from "@/store/bay-store";
 import { cn } from "@/lib/utils";
 
-const BayCanvas = lazy(() => import("@/components/bay/canvas"));
-
-class StageErrorBoundary extends Component<{ children: ReactNode }, { message: string | null }> {
-  state = { message: null as string | null };
+class StageErrorBoundary extends Component<{ children: ReactNode }, { message: string | null; gen: number }> {
+  state = { message: null as string | null, gen: 0 };
+  timer: ReturnType<typeof setTimeout> | null = null;
   static getDerivedStateFromError(error: Error) {
     return { message: error.message };
   }
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error(error, info.componentStack);
+    if (this.timer != null) clearTimeout(this.timer);
+    this.timer = setTimeout(() => {
+      this.setState((s) => ({ message: null, gen: s.gen + 1 }));
+    }, 400);
+  }
+  componentWillUnmount() {
+    if (this.timer != null) clearTimeout(this.timer);
   }
   render() {
     if (this.state.message) {
       return (
-        <div className="absolute inset-0 grid place-items-center bg-bg px-6 text-center">
-          <p className="font-mono text-sm text-fg">{this.state.message}</p>
+        <div className="lab-stage absolute inset-0 h-full w-full">
+          <canvas className="block h-full w-full" />
         </div>
       );
     }
-    return this.props.children;
+    return <div key={this.state.gen} className="contents">{this.props.children}</div>;
   }
 }
 

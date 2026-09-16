@@ -6,7 +6,7 @@ import { cooks } from "@/lib/bay/cook";
 import { applyActor, listSamplers, note, setColliderGroups } from "@/lib/bay/probe";
 import type { Scene } from "@/lib/bay/scene";
 import { COVER_G, CRATE_G, DUMMY_G, WAGON_G, WHEEL_G, WORLD_G } from "@/lib/bay/groups";
-import { WHEEL } from "@/lib/bay/parts";
+import { isVehicleKind, WHEEL } from "@/lib/bay/parts";
 import { holdRide, letGoRide, noteRideY, resetRide } from "@/lib/bay/ride";
 import { useBay } from "@/store/bay-store";
 
@@ -47,6 +47,7 @@ type Lock = {
 
 type RapierBody = {
   isKinematic: () => boolean;
+  isFixed?: () => boolean;
   setNextKinematicTranslation: (p: { x: number; y: number; z: number }) => void;
   setNextKinematicRotation: (q: { x: number; y: number; z: number; w: number }) => void;
   setTranslation: (p: { x: number; y: number; z: number }, w: boolean) => void;
@@ -98,8 +99,10 @@ function poseBody(
   }
   b.setTranslation({ x, y, z }, true);
   b.setRotation(rot, true);
-  b.setLinvel({ x: 0, y: 0, z: 0 }, true);
-  b.setAngvel({ x: 0, y: 0, z: 0 }, true);
+  if (!b.isFixed?.()) {
+    b.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    b.setAngvel({ x: 0, y: 0, z: 0 }, true);
+  }
   b.wakeUp();
 }
 
@@ -186,12 +189,14 @@ export function SceneRig({ scene }: { scene: Scene }) {
       const nade = ents.find((e) => e.kind === "grenade" || e.kind === "charge");
       const hill = ents.find((e) => e.kind === "hill" || e.kind === "ramp");
       if (hill && !bodyOf(hill.id)) return;
+      if (ents.some((e) => (e.kind === "hill" || e.kind === "ramp") && !bodyOf(e.id))) return;
       if (wagon && !bodyOf(wagon.id)) return;
       if (wheel && !bodyOf(wheel.id)) return;
       if (nade && !bodyOf(nade.id)) return;
       if (dummy && !bodyOf(`${dummy.id}-hips`)) return;
       for (const e of ents) {
         if (e.kind === "drum" && !bodyOf(e.id)) return;
+        if (isVehicleKind(e.kind) && !bodyOf(e.id)) return;
       }
 
       for (const e of ents) {
@@ -222,6 +227,10 @@ export function SceneRig({ scene }: { scene: Scene }) {
         if (e.bounce != null) patch.restitution = e.bounce;
         if (e.mass != null) patch.mass = e.mass;
         if (Object.keys(patch).length) applyActor(e.id, patch);
+        if (isVehicleKind(e.kind)) {
+          b.setGravityScale(1, true);
+          continue;
+        }
         b.setBodyType(0, true);
         if (e.kind === "wagon" || e.kind === "wheel" || e.kind === "drum" || e.kind === "crate") {
           b.setGravityScale(1, true);

@@ -1,7 +1,7 @@
 # Code Expert — implementation axioms
 
 **Who:** Code Expert bot (`2dd45bb5-dce2-4b7f-8453-55a90fce6be2`).
-**Why it existed:** this bot owned CONTAIN code but was forbidden to type product code by hand. It steered omp in herdr, then had to prove the scene with the bay harness. These lines are why a harness “pass” was still a fail, and why Chrome was banned.
+**Why it existed:** this bot owned CONTAIN code. This file is historical Code Expert process; current drive is hangar.mjs + bay.mjs + Cursor.
 
 ## Verify
 
@@ -13,7 +13,7 @@ Iterate JSON scene files (`public/scenes/*.json`). Do not hardcode trials in `ru
 
 ## How to drive the sim
 
-Only `node scripts/bay.mjs` against `window.__bay`. Never the browser. Never Playwright. Never a Chrome watch. If paints is 0, say so and stop. Named miss: `omp-browser-harness`. The Grok 4.6 high seat spawns specialist `contain-bay` (Grok 4.6 medium) for every restage/peek/tape; high does not burn tokens sitting in the harness.
+`hangar.mjs` owns the painted page. Agents only call `node scripts/bay.mjs` against `window.__bay`. Never the browser. Never Playwright. Never a Chrome watch. If paints is 0, say so and stop. Named miss: `omp-browser-harness`. The Grok 4.6 high seat spawns specialist `contain-bay` (Grok 4.6 medium) for every restage/peek/tape; high does not burn tokens sitting in the harness.
 
 Health: one taker, one paint. Peek first. Leftover wreck is FAIL. Tape only after peek shows a fresh spawn. Recorder already rolling, then restage. If restage is not in the file, discard it.
 
@@ -23,9 +23,9 @@ New gags (roll rumble, contact hits, 30 Hz motion flags) go in a frozen number t
 
 ## How to change code
 
-One omp prompt on a fresh grok 4.6 high seat in herdr. Wait until idle. Do not paste follow-ups while it is working. Do not hand-edit `src/`. Harness failures go back to omp.
+This file is historical Code Expert process (omp in herdr). Current drive is hangar.mjs + bay.mjs + Cursor.
 
-Omp briefs are senior software plus mechanical/physics: constraints, geometry, velocity, fuse vs height, camera, numeric pass/fail. Not casual product talk.
+Briefs are senior software plus mechanical/physics: constraints, geometry, velocity, fuse vs height, camera, numeric pass/fail. Not casual product talk.
 
 ## Handoff
 
@@ -33,7 +33,7 @@ Do not hand off until Creative Content’s PASS/FAIL lines are true. Code Expert
 
 ## Out of bounds
 
-Cars, crush-as-BeamNG-costume, fluids, certified ATD, full Rapier soft-body rewrite: stop and ask. dawon later allowed two new objects (steel wheel, oil drum) with a material yield. That is not “change the physics engine.” It is verts moving on those two bodies from impact force. The mesh has to cave in.
+Do not rip BeamNG cars or maps, a SURVIVAL CHANCE HUD, fluids, certified ATD, or a full Rapier soft-body rewrite: stop and ask. Toy vehicles in the studio palette are allowed. dawon later allowed two new objects (steel wheel, oil drum) with a material yield. That is not “change the physics engine.” It is verts moving on those two bodies from impact force. The mesh has to cave in.
 
 ## Do not
 

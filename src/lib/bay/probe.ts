@@ -16,6 +16,10 @@ export interface ProbeObject {
   vx: number | null;
   vy: number | null;
   vz: number | null;
+  wx?: number | null;
+  wy?: number | null;
+  wz?: number | null;
+  omega?: number | null;
   inView: boolean;
   mass: number | null;
   friction: number | null;

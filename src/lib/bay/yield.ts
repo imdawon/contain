@@ -66,8 +66,8 @@ export function makeSteelShell(kind: SteelKind): SteelShell {
   const ringsY = kind === "wheel" ? 9 : 7;
   const ringsR = kind === "wheel" ? 6 : 3;
   const radius = s.radius;
-  // Drums close the lids: inner ~0 so the end faces are disks, not open washers.
-  const inner = kind === "wheel" ? WHEEL.hub : 0.02;
+  // Close lids: inner ~0 so end faces are disks, not washers / hollow rings.
+  const inner = 0.02;
   const halfH = kind === "wheel" ? WHEEL.thick / 2 : DRUM.height / 2;
   const n = segs * ringsY * ringsR;
   const rest = new Float32Array(n * 3);
@@ -528,6 +528,227 @@ export function refreshSteelMesh(geo: THREE.BufferGeometry, live?: Float32Array)
   pos.version += 1;
   const col = geo.getAttribute("color") as THREE.BufferAttribute | undefined;
   if (col) {
+    col.needsUpdate = true;
+    col.version += 1;
+  }
+  geo.computeVertexNormals();
+  const nrm = geo.getAttribute("normal") as THREE.BufferAttribute | undefined;
+  if (nrm) {
+    nrm.needsUpdate = true;
+    nrm.version += 1;
+  }
+  geo.computeBoundingSphere();
+}
+
+/** Segmented box panel. Plastic crater, not FEA. */
+export type PanelShell = {
+  hx: number;
+  hy: number;
+  hz: number;
+  segs: number;
+  rest: Float32Array;
+  live: Float32Array;
+  dent: Float32Array;
+  paint: Float32Array;
+  index: Uint32Array | null;
+  maxTaken: number;
+  maxDent: number;
+};
+
+export function makeBoxPanel(hx: number, hy: number, hz: number, segs = 10): PanelShell {
+  const g = new THREE.BoxGeometry(hx * 2, hy * 2, hz * 2, segs, segs, segs);
+  const pos = g.getAttribute("position") as THREE.BufferAttribute;
+  const rest = new Float32Array(pos.array as Float32Array);
+  const srcIdx = g.getIndex();
+  const index = srcIdx ? new Uint32Array(srcIdx.array as ArrayLike<number>) : null;
+  g.dispose();
+  const n = rest.length / 3;
+  const paint = new Float32Array(n * 3);
+  paint.fill(1);
+  return {
+    hx,
+    hy,
+    hz,
+    segs,
+    rest,
+    live: rest.slice(),
+    dent: new Float32Array(n),
+    paint,
+    index,
+    maxTaken: 0,
+    maxDent: 0.48,
+  };
+}
+
+export function panelGeometry(shell: PanelShell) {
+  const geo = new THREE.BufferGeometry();
+  const pos = new THREE.BufferAttribute(shell.live, 3);
+  pos.setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute("position", pos);
+  const col = new THREE.BufferAttribute(shell.paint, 3);
+  col.setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute("color", col);
+  if (shell.index) geo.setIndex(new THREE.BufferAttribute(shell.index, 1));
+  geo.computeVertexNormals();
+  geo.computeBoundingSphere();
+  return geo;
+}
+
+function bruisePanel(shell: PanelShell, i: number) {
+  const t = Math.min(1, shell.dent[i]! / Math.max(0.04, shell.maxDent * 0.55));
+  const o = i * 3;
+  shell.paint[o] = 1 - t + BRUISE[0] * t;
+  shell.paint[o + 1] = 1 - t + BRUISE[1] * t;
+  shell.paint[o + 2] = 1 - t + BRUISE[2] * t;
+}
+
+/** Accordion crumple: roof down, contact face in, sinusoidal buckle. Not a uniform shrink. */
+export function applyPanelHit(
+  shell: PanelShell,
+  localPoint: { x: number; y: number; z: number },
+  localNormal: { x: number; y: number; z: number },
+  impulse: number,
+) {
+  const { rest, live, dent, maxDent } = shell;
+  const n = dent.length;
+  const hx = Math.max(0.04, shell.hx);
+  const hy = Math.max(0.04, shell.hy);
+  const hz = Math.max(0.04, shell.hz);
+  const px0 = Math.max(-hx, Math.min(hx, localPoint.x));
+  const py0 = Math.max(-hy, Math.min(hy, localPoint.y));
+  const pz0 = Math.max(-hz, Math.min(hz, localPoint.z));
+  const extent = Math.max(hx, hy, hz);
+  const sigma = Math.max(0.55, extent * 1.15);
+  const two = 2 * sigma * sigma;
+  const depth = Math.min(maxDent, Math.max(0.12, 0.1 + Math.abs(impulse) * 4.2e-7));
+  let nx = localNormal.x;
+  let ny = localNormal.y;
+  let nz = localNormal.z;
+  if (Math.hypot(nx, ny, nz) < 1e-4) {
+    nx = px0;
+    ny = py0;
+    nz = pz0;
+  }
+  const nl = Math.hypot(nx, ny, nz) || 1;
+  nx /= nl;
+  ny /= nl;
+  nz /= nl;
+  const ax = Math.abs(nx);
+  const ay = Math.abs(ny);
+  const az = Math.abs(nz);
+  const sx = nx >= 0 ? 1 : -1;
+  const sy = ny >= 0 ? 1 : -1;
+  const sz = nz >= 0 ? 1 : -1;
+  let added = 0;
+  for (let i = 0; i < n; i++) {
+    const o = i * 3;
+    const rx = rest[o]!;
+    const ry = rest[o + 1]!;
+    const rz = rest[o + 2]!;
+    const dx = rx - px0;
+    const dy = ry - py0;
+    const dz = rz - pz0;
+    const w = Math.exp(-(dx * dx + dy * dy + dz * dz) / two);
+    if (w < 0.02) continue;
+    const room = maxDent - dent[i]!;
+    if (room <= 0.0004) continue;
+    const roof = ry > 0 ? 1.15 : 0.28;
+    const faceX = 0.35 + 0.65 * (rx * sx > 0 ? 1 : 0.22);
+    const faceZ = 0.35 + 0.65 * (rz * sz > 0 ? 1 : 0.22);
+    const faceY = 0.4 + 0.6 * (ry * sy > 0 ? 1 : 0.3);
+    const face = ax >= az && ax >= ay ? faceX : az >= ay ? faceZ : faceY;
+    const take = Math.min(room, depth * Math.max(0.18, w) * roof * face);
+    if (take < 0.0003) continue;
+    const down = take * (ry > 0 ? 1.05 : 0.22);
+    const caveX = take * (ax * 0.55 + 0.22) * (rx * sx > 0 ? sx : sx * 0.28);
+    const caveZ = take * (az * 0.55 + 0.22) * (rz * sz > 0 ? sz : sz * 0.28);
+    const buckleZ = Math.sin((rz / hz) * Math.PI * 4.1) * take * 0.4;
+    const buckleX = Math.sin((rx / hx) * Math.PI * 3.4 + (ry / hy) * 1.8) * take * 0.38;
+    const ox = live[o]!;
+    const oy = live[o + 1]!;
+    const oz = live[o + 2]!;
+    live[o] = ox - caveX + buckleX;
+    live[o + 1] = oy - down;
+    live[o + 2] = oz - caveZ + buckleZ;
+    const pushed = Math.hypot(ox - live[o]!, oy - live[o + 1]!, oz - live[o + 2]!);
+    if (pushed <= 1e-5) {
+      live[o] = ox;
+      live[o + 1] = oy;
+      live[o + 2] = oz;
+      continue;
+    }
+    dent[i] = Math.min(maxDent, dent[i]! + pushed);
+    bruisePanel(shell, i);
+    added += pushed;
+  }
+  const pinchT = Math.min(0.28, 0.1 + depth / Math.max(0.01, maxDent) * 0.2);
+  const roofFloor = hy * 0.12;
+  if (added <= 0) {
+    clampPanelVerts(shell);
+    return 0;
+  }
+  for (let i = 0; i < n; i++) {
+    const o = i * 3;
+    if (rest[o + 1]! <= 0) continue;
+    const y = live[o + 1]!;
+    if (y <= roofFloor) continue;
+    const ny = y + (roofFloor - y) * pinchT;
+    const dy = y - ny;
+    if (dy <= 1e-5) continue;
+    live[o + 1] = ny;
+    dent[i] = Math.min(maxDent, dent[i]! + dy);
+    bruisePanel(shell, i);
+    added += dy;
+  }
+  clampPanelVerts(shell);
+  if (added > 0) {
+    shell.maxTaken = 0;
+    for (let i = 0; i < n; i++) if (dent[i]! > shell.maxTaken) shell.maxTaken = dent[i]!;
+  }
+  return added;
+}
+
+/** Keep crumpled panels truck-sized. Rest extents × 1.35, not a 20 m shard cloud. */
+export function clampPanelVerts(shell: PanelShell) {
+  const { rest, live } = shell;
+  if (!rest || !live || rest.length !== live.length) return;
+  let mx = Math.max(0.04, shell.hx);
+  let my = Math.max(0.04, shell.hy);
+  let mz = Math.max(0.04, shell.hz);
+  const n = rest.length / 3;
+  for (let i = 0; i < n; i++) {
+    const o = i * 3;
+    mx = Math.max(mx, Math.abs(rest[o]!));
+    my = Math.max(my, Math.abs(rest[o + 1]!));
+    mz = Math.max(mz, Math.abs(rest[o + 2]!));
+  }
+  const lx = mx * 1.35;
+  const ly = my * 1.35;
+  const lz = mz * 1.35;
+  for (let i = 0; i < n; i++) {
+    const o = i * 3;
+    const x = live[o]!;
+    const y = live[o + 1]!;
+    const z = live[o + 2]!;
+    if (Number.isFinite(x)) live[o] = x > lx ? lx : x < -lx ? -lx : x;
+    else live[o] = rest[o]!;
+    if (Number.isFinite(y)) live[o + 1] = y > ly ? ly : y < -ly ? -ly : y;
+    else live[o + 1] = rest[o + 1]!;
+    if (Number.isFinite(z)) live[o + 2] = z > lz ? lz : z < -lz ? -lz : z;
+    else live[o + 2] = rest[o + 2]!;
+  }
+}
+
+export function syncPanelGeometry(geo: THREE.BufferGeometry, shell: PanelShell) {
+  const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+  const dst = pos.array as Float32Array;
+  if (shell.live !== dst && shell.live.length >= dst.length) dst.set(shell.live.subarray(0, dst.length));
+  pos.needsUpdate = true;
+  pos.version += 1;
+  const col = geo.getAttribute("color") as THREE.BufferAttribute | undefined;
+  if (col) {
+    const carr = col.array as Float32Array;
+    if (shell.paint !== carr && shell.paint.length >= carr.length) carr.set(shell.paint.subarray(0, carr.length));
     col.needsUpdate = true;
     col.version += 1;
   }

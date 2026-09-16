@@ -1,48 +1,88 @@
 # CONTAIN
 
-Live 16:9 **setup-then-watch** destruction bay. Graphic / toy. Video-game physics, not MATLAB.
+Live hangar for toy destruction. Graphic, not MATLAB. Rigid bodies, joints, masses, break numbers.
 
-This file is the **living axiom list**. Axioms are product rules that still matter after a compact. Implementation facts (tick rates, file maps, current spawn list, API dumps) do **not** get a number.
+You **stage**, then **Play**. Physics is frozen until Play. Reset restages the layout; it does not wipe it.
+
+This file is the **living axiom list**. Axioms are product rules that still matter after a compact. Implementation facts (tick rates, file maps, spawn lists, API dumps) do **not** get a number.
+
+---
+
+## Controls
+
+The hangar is an orbit camera around a tracked actor. It is not a locked chase cam and not a first-person game.
+
+| Input | What it does |
+| --- | --- |
+| Drag empty stage | Orbit |
+| Scroll | Dolly |
+| **Track** | Sticky follow: camera *and* orbit target translate with that body. Empty = free orbit. Dummy default is **chest**. |
+| **Studio** | Freeze. Pick a kit, click the floor to drop it (Shift: height of the camera). |
+| RGB arrows | Screen-space move. Drag along the projected axis. Writes the RigidBody parent, never an inner mesh. |
+| Hold **X** / **Y** / **Z** while grabbing | Lock that axis |
+| **Grab** / **Nail** | Grab moves the whole assembly until the joints fail. Nail pins. |
+| **Play** | Rapier starts. |
+| **Reset** | Restage this clip / scene. |
+| **Save** | Keep the arrangement as a named clip. |
+| **Run** | vs ladders, JSON scenes, builtin gags. |
+| **Next** / `N` | Next vs rung |
+| **X-ray** / `X` | Ghost the wall facing the camera |
+| **Slo-mo** / `S` | Quarter speed |
+| **PULL PIN** / **PUNCTURE** | Arm grenades / cook a pack |
+
+TrackCam only **translates** with the actor. Do not overwrite camera pose each frame — orbit dies. `OrbitControls` stay on while tracking. Restage snaps to the scene JSON camera.
 
 ---
 
 ## What this is
 
-You place objects, then let them play. BeamNG energy: one setup, one run, a readable ending.
+A **clip machine**. HUD stays thin. The 3D stage is the product.
 
-**Now (v0):** dummy + crate + **grenade** + wall + doorway + **vs runs** (same victim, one knob ticks up). Phone pack still spawnable as a fire.
+Cast: dummy, wagon, grenade, pack, hill / ramp, cannon, steel wheel, drum, toy vehicles, crate, can, grass, wall, door, solids.
 
-**Not yet:** cars, ramps, shields, film chrome.
+Clips are JSON (`public/scenes/`). Iterate the file. A **run** is a bet: same victim, one knob.
+
+Live hangar fills the window. Tapes bake **9:16** (720×1280).
 
 ---
 
 ## Axioms
 
 1. **Clip machine, not a lab dashboard.** HUD stays thin. The 3D stage is the product.
-2. **Setup, then watch.** Full spawn / grab. No cutscene that plays itself without the player staging it.
-3. **Live play, 16:9.** You operate the camera. Orbit empty floor, or **track any object / sub-object**. Leaving frame is allowed. Do not glue the world to the camera.
+2. **Setup, then watch.** Frozen until Play. Full spawn / grab. No cutscene that plays itself without the player staging it.
+3. **You operate the camera.** Orbit empty floor, or **track any object / sub-object**. Leaving frame is allowed. Do not glue the world to the camera.
 4. **Graphic / toy, not photoreal.** Flat color, grid, readable silhouettes.
 5. **Video-game physics.** Rigid bodies, joints, masses, break numbers. Not FEA, not electrochemical accuracy.
 6. **Parts are the unit.** Assemblies (can, crate, dummy) are collections of bodies, not one mesh. Grab moves the whole assembly until the joints actually fail.
 7. **Latch fails before hinge.** A phone cook pops the latch. Only a much bigger dump shears the pin.
 8. **Thermal is juice + force.** Cook is an authored meter plus impulses. Phone NMC is a fire, not a charge: it must not loft a steel can. World blast is for actual explosives.
 9. **Never `useFrame(fn, priority > 0)`.** That steals the R3F render loop and blanks the canvas.
-10. **Probe, don’t screenshot.** Motion, latch, flop, and cook claims come from `window.__bay` (`peek`, `history`, `effects`, `until`). Screenshots are optional garnish.
+10. **Proof is numbers and a picture from the same world.** Motion, latch, flop, dent, and cook claims come from `window.__bay` (`peek`, `history`, `effects`, `until`) **and** a shot JPEG of that tick. Peek xyz is not a picture.
 11. **Only number major product rules.** Tick rates, file maps, spawn lists, and API dumps are facts. Do not add them as axioms.
 12. **Commit when the bay actually moved.** Same turn as a verified slice. Message says what the bay does now.
-13. **A clip is a level.** Named arrangement of parts. Reset restages that clip. Save keeps a gag. JSON scene files (`public/scenes/`) are the clips going forward — iterate the file.
+13. **A clip is a level.** Named arrangement of parts. Reset restages that clip. Save keeps a gag. JSON scene files (`public/scenes/`) are the clips — iterate the file.
 14. **A run is a bet.** Same victim. One variable. Premise on screen. Early rungs can fail. Next is the only loop.
 15. **Cover is occlusion.** A crate, can, wall, or door on the line blocks that bone’s blast. Grass is not cover. Rapier will not occlude a scripted radial impulse by itself.
 
 ---
 
-## v0 proof (what “works” means)
+## Drive it
 
-- Default stage: **Grenades vs Dummy lv 1** — one grenade far enough that the dummy stays a T-statue.
-- **PULL PIN** arms every grenade. Fuse → `grenade-boom`. Lv 1–3 miss. Lv 4 at the feet flops.
-- Cover on the line (crate / can / wall / doorway) stops that flop. Grass on the line does not.
-- **Next** restages lv+1 with more bangs / closer range. Same dummy.
-- Phone pack still spawnable; it is a **fire**, not a charge, and must **not** loft an 8 kg can.
+Human: the hangar on `:8080`.
+
+Agents never open Chrome. `hangar.mjs` owns one painted page (`window.__bayOwned`). Talk to that world with `bay.mjs`:
+
+```
+node scripts/hangar.mjs start
+node scripts/bay.mjs health          # wants takers>=1 paints>=1
+node scripts/bay.mjs restage <scene>
+node scripts/bay.mjs peek
+node scripts/bay.mjs shot screenshots/foo.jpg
+```
+
+`paints: 0` is a second, headless Rapier world — blocked, not a pass. Named miss: `omp-browser-harness`.
+
+Taste for takes: `docs/axioms/`. Distill the loop. Do not rip cars, maps, or a SURVIVAL CHANCE HUD from those refs.
 
 ---
 
@@ -50,43 +90,22 @@ You place objects, then let them play. BeamNG energy: one setup, one run, a read
 
 | Path | Role |
 | --- | --- |
-| `README.md` | This axiom list |
-| `src/lib/bay/parts.ts` | Masses, latch/hinge numbers, sizes |
-| `src/lib/bay/cook.ts` | Pack / grenade cook phases |
-| `src/lib/bay/probe.ts` | State stream (`window.__bay`) |
-| `src/components/bay/ammo-can.tsx` | Body + lid + revolute hinge + breakable fixed latch |
-| `src/components/bay/pack.tsx` | Grabbable pack, puncture, fire |
-| `src/components/bay/grenade.tsx` | Pin, fuse tick, bang, fragments |
-| `src/components/bay/probe-tick.tsx` | Camera frustum + per-frame snapshot |
-| `src/store/bay-store.ts` | Spawn/select/tool/latch/clip |
-| `src/lib/bay/level.ts` | Builtin gags + saved clips |
-| `src/lib/bay/run.ts` | vs ladders (grenades vs dummy, dummy vs cover) |
+| `README.md` | This axiom list + controls |
+| `public/scenes/*.json` | Clips: layout, velocity, grip, ties, camera |
 | `src/lib/bay/scene.ts` | JSON scene loader. Restage the file, do not hardcode a new trial. |
-| `public/scenes/*.json` | Gags: layout, start velocity, grip, ties |
-| `src/components/contain/inspector.tsx` | Live xyz / mass / grip / bounce editor for the tracked body |
-| `src/lib/bay/solids.ts` | Collider-kit shapes |
-| `src/components/bay/solid.tsx` | Spawnable cube / ball / cylinder / capsule / platonic hulls / plank |
-| `src/components/bay/dummy.tsx` | Ragdoll dummy |
-| `src/components/bay/wall.tsx` | Tall cuboid cover |
-| `src/components/bay/doorway.tsx` | Frame + hinged door; latch fails first |
-| `src/components/bay/crate.tsx` | Welded crate that shears on blast |
-| `src/components/bay/grass.tsx` | Spreading grass fire |
-| `src/lib/bay/heat.ts` | Toy heat field |
-| `src/lib/bay/harness.ts` | Agent command API + 30s history |
+| `src/lib/bay/studio.ts` | Studio palette, place, patch, save |
+| `src/components/contain/studio.tsx` | Studio panel |
+| `src/components/bay/move-gizmo.tsx` | Screen-space RGB arrows |
+| `src/components/bay/studio-place.tsx` | Click-floor drop |
+| `src/components/bay/canvas.tsx` | R3F / Rapier world. TrackCam lives here. |
+| `src/components/bay/look-cam.tsx` | Point-at-dummy helper for harness camera checks |
+| `src/components/contain/lab-app.tsx` | Hangar chrome |
+| `src/components/contain/inspector.tsx` | Live xyz / mass / grip for the tracked body |
+| `src/store/bay-store.ts` | Spawn / select / tool / clip / playing |
+| `src/lib/bay/harness.ts` | `window.__bay` command API |
+| `scripts/hangar.mjs` | Vite + owned paint page |
 | `scripts/bay.mjs` | POST `/__bay` → live `window.__bay` (no browser) |
+| `src/lib/bay/parts.ts` | Masses, latch/hinge numbers, sizes |
 | `src/lib/bay/actions.ts` | Puncture / spawn / reset without the DOM |
-
----
-
-## How to play v0
-
-1. Read the overlay: **N GRENADES vs 1 DUMMY**. That is the bet.
-2. **PULL PIN**. Watch whether the dummy stays up. **Next** (or `N`) is the next rung.
-3. Pick **Dummy vs Cover** to tick armor instead of grenade count. Wall and door are spawnable cover. Gags (Pin-pull, Shoes, …) are still under Run.
-4. **Grab** a part to cheat the setup. **Save** keeps a layout. **Reset** restages this rung.
-
----
-
-## Later (not v0)
-
-Shields (cardboard, plastic, hood, bolted riot). Multiple pack sizes. Film chrome.
+| `src/lib/bay/run.ts` | vs ladders |
+| `src/lib/bay/level.ts` | Builtin gags + saved clips |

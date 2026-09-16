@@ -56,6 +56,9 @@ export const SCENE_INDEX = [
   { id: "wheel-100", file: "scenes/wheel-100.json", name: "Wheel 100 t" },
   { id: "wheel-200", file: "scenes/wheel-200.json", name: "Wheel 200 t" },
   { id: "wheel-300", file: "scenes/wheel-300.json", name: "Wheel 300 t" },
+  { id: "halfpipe-100", file: "scenes/halfpipe-100.json", name: "100 t" },
+  { id: "halfpipe-200", file: "scenes/halfpipe-200.json", name: "200 t" },
+  { id: "halfpipe-300", file: "scenes/halfpipe-300.json", name: "300 t" },
   { id: "cannon-100", file: "scenes/cannon-100.json", name: "Cannon 100 t" },
   { id: "cannon-keep", file: "scenes/cannon-keep.json", name: "Cannon Keep" },
   { id: "cannon-beach", file: "scenes/cannon-beach.json", name: "Cannon Beach" },
@@ -88,6 +91,14 @@ const KINDS = new Set<string>([
   "wheel",
   "drum",
   "cannon",
+  "dumptruck",
+  "van",
+  "suv",
+  "pickup",
+  "car",
+  "bus",
+  "flatbed",
+  "loader",
 ]);
 
 function round(n: number) {

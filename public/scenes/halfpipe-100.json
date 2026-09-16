@@ -1,9 +1,9 @@
 {
-  "id": "wheel-100",
-  "name": "Wheel 100 t",
-  "blurb": "100 t coil through a grassy hillside concrete half-pipe vehicle gauntlet",
-  "file": "scenes/wheel-100.json",
-  "select": "wheel",
+  "id": "halfpipe-100",
+  "name": "Ship halfpipe fidelity crush bake",
+  "blurb": "Chaotic gauntlet crush bake through a grassy hillside concrete half-pipe",
+  "file": "scenes/halfpipe-100.json",
+  "select": "coil",
   "inspect": false,
   "track": {
     "ref": "coil"
@@ -256,9 +256,9 @@
       "name": "dump-truck",
       "kind": "dumptruck",
       "pos": [
-        0,
+        1.8,
         3.6,
-        40
+        40.0
       ],
       "rot": [
         0,
@@ -278,13 +278,13 @@
       "name": "van-1",
       "kind": "van",
       "pos": [
-        0,
+        -2.4,
         3.1,
-        67
+        71.2
       ],
       "rot": [
         0,
-        0,
+        -0.436332,
         0
       ],
       "size": [
@@ -300,13 +300,13 @@
       "name": "van-2",
       "kind": "van",
       "pos": [
-        0,
         3.1,
-        94
+        3.1,
+        90.5
       ],
       "rot": [
         0,
-        0,
+        0.558505,
         0
       ],
       "size": [
@@ -322,13 +322,13 @@
       "name": "suv-1",
       "kind": "suv",
       "pos": [
-        0,
+        -1.1,
         2.9,
-        121
+        126.5
       ],
       "rot": [
         0,
-        0,
+        -0.20944,
         0
       ],
       "size": [
@@ -344,13 +344,13 @@
       "name": "pickup-1",
       "kind": "pickup",
       "pos": [
-        0,
+        2.7,
         2.95,
-        148
+        143.2
       ],
       "rot": [
         0,
-        0,
+        0.488692,
         0
       ],
       "size": [
@@ -366,13 +366,13 @@
       "name": "pickup-2",
       "kind": "pickup",
       "pos": [
-        0,
+        -3.3,
         2.95,
-        175
+        177.6
       ],
       "rot": [
         0,
-        0,
+        -0.610865,
         0
       ],
       "size": [
@@ -388,13 +388,13 @@
       "name": "car-1",
       "kind": "car",
       "pos": [
-        0,
+        0.9,
         2.75,
-        202
+        196.8
       ],
       "rot": [
         0,
-        0,
+        0.174533,
         0
       ],
       "size": [
@@ -410,13 +410,13 @@
       "name": "bus-1",
       "kind": "bus",
       "pos": [
-        0,
+        -1.6,
         3.6,
-        229
+        232.8
       ],
       "rot": [
         0,
-        0,
+        -0.383972,
         0
       ],
       "size": [
@@ -432,13 +432,13 @@
       "name": "flatbed-1",
       "kind": "flatbed",
       "pos": [
-        0,
+        3.4,
         2.75,
-        256
+        253.6
       ],
       "rot": [
         0,
-        0,
+        0.261799,
         0
       ],
       "size": [
@@ -454,13 +454,13 @@
       "name": "loader-1",
       "kind": "loader",
       "pos": [
-        0,
+        -2.2,
         3.75,
-        280
+        280.0
       ],
       "rot": [
         0,
-        0,
+        -0.523599,
         0
       ],
       "size": [
@@ -485,7 +485,7 @@
         0,
         1.571
       ],
-      "mass": 100000,
+      "mass": 200000,
       "grip": 0.22,
       "bounce": 0,
       "vel": [

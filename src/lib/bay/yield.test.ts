@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { coilInertia } from "./parts.ts";
-import { applySteelHits, crumpleDrum, makeSteelShell, steelExtents, steelGeometry, steelMeshRim, steelRim } from "./yield.ts";
+import { applyPanelHit, applySteelHits, clampPanelVerts, crumpleDrum, makeBoxPanel, makeSteelShell, steelExtents, steelGeometry, steelMeshRim, steelRim } from "./yield.ts";
 
 test("a hard slam caves the live rim, including inverted Rapier normals", () => {
   for (const nz of [1, -1]) {
@@ -127,4 +127,69 @@ test("a tonne-scale hit flattens an empty drum into a thin steel pancake", () =>
   const ext = steelExtents(shell);
   assert.ok(ext.halfH < 0.08, `pancake height ${ext.halfH}`);
   assert.ok(ext.radius > r0 * 1.15, `splay ${ext.radius} vs ${r0}`);
+});
+
+test("a 200 t-scale panel hit folds roof down with wrinkles, not a uniform shrink", () => {
+  const shell = makeBoxPanel(1.1, 0.55, 1.8, 10);
+  const added = applyPanelHit(shell, { x: 0, y: 0.2, z: 1.4 }, { x: 0, y: 0, z: 1 }, 8e5);
+  assert.ok(added > 0.25, `added ${added}`);
+  assert.ok(shell.maxTaken >= 0.25, `maxTaken ${shell.maxTaken}`);
+  let roofDy = 0;
+  let floorDy = 0;
+  let nRoof = 0;
+  let nFloor = 0;
+  let zVar = 0;
+  let n = 0;
+  for (let i = 0; i < shell.dent.length; i++) {
+    const o = i * 3;
+    const ry = shell.rest[o + 1]!;
+    const dy = shell.live[o + 1]! - ry;
+    const dz = shell.live[o + 2]! - shell.rest[o + 2]!;
+    zVar += dz * dz;
+    n++;
+    if (ry > 0.05) {
+      roofDy += dy;
+      nRoof++;
+    }
+    if (ry < -0.05) {
+      floorDy += dy;
+      nFloor++;
+    }
+  }
+  const roofMean = roofDy / Math.max(1, nRoof);
+  const floorMean = floorDy / Math.max(1, nFloor);
+  assert.ok(roofMean < floorMean - 0.02, `roof ${roofMean} vs floor ${floorMean}`);
+  assert.ok(zVar / n > 1e-4, `wrinkle variance ${zVar / n}`);
+});
+
+test("a miss that moves no verts does not inflate panel maxTaken", () => {
+  const shell = makeBoxPanel(0.4, 0.2, 0.4, 8);
+  shell.maxDent = 0.0002;
+  for (let i = 0; i < shell.dent.length; i++) shell.dent[i] = 0.0002;
+  applyPanelHit(shell, { x: 0, y: 0, z: 0.4 }, { x: 0, y: 0, z: 1 }, 8e5);
+  assert.equal(shell.maxTaken, 0);
+});
+
+test("panel verts stay within 1.35× rest extents after a huge slam", () => {
+  const shell = makeBoxPanel(1.2, 1.1, 1.0, 10);
+  for (let k = 0; k < 8; k++) {
+    applyPanelHit(shell, { x: 0, y: 0.8, z: 0.6 }, { x: 0.2, y: -1, z: 0.4 }, 8e5);
+    applyPanelHit(shell, { x: 0.5, y: 0.4, z: -0.4 }, { x: 1, y: -0.4, z: 0.2 }, 8e5);
+  }
+  clampPanelVerts(shell);
+  let mx = 0, my = 0, mz = 0, rx = 0, ry = 0, rz = 0;
+  const n = shell.rest.length / 3;
+  for (let i = 0; i < n; i++) {
+    const o = i * 3;
+    rx = Math.max(rx, Math.abs(shell.rest[o]!));
+    ry = Math.max(ry, Math.abs(shell.rest[o + 1]!));
+    rz = Math.max(rz, Math.abs(shell.rest[o + 2]!));
+    mx = Math.max(mx, Math.abs(shell.live[o]!));
+    my = Math.max(my, Math.abs(shell.live[o + 1]!));
+    mz = Math.max(mz, Math.abs(shell.live[o + 2]!));
+  }
+  assert.ok(mx <= rx * 1.35 + 1e-6, `x ${mx} vs ${rx * 1.35}`);
+  assert.ok(my <= ry * 1.35 + 1e-6, `y ${my} vs ${ry * 1.35}`);
+  assert.ok(mz <= rz * 1.35 + 1e-6, `z ${mz} vs ${rz * 1.35}`);
+  assert.ok(mx < 8 && my < 8 && mz < 8, `chase fill ${mx},${my},${mz}`);
 });

@@ -1,6 +1,6 @@
 /**
- * Seat glue: dummy bones (or anything else) stay locked to a lead body
- * until the dummy is hurt. Hang is only a pose hint, not the unglue gate.
+ * Seat glue: dummy bones stay locked to a lead body until each lock
+ * breaks on its own contact impulse. Hang is only a pose hint.
  */
 const held = new Set<string>();
 let peakY = 0;

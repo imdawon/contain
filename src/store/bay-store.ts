@@ -10,6 +10,7 @@ import {
 } from "@/lib/bay/level";
 import { DEFAULT_RUN_ID, getRun, getTrial, materializeTrial, type Run } from "@/lib/bay/run";
 import { materializeScene, type Scene } from "@/lib/bay/scene";
+import { isVehicleKind, VEHICLE } from "@/lib/bay/parts";
 import { SOLID_SHAPES, type SolidShape } from "@/lib/bay/solids";
 
 export type Tool = "grab" | "nail";
@@ -29,6 +30,14 @@ export type Kind =
   | "wheel"
   | "drum"
   | "cannon"
+  | "dumptruck"
+  | "van"
+  | "suv"
+  | "pickup"
+  | "car"
+  | "bus"
+  | "flatbed"
+  | "loader"
   | SolidShape;
 
 export interface Entity {
@@ -154,6 +163,8 @@ export const useBay = create<BayState>((set, get) => ({
             ? [r(), 1.05, r()]
             : kind === "drum"
               ? [r(), 0.64, r()]
+              : isVehicleKind(kind)
+                ? [0, VEHICLE[kind].size[2] / 2, 0]
               : kind === "ramp" || kind === "hill"
                 ? [0, 0, 0]
                 : kind === "can" || kind === "crate" || kind === "grass" || kind === "dummy" || kind === "wall" || kind === "doorway"
@@ -174,6 +185,10 @@ export const useBay = create<BayState>((set, get) => ({
       e.vel = [0, 0, 8];
     }
     if (kind === "drum") e.mass = 80;
+    if (isVehicleKind(kind)) {
+      e.size = VEHICLE[kind].size;
+      e.mass = VEHICLE[kind].mass;
+    }
     if (kind === "grenade") e.fuse = 1.7;
     const trackId =
       kind === "dummy"

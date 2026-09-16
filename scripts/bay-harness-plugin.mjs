@@ -40,14 +40,15 @@ export function bayHarnessPlugin() {
             fps: Number(u.searchParams.get("fps") || 0),
             ms: Number(u.searchParams.get("ms") || 0),
             gen: Number(u.searchParams.get("gen") || 0),
+            owned: u.searchParams.get("owned") === "1",
           };
         } catch {
-          return { vis: "hidden", nobj: 0, paint: false, bot: false, fps: 0, ms: 0, gen: 0 };
+          return { vis: "hidden", nobj: 0, paint: false, bot: false, fps: 0, ms: 0, gen: 0, owned: false };
         }
       }
 
       function rank(t) {
-        return (t.paint ? 10000 : 0) + (t.bot ? -8000 : 0) + (t.vis === "visible" ? 1000 : 0) + (Number(t.gen) || 0) * 50 + (t.nobj || 0);
+        return (t.paint ? 10000 : 0) + (t.owned ? 8000 : 0) + ((t.bot && !t.owned) ? -8000 : 0) + (t.vis === "visible" ? 1000 : 0) + (Number(t.gen) || 0) * 50 + (t.nobj || 0);
       }
 
       let lastScene = null;
@@ -92,6 +93,7 @@ export function bayHarnessPlugin() {
 
       function settle(job, fallback) {
         if (!job || job.status === "done") return;
+        job.busyPaint = false;
         job.status = "done";
         jobs.delete(job.id);
         clearTimeout(job.timer);
@@ -123,6 +125,13 @@ export function bayHarnessPlugin() {
         if (!list.length) return;
         job.status = "out";
         job.expect = list.length;
+        const painted = list.find((t) => t && t.paint === true);
+        if (painted) {
+          job.busyPaint = true;
+          job.vis = painted.vis;
+          job.nobj = painted.nobj;
+          job.bot = painted.bot;
+        }
         for (const taker of list) {
           if (!taker || taker.res.writableEnded) {
             job.expect -= 1;
@@ -175,13 +184,17 @@ export function bayHarnessPlugin() {
         const method = (req.method ?? "GET").toUpperCase();
 
         if (pathOnly === "/__bay/health" && method === "GET") {
+          const busyJobs = [...jobs.values()].filter((j) => j.status === "out" && j.busyPaint);
           sendJson(res, 200, {
             ok: true,
             takers: takers.length,
             jobs: jobs.size,
             clients: clientCount(),
-            paints: takers.filter((t) => t.paint).length,
-            list: takers.map((t) => ({ vis: t.vis, nobj: t.nobj, paint: t.paint, bot: t.bot, fps: t.fps, ms: t.ms, gen: t.gen })),
+            paints: takers.filter((t) => t.paint).length + busyJobs.length,
+            list: [
+              ...takers.map((t) => ({ vis: t.vis, nobj: t.nobj, paint: t.paint, bot: t.bot, fps: t.fps, ms: t.ms, gen: t.gen, owned: t.owned })),
+              ...busyJobs.map((j) => ({ paint: true, busy: true, fn: j.fn, vis: j.vis, nobj: j.nobj, bot: j.bot })),
+            ],
           });
           return;
         }
@@ -243,6 +256,17 @@ export function bayHarnessPlugin() {
           return;
         }
 
+        if ((pathOnly === "/__bay/abort" || pathOnly === "/__bay/cancel") && method === "POST") {
+          for (const job of [...jobs.values()]) {
+            job.expect = 1;
+            job.replies = [];
+            settle(job, { error: "aborted", value: null });
+          }
+          jobs.clear();
+          sendJson(res, 200, { ok: true, jobs: jobs.size });
+          return;
+        }
+
         if (pathOnly === "/__bay" && method === "POST") {
           readBody(req)
             .then(async (body) => {
@@ -252,7 +276,7 @@ export function bayHarnessPlugin() {
                 return;
               }
               const args = Array.isArray(body.args) ? body.args : [];
-              const waitMs = Math.min(240000, Number(body.waitMs) || 20000);
+              const waitMs = Math.min(fn === "tape" ? 580000 : 240000, Number(body.waitMs) || 20000);
               const id = `c${Date.now().toString(36)}${++seq}`;
               const payload = await new Promise((resolve) => {
                 const timer = setTimeout(() => {
@@ -288,7 +312,7 @@ export function bayHarnessPlugin() {
 
 const FANOUT = new Set(["restage", "run", "load", "reset", "next", "peek", "boot", "reload"]);
 
-/** @typedef {{ id: string, fn: string, args: unknown[], waitMs?: number, status: "open" | "out" | "done", resolve: (v: { value?: unknown, error?: string | null }) => void, timer: NodeJS.Timeout, replies: unknown[], expect: number }} Job */
+/** @typedef {{ id: string, fn: string, args: unknown[], waitMs?: number, status: "open" | "out" | "done", resolve: (v: { value?: unknown, error?: string | null }) => void, timer: NodeJS.Timeout, replies: unknown[], expect: number, busyPaint?: boolean, vis?: string, nobj?: number, bot?: boolean }} Job */
 /** @typedef {{ res: import("node:http").ServerResponse, timer: NodeJS.Timeout, vis: string, nobj: number, paint: boolean, bot: boolean }} Taker */
 
 function readBody(req) {
@@ -325,15 +349,18 @@ if (!(g.__bayPipeCtl && !g.__bayPipeCtl.signal.aborted)) {
     let nobj = 0;
     try { nobj = (g.__bay?.peek?.().objects || []).length; } catch {}
     const bot = typeof navigator !== "undefined" && navigator.webdriver === true;
-    const paint = vis === "visible" && typeof document !== "undefined" && !!document.querySelector("canvas") && !bot;
+    const canvas = typeof document !== "undefined" && !!document.querySelector("canvas");
+    const owned = Boolean(g.__bayOwned);
+    const bake = Boolean(g.__bayBake);
+    const paint = Boolean(canvas && (owned || bake || vis === "visible"));
     const fps = Number(g.__bayFps || 0);
     const ms = Number(g.__bayFrameMs || 0);
     const gen = Number(g.__bayPipeGen || 0);
-    return { vis, nobj, paint, bot, fps, ms, gen };
+    return { vis, nobj, paint, bot, fps, ms, gen, owned };
   };
   const takeUrl = () => {
     const p = paintInfo();
-    return "/__bay/take?wait=10000&vis=" + encodeURIComponent(p.vis) + "&nobj=" + p.nobj + "&paint=" + (p.paint ? "1" : "0") + "&bot=" + (p.bot ? "1" : "0") + "&fps=" + Math.round(p.fps) + "&ms=" + Math.round(p.ms) + "&gen=" + p.gen;
+    return "/__bay/take?wait=10000&vis=" + encodeURIComponent(p.vis) + "&nobj=" + p.nobj + "&paint=" + (p.paint ? "1" : "0") + "&bot=" + (p.bot ? "1" : "0") + "&fps=" + Math.round(p.fps) + "&ms=" + Math.round(p.ms) + "&gen=" + p.gen + "&owned=" + (p.owned ? "1" : "0");
   };
   const run = async (fn, args) => {
     const api = g.__bay;
@@ -392,7 +419,7 @@ if (!(g.__bayPipeCtl && !g.__bayPipeCtl.signal.aborted)) {
         const jobKey = String(msg.id) + ":" + String(msg.fn ?? "");
         let pending = jobs.get(jobKey);
         if (!pending) {
-          const cap = Math.min(240000, Number(msg.waitMs) || 16000);
+          const cap = Math.min(String(msg.fn ?? "") === "tape" ? 580000 : 240000, Number(msg.waitMs) || 16000);
           pending = Promise.race([
             run(String(msg.fn ?? ""), Array.isArray(msg.args) ? msg.args : []),
             new Promise((res) => setTimeout(() => res({ error: "run-timeout" }), cap)),
@@ -408,8 +435,9 @@ if (!(g.__bayPipeCtl && !g.__bayPipeCtl.signal.aborted)) {
         await fetch("/__bay/done", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ id: msg.id, ...out, paint: after.paint, nobj: after.nobj, gen: after.gen }),
+          body: JSON.stringify({ id: msg.id, ...out, paint: after.paint, nobj: after.nobj, gen: after.gen, owned: after.owned }),
         });
+        jobs.delete(jobKey);
       } catch {
         if (ctl.signal.aborted) return;
         await new Promise((res) => setTimeout(res, 500));

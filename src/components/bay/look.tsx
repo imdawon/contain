@@ -82,8 +82,11 @@ export function LabLook() {
 
   const stageN = useBay((s) => s.stageN);
   const nEnt = useBay((s) => s.entities.length);
+  const halfpipe = Boolean(useBay((s) => s.scene?.id?.startsWith("halfpipe-")));
   useLayoutEffect(() => {
-    gl.shadowMap.enabled = false;
+    gl.shadowMap.enabled = halfpipe;
+    if (halfpipe) gl.shadowMap.type = THREE.PCFSoftShadowMap;
+    (window as unknown as { __bayShadows?: boolean }).__bayShadows = halfpipe;
     scene.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (!mesh.isMesh) return;
@@ -94,11 +97,17 @@ export function LabLook() {
       }
       if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
       const span = (mesh.geometry.boundingSphere?.radius ?? 1) * 2 * Math.max(mesh.scale.x, mesh.scale.y, mesh.scale.z);
-      // 800 m hangar floor receiving 2048² PCF shadows is what kills Chromium WebGL.
-      mesh.castShadow = span < 8;
-      mesh.receiveShadow = span < 16;
+      const isFloor = mesh.geometry.type === "PlaneGeometry" && span > 80;
+      if (!halfpipe) {
+        // 800 m hangar floor receiving 2048² PCF shadows is what kills Chromium WebGL.
+        mesh.castShadow = span < 8;
+        mesh.receiveShadow = span < 16;
+        return;
+      }
+      mesh.castShadow = !isFloor && span < 48;
+      mesh.receiveShadow = !isFloor;
     });
-  }, [scene, stageN, nEnt, gl]);
+  }, [scene, stageN, nEnt, gl, halfpipe]);
 
   const theme = useBay((s) => sceneTheme(s.scene));
   return (
@@ -110,7 +119,7 @@ export function LabLook() {
 }
 
 function HangarLamps() {
-  const zs = [0, 30, 60, 90, 120, 150];
+  const zs = [0, 40, 80, 120, 160, 200, 240, 280, 320];
   return (
     <group>
       {zs.map((z) => (
@@ -124,6 +133,7 @@ function HangarLamps() {
 }
 
 function LabLights({ theme }: { theme: ArenaTheme | null }) {
+  const halfpipe = Boolean(useBay((s) => s.scene?.id?.startsWith("halfpipe-")));
   const light = useRef<THREE.DirectionalLight>(null);
   const target = useMemo(() => new THREE.Object3D(), []);
   useFrame(() => {
@@ -156,7 +166,7 @@ function LabLights({ theme }: { theme: ArenaTheme | null }) {
         ref={light}
         intensity={theme ? ARENA_LOOK[theme].sunI : 3.4}
         color={theme ? ARENA_LOOK[theme].sunC : "#fff6e4"}
-        castShadow={false}
+        castShadow={halfpipe}
         shadow-bias={-0.00018}
         shadow-normalBias={0.03}
         shadow-camera-near={8}
