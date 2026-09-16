@@ -355,7 +355,7 @@ export function applySteelHits(shell: SteelShell, hits: SteelHit[]) {
     const sigY = kind === "wheel" ? halfH * 0.55 : sigma;
     const twoR = 2 * sigR * sigR;
     const twoY = 2 * sigY * sigY;
-    const depth = rolling ? 0.012 : Math.min(hitCap, maxDent, excess / Math.max(0.5, stiff));
+    const depth = rolling ? 0.022 : Math.min(hitCap, maxDent, excess / Math.max(0.5, stiff));
     if (kind !== "drum" && depth < 0.002) continue;
 
     if (kind === "drum") {

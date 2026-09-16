@@ -68,7 +68,7 @@ type DragJob = {
   floppy: boolean;
 };
 
-const PIPE_GEN = 178;
+const PIPE_GEN = 179;
 
 const g = globalThis as unknown as {
   __bayHist?: { frames: HistFrame[]; lastHistT: number; lastEventN: number };

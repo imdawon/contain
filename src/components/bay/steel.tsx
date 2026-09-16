@@ -186,7 +186,7 @@ function SteelBody({
       const p = b.translation();
       const v = b.linvel();
       let vz = v.z;
-      if (lastWheelGrounded && vz < 8) vz = 8;
+      if (vz < 8) vz = 8;
       b.setTranslation({ x: 0, y: p.y, z: p.z }, true);
       b.setLinvel({ x: 0, y: v.y, z: vz }, true);
       b.setAngvel({ x: -vz / Math.max(0.08, WHEEL.radius), y: 0, z: 0 }, true);
@@ -295,10 +295,7 @@ function SteelBody({
           .sort((a, b) => b.impulse - a.impulse)
           .slice(0, 1);
         const hits = slammed ? slams : pipeRoll;
-        const rollN = ((shell as { rollN?: number }).rollN ?? 0) + 1;
-        (shell as { rollN?: number }).rollN = rollN;
-        const rollTick = !slammed && rollN % 12 === 0;
-        if (hits.length > 0 && (slammed || rollTick)) {
+        if (hits.length > 0) {
           const reach = WHEEL.radius * 1.7 + WHEEL.thick;
           const local = hits.some((h) => Math.hypot(h.x, h.y, h.z) > reach) ? worldHitsToLocal(b, hits) : hits;
           added += applySteelHits(shell, local);
