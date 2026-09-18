@@ -1,0 +1,309 @@
+{
+  "id": "td-04-chicken-twist",
+  "name": "TD4 Chicken Twist",
+  "blurb": "Twisting road. Oncoming bus, van, car. Survive the weave or collect them all.",
+  "file": "scenes/td-04-chicken-twist.json",
+  "select": "grenade",
+  "inspect": false,
+  "track": {
+    "ref": "dummy-chest"
+  },
+  "cam": {
+    "offset": [
+      0.0,
+      2.8,
+      -7.5
+    ],
+    "look": [
+      0.0,
+      -0.2,
+      14
+    ],
+    "fov": 46
+  },
+  "entities": [
+    {
+      "name": "leg-a",
+      "kind": "hill",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        10,
+        2.5,
+        20
+      ],
+      "fixed": true,
+      "grip": 0.08
+    },
+    {
+      "name": "leg-b",
+      "kind": "hill",
+      "pos": [
+        3.5,
+        0,
+        22
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        10,
+        2.5,
+        20
+      ],
+      "fixed": true,
+      "grip": 0.08
+    },
+    {
+      "name": "leg-c",
+      "kind": "hill",
+      "pos": [
+        0,
+        0,
+        44
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        10,
+        2.5,
+        22
+      ],
+      "fixed": true,
+      "grip": 0.08
+    },
+    {
+      "name": "guide-1",
+      "kind": "wall",
+      "pos": [
+        -4.5,
+        1.0,
+        6
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        0.5,
+        2.0,
+        10
+      ],
+      "fixed": true
+    },
+    {
+      "name": "guide-2",
+      "kind": "wall",
+      "pos": [
+        7.5,
+        1.0,
+        24
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        0.5,
+        2.0,
+        12
+      ],
+      "fixed": true
+    },
+    {
+      "name": "guide-3",
+      "kind": "wall",
+      "pos": [
+        -4.5,
+        1.0,
+        48
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        0.5,
+        2.0,
+        12
+      ],
+      "fixed": true
+    },
+    {
+      "name": "fleet-bus",
+      "kind": "bus",
+      "pos": [
+        3.2,
+        3.6,
+        34
+      ],
+      "rot": [
+        0,
+        3.0,
+        0
+      ],
+      "vel": [
+        0.5,
+        0,
+        -10
+      ]
+    },
+    {
+      "name": "fleet-van",
+      "kind": "van",
+      "pos": [
+        4.0,
+        3.1,
+        40
+      ],
+      "rot": [
+        0,
+        3.05,
+        0
+      ],
+      "vel": [
+        0.3,
+        0,
+        -11
+      ]
+    },
+    {
+      "name": "fleet-car",
+      "kind": "car",
+      "pos": [
+        2.6,
+        2.75,
+        46
+      ],
+      "rot": [
+        0,
+        3.1,
+        0
+      ],
+      "vel": [
+        0.2,
+        0,
+        -12
+      ]
+    },
+    {
+      "name": "fleet-loader",
+      "kind": "loader",
+      "pos": [
+        3.8,
+        3.75,
+        52
+      ],
+      "rot": [
+        0,
+        3.0,
+        0
+      ],
+      "vel": [
+        0.1,
+        0,
+        -8
+      ]
+    },
+    {
+      "name": "wagon",
+      "kind": "wagon",
+      "pos": [
+        0.0,
+        2.6,
+        -8.0
+      ],
+      "rot": [
+        0.08,
+        0,
+        0
+      ],
+      "vel": [
+        0.0,
+        0.0,
+        11.5
+      ],
+      "grip": 0.06,
+      "bounce": 0.0
+    },
+    {
+      "name": "dummy",
+      "kind": "dummy",
+      "pos": [
+        -0.02,
+        2.63,
+        -8.04
+      ],
+      "rot": [
+        0.08,
+        0,
+        0
+      ],
+      "vel": [
+        0.0,
+        0.0,
+        11.5
+      ],
+      "live": false
+    },
+    {
+      "name": "nade",
+      "kind": "grenade",
+      "pos": [
+        0.24,
+        2.72,
+        -7.65
+      ],
+      "rot": [
+        0.08,
+        0,
+        0
+      ],
+      "vel": [
+        0.0,
+        0.0,
+        11.5
+      ],
+      "grip": 0.8,
+      "fuse": 2.4
+    }
+  ],
+  "ties": [
+    {
+      "a": "dummy-hips",
+      "b": "wagon"
+    },
+    {
+      "a": "dummy-chest",
+      "b": "wagon"
+    },
+    {
+      "a": "dummy-shin-l",
+      "b": "wagon"
+    },
+    {
+      "a": "dummy-shin-r",
+      "b": "wagon"
+    },
+    {
+      "a": "nade",
+      "b": "wagon"
+    }
+  ]
+}

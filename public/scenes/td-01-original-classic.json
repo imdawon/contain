@@ -1,0 +1,224 @@
+{
+  "id": "td-01-original-classic",
+  "name": "TD1 Original Classic",
+  "blurb": "Short hill, a wall in the path, then a jump. Does the dummy clear or pancake?",
+  "file": "scenes/td-01-original-classic.json",
+  "select": "grenade",
+  "inspect": false,
+  "track": {
+    "ref": "dummy-chest"
+  },
+  "cam": {
+    "offset": [
+      0.0,
+      2.0,
+      -5.8
+    ],
+    "look": [
+      0.0,
+      -0.1,
+      8
+    ],
+    "fov": 50
+  },
+  "airborne": {
+    "minY": 1.5,
+    "minZ": 6.0
+  },
+  "entities": [
+    {
+      "name": "road",
+      "kind": "hill",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        10,
+        5.5,
+        28
+      ],
+      "fixed": true,
+      "grip": 0.08
+    },
+    {
+      "name": "brick",
+      "kind": "wall",
+      "pos": [
+        0,
+        1.6,
+        14
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        5.5,
+        3.2,
+        0.7
+      ],
+      "fixed": true
+    },
+    {
+      "name": "kick",
+      "kind": "ramp",
+      "pos": [
+        0,
+        0.2,
+        22
+      ],
+      "rot": [
+        0.15,
+        0,
+        0
+      ],
+      "size": [
+        8,
+        4.5,
+        12
+      ],
+      "fixed": true,
+      "grip": 0.08
+    },
+    {
+      "name": "pin-l",
+      "kind": "drum",
+      "pos": [
+        -1.1,
+        0.64,
+        34
+      ],
+      "mass": 80,
+      "grip": 0.12,
+      "bounce": 0.02
+    },
+    {
+      "name": "pin-c",
+      "kind": "drum",
+      "pos": [
+        0.0,
+        0.64,
+        34
+      ],
+      "mass": 80,
+      "grip": 0.12,
+      "bounce": 0.02
+    },
+    {
+      "name": "pin-r",
+      "kind": "drum",
+      "pos": [
+        1.1,
+        0.64,
+        34
+      ],
+      "mass": 80,
+      "grip": 0.12,
+      "bounce": 0.02
+    },
+    {
+      "name": "pin-t",
+      "kind": "drum",
+      "pos": [
+        0.0,
+        1.96,
+        34
+      ],
+      "mass": 80,
+      "grip": 0.12,
+      "bounce": 0.02
+    },
+    {
+      "name": "wagon",
+      "kind": "wagon",
+      "pos": [
+        0.0,
+        5.2,
+        -10.5
+      ],
+      "rot": [
+        0.42,
+        0,
+        0
+      ],
+      "vel": [
+        0.0,
+        0.0,
+        9.5
+      ],
+      "grip": 0.06,
+      "bounce": 0.0
+    },
+    {
+      "name": "dummy",
+      "kind": "dummy",
+      "pos": [
+        -0.02,
+        5.23,
+        -10.54
+      ],
+      "rot": [
+        0.42,
+        0,
+        0
+      ],
+      "vel": [
+        0.0,
+        0.0,
+        9.5
+      ],
+      "live": false
+    },
+    {
+      "name": "nade",
+      "kind": "grenade",
+      "pos": [
+        0.24,
+        5.32,
+        -10.15
+      ],
+      "rot": [
+        0.42,
+        0,
+        0
+      ],
+      "vel": [
+        0.0,
+        0.0,
+        9.5
+      ],
+      "grip": 0.8,
+      "fuse": 2.0
+    }
+  ],
+  "ties": [
+    {
+      "a": "dummy-hips",
+      "b": "wagon"
+    },
+    {
+      "a": "dummy-chest",
+      "b": "wagon"
+    },
+    {
+      "a": "dummy-shin-l",
+      "b": "wagon"
+    },
+    {
+      "a": "dummy-shin-r",
+      "b": "wagon"
+    },
+    {
+      "a": "nade",
+      "b": "wagon"
+    }
+  ]
+}

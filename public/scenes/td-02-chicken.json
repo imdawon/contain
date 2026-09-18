@@ -1,0 +1,230 @@
+{
+  "id": "td-02-chicken",
+  "name": "TD2 Chicken",
+  "blurb": "Straight road. Oncoming car. Who swerves \u2014 or who wins the smash?",
+  "file": "scenes/td-02-chicken.json",
+  "select": "grenade",
+  "inspect": false,
+  "track": {
+    "ref": "dummy-chest"
+  },
+  "cam": {
+    "offset": [
+      0.0,
+      2.4,
+      -7.0
+    ],
+    "look": [
+      0.0,
+      -0.2,
+      14
+    ],
+    "fov": 46
+  },
+  "entities": [
+    {
+      "name": "road",
+      "kind": "hill",
+      "pos": [
+        0,
+        0,
+        8
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        12,
+        2.2,
+        48
+      ],
+      "fixed": true,
+      "grip": 0.08
+    },
+    {
+      "name": "bar-l1",
+      "kind": "wall",
+      "pos": [
+        -4.2,
+        1.0,
+        10
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        0.5,
+        2.0,
+        8
+      ],
+      "fixed": true
+    },
+    {
+      "name": "bar-l2",
+      "kind": "wall",
+      "pos": [
+        -4.2,
+        1.0,
+        22
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        0.5,
+        2.0,
+        8
+      ],
+      "fixed": true
+    },
+    {
+      "name": "bar-r1",
+      "kind": "wall",
+      "pos": [
+        4.2,
+        1.0,
+        10
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        0.5,
+        2.0,
+        8
+      ],
+      "fixed": true
+    },
+    {
+      "name": "bar-r2",
+      "kind": "wall",
+      "pos": [
+        4.2,
+        1.0,
+        22
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        0.5,
+        2.0,
+        8
+      ],
+      "fixed": true
+    },
+    {
+      "name": "oncoming",
+      "kind": "car",
+      "pos": [
+        0.3,
+        2.75,
+        36
+      ],
+      "rot": [
+        0,
+        3.1416,
+        0
+      ],
+      "vel": [
+        0,
+        0,
+        -14
+      ]
+    },
+    {
+      "name": "wagon",
+      "kind": "wagon",
+      "pos": [
+        0.0,
+        2.4,
+        -6.0
+      ],
+      "rot": [
+        0.05,
+        0,
+        0
+      ],
+      "vel": [
+        0.0,
+        0.0,
+        12.0
+      ],
+      "grip": 0.06,
+      "bounce": 0.0
+    },
+    {
+      "name": "dummy",
+      "kind": "dummy",
+      "pos": [
+        -0.02,
+        2.4299999999999997,
+        -6.04
+      ],
+      "rot": [
+        0.05,
+        0,
+        0
+      ],
+      "vel": [
+        0.0,
+        0.0,
+        12.0
+      ],
+      "live": false
+    },
+    {
+      "name": "nade",
+      "kind": "grenade",
+      "pos": [
+        0.24,
+        2.52,
+        -5.65
+      ],
+      "rot": [
+        0.05,
+        0,
+        0
+      ],
+      "vel": [
+        0.0,
+        0.0,
+        12.0
+      ],
+      "grip": 0.8,
+      "fuse": 2.2
+    }
+  ],
+  "ties": [
+    {
+      "a": "dummy-hips",
+      "b": "wagon"
+    },
+    {
+      "a": "dummy-chest",
+      "b": "wagon"
+    },
+    {
+      "a": "dummy-shin-l",
+      "b": "wagon"
+    },
+    {
+      "a": "dummy-shin-r",
+      "b": "wagon"
+    },
+    {
+      "a": "nade",
+      "b": "wagon"
+    }
+  ]
+}

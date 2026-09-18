@@ -1,0 +1,44 @@
+{
+  "title": "Turbo Dismount first five \u2014 CONTAIN ports",
+  "note": "Secret Exit is the studio. Mapped the first five standard maps (IGN/fandom order). Not 1:1 car rips \u2014 CONTAIN dummy+wagon+grenade cast with kit props.",
+  "sources": [
+    "https://www.ign.com/wikis/turbo-dismount/Levels",
+    "https://dismount.fandom.com/wiki/Original_Classic",
+    "https://dismount.fandom.com/wiki/Chicken",
+    "https://dismount.fandom.com/wiki/Aiming_High",
+    "https://dismount.fandom.com/wiki/Chicken_Twist",
+    "https://dismount.fandom.com/wiki/Space_Program"
+  ],
+  "levels": [
+    {
+      "id": "td-01-original-classic",
+      "name": "TD1 Original Classic",
+      "blurb": "Short hill, a wall in the path, then a jump. Does the dummy clear or pancake?",
+      "td_source": "Original Classic"
+    },
+    {
+      "id": "td-02-chicken",
+      "name": "TD2 Chicken",
+      "blurb": "Straight road. Oncoming car. Who swerves \u2014 or who wins the smash?",
+      "td_source": "Chicken"
+    },
+    {
+      "id": "td-03-aiming-high",
+      "name": "TD3 Aiming High",
+      "blurb": "Dive the underpass while traffic sits overhead. Clear the mouth or eat the span.",
+      "td_source": "Aiming High"
+    },
+    {
+      "id": "td-04-chicken-twist",
+      "name": "TD4 Chicken Twist",
+      "blurb": "Twisting road. Oncoming bus, van, car. Survive the weave or collect them all.",
+      "td_source": "Chicken Twist"
+    },
+    {
+      "id": "td-05-space-program",
+      "name": "TD5 Space Program",
+      "blurb": "Long steep ramp toward the sky. Make the lip \u2014 then the ground collects the score.",
+      "td_source": "Space Program"
+    }
+  ]
+}

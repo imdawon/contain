@@ -1,0 +1,348 @@
+{
+  "id": "wheel-100-spaced",
+  "name": "Wheel 100 t \u2014 spaced pipes",
+  "blurb": "100 t coil rolls three half-pipes spaced apart; drums crumple at each mouth",
+  "cam": {
+    "offset": [
+      0,
+      6,
+      -14
+    ],
+    "look": [
+      0,
+      -1.5,
+      18
+    ],
+    "fov": 46
+  },
+  "entities": [
+    {
+      "name": "pipe1-1",
+      "kind": "ramp",
+      "pos": [
+        0,
+        40.0,
+        20
+      ]
+    },
+    {
+      "name": "pipe1-2",
+      "kind": "ramp",
+      "pos": [
+        0,
+        35.5,
+        38
+      ]
+    },
+    {
+      "name": "pipe1-3",
+      "kind": "ramp",
+      "pos": [
+        0,
+        31.0,
+        56
+      ]
+    },
+    {
+      "name": "pipe1-4",
+      "kind": "ramp",
+      "pos": [
+        0,
+        26.5,
+        74
+      ]
+    },
+    {
+      "name": "d1",
+      "kind": "drum",
+      "pos": [
+        -2.2,
+        34.2,
+        56
+      ],
+      "mass": 80,
+      "bounce": 0.05
+    },
+    {
+      "name": "d2",
+      "kind": "drum",
+      "pos": [
+        -2.2,
+        34.2,
+        60
+      ],
+      "mass": 80,
+      "bounce": 0.05
+    },
+    {
+      "name": "d3",
+      "kind": "drum",
+      "pos": [
+        0,
+        34.2,
+        56
+      ],
+      "mass": 80,
+      "bounce": 0.05
+    },
+    {
+      "name": "d4",
+      "kind": "drum",
+      "pos": [
+        0,
+        34.2,
+        60
+      ],
+      "mass": 80,
+      "bounce": 0.05
+    },
+    {
+      "name": "d5",
+      "kind": "drum",
+      "pos": [
+        2.2,
+        34.2,
+        56
+      ],
+      "mass": 80,
+      "bounce": 0.05
+    },
+    {
+      "name": "d6",
+      "kind": "drum",
+      "pos": [
+        2.2,
+        34.2,
+        60
+      ],
+      "mass": 80,
+      "bounce": 0.05
+    },
+    {
+      "name": "pipe2-1",
+      "kind": "ramp",
+      "pos": [
+        0,
+        28.0,
+        120
+      ]
+    },
+    {
+      "name": "pipe2-2",
+      "kind": "ramp",
+      "pos": [
+        0,
+        23.5,
+        138
+      ]
+    },
+    {
+      "name": "pipe2-3",
+      "kind": "ramp",
+      "pos": [
+        0,
+        19.0,
+        156
+      ]
+    },
+    {
+      "name": "pipe2-4",
+      "kind": "ramp",
+      "pos": [
+        0,
+        14.5,
+        174
+      ]
+    },
+    {
+      "name": "d7",
+      "kind": "drum",
+      "pos": [
+        -2.2,
+        22.2,
+        156
+      ],
+      "mass": 80,
+      "bounce": 0.05
+    },
+    {
+      "name": "d8",
+      "kind": "drum",
+      "pos": [
+        -2.2,
+        22.2,
+        160
+      ],
+      "mass": 80,
+      "bounce": 0.05
+    },
+    {
+      "name": "d9",
+      "kind": "drum",
+      "pos": [
+        0,
+        22.2,
+        156
+      ],
+      "mass": 80,
+      "bounce": 0.05
+    },
+    {
+      "name": "d10",
+      "kind": "drum",
+      "pos": [
+        0,
+        22.2,
+        160
+      ],
+      "mass": 80,
+      "bounce": 0.05
+    },
+    {
+      "name": "d11",
+      "kind": "drum",
+      "pos": [
+        2.2,
+        22.2,
+        156
+      ],
+      "mass": 80,
+      "bounce": 0.05
+    },
+    {
+      "name": "d12",
+      "kind": "drum",
+      "pos": [
+        2.2,
+        22.2,
+        160
+      ],
+      "mass": 80,
+      "bounce": 0.05
+    },
+    {
+      "name": "pipe3-1",
+      "kind": "ramp",
+      "pos": [
+        0,
+        16.0,
+        220
+      ]
+    },
+    {
+      "name": "pipe3-2",
+      "kind": "ramp",
+      "pos": [
+        0,
+        11.5,
+        238
+      ]
+    },
+    {
+      "name": "pipe3-3",
+      "kind": "ramp",
+      "pos": [
+        0,
+        7.0,
+        256
+      ]
+    },
+    {
+      "name": "pipe3-4",
+      "kind": "ramp",
+      "pos": [
+        0,
+        2.5,
+        274
+      ]
+    },
+    {
+      "name": "d13",
+      "kind": "drum",
+      "pos": [
+        -2.2,
+        10.2,
+        256
+      ],
+      "mass": 80,
+      "bounce": 0.05
+    },
+    {
+      "name": "d14",
+      "kind": "drum",
+      "pos": [
+        -2.2,
+        10.2,
+        260
+      ],
+      "mass": 80,
+      "bounce": 0.05
+    },
+    {
+      "name": "d15",
+      "kind": "drum",
+      "pos": [
+        0,
+        10.2,
+        256
+      ],
+      "mass": 80,
+      "bounce": 0.05
+    },
+    {
+      "name": "d16",
+      "kind": "drum",
+      "pos": [
+        0,
+        10.2,
+        260
+      ],
+      "mass": 80,
+      "bounce": 0.05
+    },
+    {
+      "name": "d17",
+      "kind": "drum",
+      "pos": [
+        2.2,
+        10.2,
+        256
+      ],
+      "mass": 80,
+      "bounce": 0.05
+    },
+    {
+      "name": "d18",
+      "kind": "drum",
+      "pos": [
+        2.2,
+        10.2,
+        260
+      ],
+      "mass": 80,
+      "bounce": 0.05
+    },
+    {
+      "name": "coil",
+      "kind": "wheel",
+      "pos": [
+        0,
+        48,
+        12
+      ],
+      "rot": [
+        0,
+        0,
+        1.571
+      ],
+      "mass": 100000,
+      "grip": 0.85,
+      "bounce": 0,
+      "vel": [
+        0,
+        -1,
+        10
+      ]
+    }
+  ]
+}
