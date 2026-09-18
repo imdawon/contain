@@ -1,0 +1,294 @@
+{
+  "id": "halfpipe-crush",
+  "name": "Coil vs dump in the U-pipe",
+  "blurb": "100 t coil rolls the half-pipe and smashes a dump parked in the trough",
+  "file": "scenes/halfpipe-100.json",
+  "select": "coil",
+  "inspect": false,
+  "theme": "golf",
+  "track": {
+    "ref": "coil"
+  },
+  "cam": {
+    "offset": [
+      0,
+      2.6,
+      -7.2
+    ],
+    "look": [
+      0,
+      -0.2,
+      12
+    ],
+    "fov": 46
+  },
+  "entities": [
+    {
+      "name": "approach",
+      "kind": "ramp",
+      "pos": [
+        0,
+        4.69,
+        12
+      ],
+      "rot": [
+        0.3,
+        0,
+        0
+      ],
+      "size": [
+        24,
+        10,
+        24
+      ],
+      "cut": 1,
+      "grade": 0,
+      "grip": 0.85,
+      "bounce": 0
+    },
+    {
+      "name": "pipe-2",
+      "kind": "ramp",
+      "pos": [
+        0,
+        1.1,
+        40
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        24,
+        10,
+        34
+      ],
+      "cut": 1,
+      "grade": 0,
+      "grip": 0.85,
+      "bounce": 0
+    },
+    {
+      "name": "pipe-3",
+      "kind": "ramp",
+      "pos": [
+        0,
+        1.1,
+        72
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        24,
+        10,
+        34
+      ],
+      "cut": 1,
+      "grade": 0,
+      "grip": 0.85,
+      "bounce": 0
+    },
+    {
+      "name": "pipe-4",
+      "kind": "ramp",
+      "pos": [
+        0,
+        1.1,
+        104
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        24,
+        10,
+        34
+      ],
+      "cut": 1,
+      "grade": 0,
+      "grip": 0.85,
+      "bounce": 0
+    },
+    {
+      "name": "pipe-5",
+      "kind": "ramp",
+      "pos": [
+        0,
+        1.1,
+        136
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        24,
+        10,
+        34
+      ],
+      "cut": 1,
+      "grade": 0,
+      "grip": 0.85,
+      "bounce": 0
+    },
+    {
+      "name": "pipe-6",
+      "kind": "ramp",
+      "pos": [
+        0,
+        1.1,
+        168
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        24,
+        10,
+        34
+      ],
+      "cut": 1,
+      "grade": 0,
+      "grip": 0.85,
+      "bounce": 0
+    },
+    {
+      "name": "pipe-7",
+      "kind": "ramp",
+      "pos": [
+        0,
+        1.1,
+        200
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        24,
+        10,
+        34
+      ],
+      "cut": 1,
+      "grade": 0,
+      "grip": 0.85,
+      "bounce": 0
+    },
+    {
+      "name": "pipe-8",
+      "kind": "ramp",
+      "pos": [
+        0,
+        1.1,
+        232
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        24,
+        10,
+        34
+      ],
+      "cut": 1,
+      "grade": 0,
+      "grip": 0.85,
+      "bounce": 0
+    },
+    {
+      "name": "pipe-9",
+      "kind": "ramp",
+      "pos": [
+        0,
+        1.1,
+        264
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        24,
+        10,
+        34
+      ],
+      "cut": 1,
+      "grade": 0,
+      "grip": 0.85,
+      "bounce": 0
+    },
+    {
+      "name": "pipe-10",
+      "kind": "ramp",
+      "pos": [
+        0,
+        1.1,
+        296
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        24,
+        10,
+        34
+      ],
+      "cut": 1,
+      "grade": 0,
+      "grip": 0.85,
+      "bounce": 0
+    },
+    {
+      "name": "dump",
+      "kind": "dumptruck",
+      "pos": [
+        0.4,
+        3.6,
+        72
+      ],
+      "rot": [
+        0,
+        0.25,
+        0
+      ]
+    },
+    {
+      "name": "coil",
+      "kind": "wheel",
+      "pos": [
+        0,
+        3.52,
+        28
+      ],
+      "rot": [
+        0,
+        0,
+        1.571
+      ],
+      "mass": 100000,
+      "grip": 0.85,
+      "bounce": 0,
+      "vel": [
+        0,
+        -0.5,
+        12
+      ]
+    }
+  ],
+  "ties": []
+}

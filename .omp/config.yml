@@ -1,6 +1,10 @@
-# CONTAIN project roles. High stays on the primary.
+# CONTAIN project roles.
+# Parent/default coding: Grok 4.6 high (dawon 2026-09-15).
+# Smol helpers only: Grok 4.6 medium.
 # contain-bay owns every bay.mjs restage/peek/tape.
 # researcher owns web research (Exa first).
 modelRoles:
+  default: cursor/cursor-grok-4.6:high
+  smol: cursor/cursor-grok-4.6:medium
   contain-bay: cursor/cursor-grok-4.6:medium
   researcher: cursor/cursor-grok-4.6:medium

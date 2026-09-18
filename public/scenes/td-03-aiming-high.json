@@ -1,0 +1,269 @@
+{
+  "id": "td-03-aiming-high",
+  "name": "TD3 Aiming High",
+  "blurb": "Dive the underpass while traffic sits overhead. Clear the mouth or eat the span.",
+  "file": "scenes/td-03-aiming-high.json",
+  "select": "grenade",
+  "inspect": false,
+  "track": {
+    "ref": "dummy-chest"
+  },
+  "cam": {
+    "offset": [
+      0.0,
+      2.6,
+      -8.0
+    ],
+    "look": [
+      0.0,
+      0.0,
+      12
+    ],
+    "fov": 48
+  },
+  "entities": [
+    {
+      "name": "approach",
+      "kind": "hill",
+      "pos": [
+        0,
+        0,
+        0
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        12,
+        4.0,
+        22
+      ],
+      "fixed": true,
+      "grip": 0.08
+    },
+    {
+      "name": "pier-l",
+      "kind": "wall",
+      "pos": [
+        -3.2,
+        2.2,
+        18
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        1.2,
+        4.5,
+        2.0
+      ],
+      "fixed": true
+    },
+    {
+      "name": "pier-r",
+      "kind": "wall",
+      "pos": [
+        3.2,
+        2.2,
+        18
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        1.2,
+        4.5,
+        2.0
+      ],
+      "fixed": true
+    },
+    {
+      "name": "span",
+      "kind": "plank",
+      "pos": [
+        0,
+        4.4,
+        18
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        7.5,
+        0.35,
+        3.5
+      ],
+      "fixed": true
+    },
+    {
+      "name": "traffic1",
+      "kind": "van",
+      "pos": [
+        -1.5,
+        5.6,
+        20
+      ],
+      "rot": [
+        0,
+        0.1,
+        0
+      ]
+    },
+    {
+      "name": "traffic2",
+      "kind": "car",
+      "pos": [
+        1.8,
+        5.4,
+        24
+      ],
+      "rot": [
+        0,
+        -0.15,
+        0
+      ]
+    },
+    {
+      "name": "traffic3",
+      "kind": "bus",
+      "pos": [
+        0.2,
+        5.9,
+        30
+      ],
+      "rot": [
+        0,
+        0.05,
+        0
+      ]
+    },
+    {
+      "name": "low-1",
+      "kind": "drum",
+      "pos": [
+        -1.0,
+        0.64,
+        16
+      ],
+      "mass": 80,
+      "grip": 0.12,
+      "bounce": 0.02
+    },
+    {
+      "name": "low-2",
+      "kind": "drum",
+      "pos": [
+        1.0,
+        0.64,
+        16
+      ],
+      "mass": 80,
+      "grip": 0.12,
+      "bounce": 0.02
+    },
+    {
+      "name": "low-3",
+      "kind": "drum",
+      "pos": [
+        0.0,
+        0.64,
+        19
+      ],
+      "mass": 80,
+      "grip": 0.12,
+      "bounce": 0.02
+    },
+    {
+      "name": "wagon",
+      "kind": "wagon",
+      "pos": [
+        0.0,
+        3.8,
+        -9.0
+      ],
+      "rot": [
+        0.25,
+        0,
+        0
+      ],
+      "vel": [
+        0.0,
+        0.0,
+        11.0
+      ],
+      "grip": 0.06,
+      "bounce": 0.0
+    },
+    {
+      "name": "dummy",
+      "kind": "dummy",
+      "pos": [
+        -0.02,
+        3.8299999999999996,
+        -9.04
+      ],
+      "rot": [
+        0.25,
+        0,
+        0
+      ],
+      "vel": [
+        0.0,
+        0.0,
+        11.0
+      ],
+      "live": false
+    },
+    {
+      "name": "nade",
+      "kind": "grenade",
+      "pos": [
+        0.24,
+        3.92,
+        -8.65
+      ],
+      "rot": [
+        0.25,
+        0,
+        0
+      ],
+      "vel": [
+        0.0,
+        0.0,
+        11.0
+      ],
+      "grip": 0.8,
+      "fuse": 1.9
+    }
+  ],
+  "ties": [
+    {
+      "a": "dummy-hips",
+      "b": "wagon"
+    },
+    {
+      "a": "dummy-chest",
+      "b": "wagon"
+    },
+    {
+      "a": "dummy-shin-l",
+      "b": "wagon"
+    },
+    {
+      "a": "dummy-shin-r",
+      "b": "wagon"
+    },
+    {
+      "a": "nade",
+      "b": "wagon"
+    }
+  ]
+}

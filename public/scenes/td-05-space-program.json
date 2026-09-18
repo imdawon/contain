@@ -1,0 +1,217 @@
+{
+  "id": "td-05-space-program",
+  "name": "TD5 Space Program",
+  "blurb": "Long steep ramp toward the sky. Make the lip \u2014 then the ground collects the score.",
+  "file": "scenes/td-05-space-program.json",
+  "select": "grenade",
+  "inspect": false,
+  "track": {
+    "ref": "dummy-chest"
+  },
+  "cam": {
+    "offset": [
+      0.0,
+      3.5,
+      -10.0
+    ],
+    "look": [
+      0.0,
+      0.5,
+      18
+    ],
+    "fov": 44
+  },
+  "airborne": {
+    "minY": 4.0,
+    "minZ": 20.0
+  },
+  "entities": [
+    {
+      "name": "pad",
+      "kind": "hill",
+      "pos": [
+        0,
+        0,
+        -4
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        12,
+        3.0,
+        16
+      ],
+      "fixed": true,
+      "grip": 0.08
+    },
+    {
+      "name": "space-ramp",
+      "kind": "hill",
+      "pos": [
+        0,
+        0,
+        18
+      ],
+      "rot": [
+        0,
+        0,
+        0
+      ],
+      "size": [
+        14,
+        22,
+        40
+      ],
+      "fixed": true,
+      "grip": 0.08,
+      "grade": 0.15
+    },
+    {
+      "name": "land-1",
+      "kind": "drum",
+      "pos": [
+        -2.0,
+        0.64,
+        62
+      ],
+      "mass": 80,
+      "grip": 0.12,
+      "bounce": 0.02
+    },
+    {
+      "name": "land-2",
+      "kind": "drum",
+      "pos": [
+        0.0,
+        0.64,
+        64
+      ],
+      "mass": 80,
+      "grip": 0.12,
+      "bounce": 0.02
+    },
+    {
+      "name": "land-3",
+      "kind": "drum",
+      "pos": [
+        2.0,
+        0.64,
+        62
+      ],
+      "mass": 80,
+      "grip": 0.12,
+      "bounce": 0.02
+    },
+    {
+      "name": "land-4",
+      "kind": "drum",
+      "pos": [
+        -1.0,
+        1.96,
+        66
+      ],
+      "mass": 80,
+      "grip": 0.12,
+      "bounce": 0.02
+    },
+    {
+      "name": "land-5",
+      "kind": "drum",
+      "pos": [
+        1.0,
+        1.96,
+        66
+      ],
+      "mass": 80,
+      "grip": 0.12,
+      "bounce": 0.02
+    },
+    {
+      "name": "wagon",
+      "kind": "wagon",
+      "pos": [
+        0.0,
+        3.2,
+        -10.0
+      ],
+      "rot": [
+        0.12,
+        0,
+        0
+      ],
+      "vel": [
+        0.0,
+        0.0,
+        14.0
+      ],
+      "grip": 0.06,
+      "bounce": 0.0
+    },
+    {
+      "name": "dummy",
+      "kind": "dummy",
+      "pos": [
+        -0.02,
+        3.23,
+        -10.04
+      ],
+      "rot": [
+        0.12,
+        0,
+        0
+      ],
+      "vel": [
+        0.0,
+        0.0,
+        14.0
+      ],
+      "live": false
+    },
+    {
+      "name": "nade",
+      "kind": "grenade",
+      "pos": [
+        0.24,
+        3.3200000000000003,
+        -9.65
+      ],
+      "rot": [
+        0.12,
+        0,
+        0
+      ],
+      "vel": [
+        0.0,
+        0.0,
+        14.0
+      ],
+      "grip": 0.8,
+      "fuse": 2.8
+    }
+  ],
+  "ties": [
+    {
+      "a": "dummy-hips",
+      "b": "wagon"
+    },
+    {
+      "a": "dummy-chest",
+      "b": "wagon"
+    },
+    {
+      "a": "dummy-shin-l",
+      "b": "wagon"
+    },
+    {
+      "a": "dummy-shin-r",
+      "b": "wagon"
+    },
+    {
+      "a": "nade",
+      "b": "wagon"
+    }
+  ]
+}
